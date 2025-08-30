@@ -1,0 +1,232 @@
+<!-- Sign Up Form -->
+<form id="signupForm" class="auth-form" action="/auth/sign-up" method="POST" novalidate>
+    {{#if csrfToken}}
+        <input type="hidden" name="_csrf" value="{{csrfToken}}">
+    {{/if}}
+    
+    <!-- Email Field -->
+    <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-control" 
+            placeholder="Your@email.com"
+            required
+            autocomplete="email"
+            value="{{formData.email}}"
+        >
+        <div class="field-error" id="email-error"></div>
+    </div>
+    
+    <!-- Name Fields -->
+    <div class="form-row">
+        <div class="form-group form-group-half">
+            <label for="firstName" class="form-label">First Name</label>
+            <input 
+                type="text" 
+                id="firstName" 
+                name="firstName" 
+                class="form-control" 
+                placeholder="First name"
+                required
+                autocomplete="given-name"
+                value="{{formData.firstName}}"
+            >
+            <div class="field-error" id="firstName-error"></div>
+        </div>
+        
+        <div class="form-group form-group-half">
+            <label for="lastName" class="form-label">Last Name</label>
+            <input 
+                type="text" 
+                id="lastName" 
+                name="lastName" 
+                class="form-control" 
+                placeholder="Last name"
+                required
+                autocomplete="family-name"
+                value="{{formData.lastName}}"
+            >
+            <div class="field-error" id="lastName-error"></div>
+        </div>
+    </div>
+    
+    <!-- Password Field -->
+    <div class="form-group">
+        <label for="password" class="form-label">Password</label>
+        <div class="password-input-wrapper">
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-control" 
+                placeholder="Create a strong password"
+                required
+                autocomplete="new-password"
+                minlength="8"
+            >
+            <button type="button" class="password-toggle" id="passwordToggle" aria-label="Show password">
+                <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
+        <div class="password-strength" id="passwordStrength"></div>
+        <div class="field-error" id="password-error"></div>
+        <div class="password-requirements">
+            <small class="requirements-text">Password must contain:</small>
+            <ul class="requirements-list">
+                <li class="requirement" data-requirement="length">At least 8 characters</li>
+                <li class="requirement" data-requirement="uppercase">One uppercase letter</li>
+                <li class="requirement" data-requirement="lowercase">One lowercase letter</li>
+                <li class="requirement" data-requirement="number">One number</li>
+                <li class="requirement" data-requirement="special">One special character</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Terms and Privacy Checkboxes -->
+    <div class="form-group checkbox-group">
+        <div class="checkbox-wrapper">
+            <input 
+                type="checkbox" 
+                id="terms" 
+                name="terms" 
+                value="true"
+                class="checkbox-input"
+                required
+                {{#if formData.terms}}checked{{/if}}
+            >
+            <label for="terms" class="checkbox-label">
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">
+                    I agree to the 
+                    <a href="/terms" target="_blank" class="terms-link">Terms & Conditions</a>
+                </span>
+            </label>
+        </div>
+        <div class="field-error" id="terms-error"></div>
+    </div>
+    
+    <div class="form-group checkbox-group">
+        <div class="checkbox-wrapper">
+            <input 
+                type="checkbox" 
+                id="privacy" 
+                name="privacy" 
+                value="true"
+                class="checkbox-input"
+                required
+                {{#if formData.privacy}}checked{{/if}}
+            >
+            <label for="privacy" class="checkbox-label">
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">
+                    I agree to the 
+                    <a href="/privacy" target="_blank" class="terms-link">Privacy Policy</a>
+                </span>
+            </label>
+        </div>
+        <div class="field-error" id="privacy-error"></div>
+    </div>
+    
+    <!-- Marketing Consent (Optional) -->
+    <div class="form-group checkbox-group">
+        <div class="checkbox-wrapper">
+            <input 
+                type="checkbox" 
+                id="marketing" 
+                name="marketing" 
+                value="true"
+                class="checkbox-input"
+                {{#if formData.marketing}}checked{{/if}}
+            >
+            <label for="marketing" class="checkbox-label">
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">
+                    Send me helpful tips and updates about AI in ministry
+                </span>
+            </label>
+        </div>
+    </div>
+    
+    <!-- Submit Button -->
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary btn-large btn-block" id="submitBtn">
+            <span class="btn-text">Send Email Link</span>
+            <span class="btn-spinner" id="btnSpinner">
+                <svg class="spinner" viewBox="0 0 24 24">
+                    <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4"></circle>
+                </svg>
+            </span>
+        </button>
+    </div>
+    
+    <!-- Alternative Sign In -->
+    <div class="form-footer">
+        <p class="footer-text">Already have an account? 
+            <a href="/auth/sign-in" class="auth-link">Sign in</a>
+        </p>
+    </div>
+</form>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner">
+            <svg class="spinner-large" viewBox="0 0 24 24">
+                <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            </svg>
+        </div>
+        <p class="loading-text">Creating your account...</p>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal-overlay" id="successModal">
+    <div class="modal-content success-modal">
+        <div class="modal-header">
+            <div class="success-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M9 12l2 2 4-4"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            </div>
+            <h3 class="modal-title">Check Your Email!</h3>
+        </div>
+        <div class="modal-body">
+            <p class="modal-message">
+                We've sent a verification link to your email address. 
+                Please click the link to activate your account and complete your registration.
+            </p>
+            <div class="email-notice">
+                <p><strong>Don't see the email?</strong></p>
+                <ul>
+                    <li>Check your spam or junk folder</li>
+                    <li>Make sure you entered the correct email address</li>
+                    <li>Wait a few minutes for the email to arrive</li>
+                </ul>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="window.location.href='/auth/sign-in'">
+                Go to Sign In
+            </button>
+            <button type="button" class="btn btn-secondary" id="resendEmail">
+                Resend Email
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize signup form functionality
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initSignupForm === 'function') {
+        initSignupForm();
+    }
+});
+</script>

@@ -1,0 +1,279 @@
+/* Global Toolbar Styles */
+.global-toolbar {
+  background: white;
+  border-bottom: 1px solid #e9ecef;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.toolbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  min-height: 60px;
+}
+
+/* Brand Section */
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+}
+
+.brand-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: #000000;
+  transition: opacity 0.2s;
+}
+
+.brand-link:hover {
+  opacity: 0.8;
+}
+
+.brand-logo {
+  height: 36px;
+  width: auto;
+  margin-right: 12px;
+}
+
+.brand-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Navigation */
+.toolbar-nav {
+  display: flex;
+  align-items: center;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: #495057;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.2s;
+  padding: 8px 0;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.nav-link:hover {
+  color: #c99b31;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: 0;
+  left: 0;
+  background-color: #c99b31;
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+/* Get Started Button Styling */
+.btn-get-started {
+  background: #006400 !important; /* Deep green */
+  color: white !important;
+  padding: 10px 20px !important;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.btn-get-started::after {
+  display: none;
+}
+
+.btn-get-started:hover {
+  background: #004d00 !important; /* Darker green on hover */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 100, 0, 0.3);
+  color: white !important;
+}
+
+/* Login Button Styling */
+.btn-login {
+  background: transparent !important;
+  color: #000000 !important;
+  padding: 8px 18px !important;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.btn-login::after {
+  display: none;
+}
+
+.btn-login:hover {
+  background: #000000 !important;
+  color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Auth Link Special Styling (for Logout) */
+.auth-link {
+  background: linear-gradient(135deg, #000000 0%, #c99b31 100%);
+  color: white !important;
+  padding: 10px 20px !important;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.auth-link::after {
+  display: none;
+}
+
+.auth-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(201, 155, 49, 0.3);
+  color: white !important;
+}
+
+/* Mobile Menu Toggle */
+.mobile-menu-toggle {
+  display: none;
+  flex-direction: column;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin-left: 16px;
+}
+
+.hamburger-line {
+  width: 24px;
+  height: 2px;
+  background-color: #495057;
+  margin: 2px 0;
+  transition: 0.3s;
+}
+
+/* Container Override for Toolbar */
+.global-toolbar .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .nav-links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid #e9ecef;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  
+  .nav-links.active {
+    max-height: 300px;
+  }
+  
+  .nav-links li {
+    width: 100%;
+    border-bottom: 1px solid #f8f9fa;
+  }
+  
+  .nav-link {
+    display: block;
+    padding: 16px 24px !important;
+    width: 100%;
+  }
+  
+  .btn-get-started {
+    background: none !important;
+    color: #006400 !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  
+  .btn-get-started:hover {
+    background: #f8f9fa !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .btn-login {
+    background: none !important;
+    color: #000000 !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  
+  .btn-login:hover {
+    background: #f8f9fa !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .auth-link {
+    background: none !important;
+    color: #c99b31 !important;
+    border-radius: 0 !important;
+  }
+  
+  .auth-link:hover {
+    background: #f8f9fa !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .mobile-menu-toggle {
+    display: flex;
+  }
+  
+  .brand-text {
+    font-size: 1.25rem;
+  }
+  
+  .brand-logo {
+    height: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar-content {
+    padding: 8px 0;
+  }
+  
+  .brand-text {
+    font-size: 1.1rem;
+  }
+  
+  .brand-logo {
+    height: 28px;
+    margin-right: 8px;
+  }
+}

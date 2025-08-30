@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{{title}} - Our AI Legacy</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    
+    <!-- CSS -->
+    <link href="/css/main.css" rel="stylesheet">
+    <link href="/css/header.css" rel="stylesheet">
+    {{#if additionalCSS}}
+        {{#each additionalCSS}}
+            <link href="{{this}}" rel="stylesheet">
+        {{/each}}
+    {{/if}}
+    
+    <!-- Meta tags -->
+    <meta name="description" content="{{description}}">
+    <meta name="keywords" content="AI, Legacy, Technology, Innovation">
+    <meta name="author" content="Our AI Legacy">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="{{title}} - Our AI Legacy">
+    <meta property="og:description" content="{{description}}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{canonicalUrl}}">
+    
+    <!-- Additional head content -->
+    {{{head}}}
+</head>
+<body class="{{bodyClass}}">
+    <!-- Global Toolbar -->
+    {{> header}}
+    
+    <!-- Additional Header -->
+    {{#if showHeader}}
+        {{> nav}}
+    {{/if}}
+    
+    <!-- Navigation -->
+    {{#if showNav}}
+        {{> nav}}
+    {{/if}}
+    
+    <!-- Flash Messages -->
+    {{#if flashMessages}}
+        <div class="flash-messages">
+            {{#each flashMessages.success}}
+                <div class="alert alert-success">
+                    <span class="alert-icon">✓</span>
+                    <span class="alert-message">{{this}}</span>
+                </div>
+            {{/each}}
+            {{#each flashMessages.error}}
+                <div class="alert alert-error">
+                    <span class="alert-icon">✗</span>
+                    <span class="alert-message">{{this}}</span>
+                </div>
+            {{/each}}
+            {{#each flashMessages.warning}}
+                <div class="alert alert-warning">
+                    <span class="alert-icon">⚠</span>
+                    <span class="alert-message">{{this}}</span>
+                </div>
+            {{/each}}
+            {{#each flashMessages.info}}
+                <div class="alert alert-info">
+                    <span class="alert-icon">ℹ</span>
+                    <span class="alert-message">{{this}}</span>
+                </div>
+            {{/each}}
+        </div>
+    {{/if}}
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        {{{body}}}
+    </main>
+    
+    <!-- Footer -->
+    {{#if showFooter}}
+        {{> footer}}
+    {{/if}}
+    
+    <!-- JavaScript -->
+    <script src="/js/main.js"></script>
+    {{#if additionalJS}}
+        {{#each additionalJS}}
+            <script src="{{this}}"></script>
+        {{/each}}
+    {{/if}}
+    
+    <!-- Additional scripts -->
+    {{{scripts}}}
+</body>
+</html>

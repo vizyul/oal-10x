@@ -1,0 +1,137 @@
+<!-- Sign In Form -->
+<form id="signinForm" class="auth-form" action="/auth/sign-in" method="POST" novalidate>
+    {{#if csrfToken}}
+        <input type="hidden" name="_csrf" value="{{csrfToken}}">
+    {{/if}}
+    
+    <!-- Email Field -->
+    <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-control" 
+            placeholder="Your@email.com"
+            required
+            autocomplete="email"
+            value="{{formData.email}}"
+            autofocus
+        >
+        <div class="field-error" id="email-error"></div>
+    </div>
+    
+    <!-- Password Field -->
+    <div class="form-group">
+        <label for="password" class="form-label">
+            Password
+            <a href="/auth/forgot-password" class="forgot-password-link">Forgot password?</a>
+        </label>
+        <div class="password-input-wrapper">
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-control" 
+                placeholder="Enter your password"
+                required
+                autocomplete="current-password"
+            >
+            <button type="button" class="password-toggle" id="passwordToggle" aria-label="Show password">
+                <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
+        <div class="field-error" id="password-error"></div>
+    </div>
+    
+    <!-- Remember Me Checkbox -->
+    <div class="form-group checkbox-group">
+        <div class="checkbox-wrapper">
+            <input 
+                type="checkbox" 
+                id="remember" 
+                name="remember" 
+                value="true"
+                class="checkbox-input"
+                {{#if formData.remember}}checked{{/if}}
+            >
+            <label for="remember" class="checkbox-label">
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Remember me for 30 days</span>
+            </label>
+        </div>
+    </div>
+    
+    <!-- Submit Button -->
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary btn-large btn-block" id="submitBtn">
+            <span class="btn-text">Sign In</span>
+            <span class="btn-spinner" id="btnSpinner">
+                <svg class="spinner" viewBox="0 0 24 24">
+                    <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4"></circle>
+                </svg>
+            </span>
+        </button>
+    </div>
+    
+    <!-- Alternative Sign Up -->
+    <div class="form-footer">
+        <p class="footer-text">Don't have an account? 
+            <a href="/auth/sign-up" class="auth-link">Start your free trial</a>
+        </p>
+    </div>
+</form>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="loading-spinner">
+            <svg class="spinner-large" viewBox="0 0 24 24">
+                <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            </svg>
+        </div>
+        <p class="loading-text">Signing you in...</p>
+    </div>
+</div>
+
+<!-- Email Verification Notice -->
+{{#if verificationRequired}}
+<div class="alert alert-warning verification-notice">
+    <div class="alert-content">
+        <div class="alert-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+        </div>
+        <div class="alert-text">
+            <h4>Email Verification Required</h4>
+            <p>Please check your email and click the verification link before signing in.</p>
+            <button type="button" class="btn btn-link" id="resendVerification">
+                Resend verification email
+            </button>
+        </div>
+    </div>
+</div>
+{{/if}}
+
+<script>
+// Initialize signin form functionality
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initSigninForm === 'function') {
+        initSigninForm();
+    }
+    
+    // Handle resend verification
+    const resendBtn = document.getElementById('resendVerification');
+    if (resendBtn) {
+        resendBtn.addEventListener('click', function() {
+            // Implementation for resending verification email
+            console.log('Resend verification email');
+        });
+    }
+});
+</script>

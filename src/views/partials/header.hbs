@@ -1,0 +1,74 @@
+<header class="global-toolbar">
+  <div class="container">
+    <div class="toolbar-content">
+      <!-- Logo and Brand -->
+      <div class="toolbar-brand">
+        <a href="/" class="brand-link">
+          <img src="/images/logo.png" alt="Our AI Legacy Logo" class="brand-logo">
+          <span class="brand-text">Our AI Legacy</span>
+        </a>
+      </div>
+      
+      <!-- Navigation Links -->
+      <nav class="toolbar-nav">
+        <ul class="nav-links">
+          <li><a href="/" class="nav-link">Home</a></li>
+          <li><a href="/contact" class="nav-link">Contact Us</a></li>
+          <li><a href="/auth/sign-up" class="nav-link btn-get-started">Get Started</a></li>
+          <li>
+            {{#if user}}
+              <a href="/auth/logout" class="nav-link auth-link">Logout</a>
+            {{else}}
+              <a href="/auth/sign-in" class="nav-link btn-login">Login</a>
+            {{/if}}
+          </li>
+        </ul>
+        
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle mobile menu">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
+      </nav>
+    </div>
+  </div>
+</header>
+
+
+<script>
+// Mobile menu toggle functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+  const navLinks = document.querySelector('.nav-links');
+  
+  if (mobileMenuToggle && navLinks) {
+    mobileMenuToggle.addEventListener('click', function() {
+      navLinks.classList.toggle('active');
+      
+      // Animate hamburger lines
+      const lines = this.querySelectorAll('.hamburger-line');
+      if (navLinks.classList.contains('active')) {
+        lines[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+        lines[1].style.opacity = '0';
+        lines[2].style.transform = 'rotate(-45deg) translate(7px, -6px)';
+      } else {
+        lines[0].style.transform = 'rotate(0) translate(0, 0)';
+        lines[1].style.opacity = '1';
+        lines[2].style.transform = 'rotate(0) translate(0, 0)';
+      }
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function(event) {
+      if (!mobileMenuToggle.contains(event.target) && !navLinks.contains(event.target)) {
+        navLinks.classList.remove('active');
+        const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
+        lines[0].style.transform = 'rotate(0) translate(0, 0)';
+        lines[1].style.opacity = '1';
+        lines[2].style.transform = 'rotate(0) translate(0, 0)';
+      }
+    });
+  }
+});
+</script>

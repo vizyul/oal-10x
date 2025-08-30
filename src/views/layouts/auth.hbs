@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{{title}} - Our AI Legacy</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+    
+    <!-- CSS -->
+    <link href="/css/main.css" rel="stylesheet">
+    <link href="/css/header.css" rel="stylesheet">
+    <link href="/css/auth.css" rel="stylesheet">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Meta tags -->
+    <meta name="description" content="{{description}}">
+    <meta name="robots" content="noindex, nofollow">
+</head>
+<body class="auth-body">
+    <!-- Global Toolbar -->
+    {{> header}}
+    
+    <div class="auth-container">
+        <div class="auth-wrapper">
+            <!-- Left Side - Testimonial -->
+            <div class="auth-testimonial">
+                <div class="testimonial-content">
+                    <blockquote class="testimonial-quote">
+                        If you've got questions on where AI fits in ministry, you can be confident that 
+                        <strong>OUR AI LEGACY</strong> is safe, responsible and gives you information you can trust.
+                    </blockquote>
+                    
+                    <div class="testimonial-author">
+                        <img src="/images/dwight.png" alt="Prophet Dwight Taylor" class="author-avatar">
+                        <div class="author-info">
+                            <div class="author-name">Prophet Dwight Taylor</div>
+                            <div class="author-title">Founder, Our AI Legacy</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Side - Form -->
+            <div class="auth-form-container">
+                <div class="auth-form-wrapper">
+                    <!-- Logo or Brand -->
+                    <div class="auth-brand">
+                        <h1 class="brand-title">Our AI Legacy</h1>
+                    </div>
+                    
+                    <!-- Form Header -->
+                    <div class="auth-header">
+                        <h2 class="auth-title">{{title}}</h2>
+                        {{#if subtitle}}
+                            <p class="auth-subtitle">{{subtitle}}</p>
+                        {{/if}}
+                    </div>
+                    
+                    <!-- Flash Messages -->
+                    {{#if message}}
+                        <div class="alert alert-info">
+                            <span class="alert-message">{{message}}</span>
+                        </div>
+                    {{/if}}
+                    
+                    <!-- Form Content -->
+                    <div class="auth-form-content">
+                        {{{body}}}
+                    </div>
+                    
+                    <!-- Social buttons will be included in individual templates as needed -->
+                    
+                    <!-- Footer Links -->
+                    <div class="auth-footer">
+                        {{#if footerText}}
+                            <p class="footer-text">{{footerText}}</p>
+                        {{/if}}
+                        
+                        <div class="footer-links">
+                            <a href="/terms" class="footer-link">Terms & Conditions</a>
+                            <span class="footer-separator">•</span>
+                            <a href="/privacy" class="footer-link">Privacy Policy</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/js/main.js"></script>
+    <script src="/js/auth.js"></script>
+</body>
+</html>
