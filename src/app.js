@@ -66,6 +66,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parser
 app.use(cookieParser());
 
+// Initialize OAuth service and Passport
+const oauthService = require('./services/oauth.service');
+app.use(oauthService.initialize());
+
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

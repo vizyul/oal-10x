@@ -137,9 +137,10 @@
 
 /* Auth Link Special Styling (for Logout) */
 .auth-link {
-  background: linear-gradient(135deg, #000000 0%, #c99b31 100%);
-  color: white !important;
-  padding: 10px 20px !important;
+  background: transparent !important;
+  color: #000000 !important;
+  padding: 8px 18px !important;
+  border: 2px solid #000000;
   border-radius: 6px;
   font-weight: 600;
 }
@@ -149,9 +150,10 @@
 }
 
 .auth-link:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(201, 155, 49, 0.3);
+  background: #000000 !important;
   color: white !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Mobile Menu Toggle */
@@ -240,7 +242,8 @@
   
   .auth-link {
     background: none !important;
-    color: #c99b31 !important;
+    color: #000000 !important;
+    border: none !important;
     border-radius: 0 !important;
   }
   

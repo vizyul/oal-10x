@@ -445,9 +445,16 @@ function initSocialLogin() {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             
-            const provider = this.classList.contains('google-btn') ? 'google' :
-                           this.classList.contains('apple-btn') ? 'apple' :
-                           this.classList.contains('microsoft-btn') ? 'microsoft' : null;
+            // Extract provider from the href attribute
+            const href = this.getAttribute('href');
+            let provider = null;
+            
+            if (href && href.includes('/auth/')) {
+                const match = href.match(/\/auth\/(\w+)/);
+                if (match) {
+                    provider = match[1];
+                }
+            }
             
             if (provider) {
                 handleSocialLogin(provider);
@@ -459,11 +466,8 @@ function initSocialLogin() {
 // Handle social login
 async function handleSocialLogin(provider) {
     try {
-        // For now, show coming soon message
-        showAlert(`${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in coming soon!`, 'info');
-        
-        // In production, you would redirect to OAuth provider:
-        // window.location.href = `/auth/${provider}`;
+        // Redirect to OAuth provider
+        window.location.href = `/auth/${provider}`;
     } catch (error) {
         console.error(`${provider} login error:`, error);
         showAlert(`Failed to sign in with ${provider}. Please try again.`, 'error');
@@ -597,17 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Add loading states to all forms
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function() {
-            const submitButtons = this.querySelectorAll('button[type="submit"]');
-            submitButtons.forEach(btn => {
-                btn.classList.add('loading');
-                btn.disabled = true;
-            });
-        });
-    });
+    // Note: Loading states are handled by individual form handlers
 });
 
 // Export functions for global access

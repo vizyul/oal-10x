@@ -155,12 +155,7 @@
   <!-- Submit Button -->
   <div class="form-group">
     <button type="submit" class="btn btn-primary btn-large btn-block" id="submitBtn">
-      <span class="btn-text">Create Account</span>
-      <span class="btn-spinner" id="btnSpinner">
-        <svg class="spinner" viewBox="0 0 24 24">
-          <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4"></circle>
-        </svg>
-      </span>
+      Create Account
     </button>
   </div>
   
@@ -282,9 +277,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    // Start loading state
+    // Prevent double submission
     isSubmitting = true;
-    submitBtn.classList.add('loading');
     submitBtn.disabled = true;
     loadingOverlay.classList.add('show');
     
@@ -324,9 +318,8 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error('Complete registration error:', error);
       showAlert('Network error. Please check your connection and try again.', 'error');
     } finally {
-      // End loading state
+      // Re-enable submission
       isSubmitting = false;
-      submitBtn.classList.remove('loading');
       submitBtn.disabled = false;
       loadingOverlay.classList.remove('show');
     }

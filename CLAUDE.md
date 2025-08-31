@@ -14,6 +14,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Lint code**: `npm run lint` - ESLint checks
 - **Fix linting**: `npm run lint:fix` - Auto-fix linting issues
 
+### Port Management (Windows)
+
+If port 3000 is already in use when starting the dev server:
+
+1. **Check what's using the port**:
+   ```bash
+   netstat -ano | findstr :3000
+   ```
+
+2. **Kill the process** (note the double slashes for Windows):
+   ```bash
+   taskkill //F //PID <process_id>
+   ```
+
+3. **Then restart the dev server**:
+   ```bash
+   npm run dev
+   ```
+
 ## Architecture
 
 ### Core Structure
@@ -26,6 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Authentication Flow**:
 - JWT-based authentication with bcryptjs password hashing
 - Multi-step signup process (3 steps) with email verification
+- OAuth integration for Google, Apple, and Microsoft with email validation
 - Protected routes using auth middleware
 - Cookie-based session management
 
@@ -33,6 +53,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Primary data storage via `airtable.service.js`
 - User data management and content tracking
 - Setup scripts: `setup-airtable-tables.js` for table configuration
+
+**OAuth Integration**:
+- `oauth.service.js` handles Google, Apple, and Microsoft authentication
+- Email verification required for all social logins
+- Social verification page with 6-digit code validation
+- Automatic user creation and account linking
 
 **Middleware Stack**:
 - Security: Helmet, CORS, rate limiting, input validation
@@ -50,11 +76,57 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 src/
 ├── config/          # Environment and database configuration
 ├── controllers/     # Request handlers
+│   └── auth.controller.js
 ├── middleware/      # Authentication, security, validation, error handling
+│   ├── auth.middleware.js
+│   ├── error.middleware.js
+│   ├── security.middleware.js
+│   └── validation.middleware.js
 ├── routes/          # Express routes (auth, API, main)
-├── services/        # Business logic (Airtable, auth, email)
+│   ├── api.routes.js
+│   ├── auth.routes.js    # Includes OAuth routes and social verification
+│   ├── index.js
+│   └── main.routes.js
+├── services/        # Business logic (Airtable, auth, email, OAuth)
+│   ├── airtable.service.js
+│   ├── auth.service.js
+│   ├── email.service.js
+│   └── oauth.service.js  # NEW: Google, Apple, Microsoft OAuth
 ├── utils/           # Helpers, validators, logger
-└── views/           # Handlebars templates and layouts
+│   ├── logger.js
+│   └── validators.js
+├── views/           # Handlebars templates and layouts
+│   ├── auth/
+│   │   ├── signin.hbs
+│   │   ├── signup.hbs
+│   │   ├── signup-step1.hbs  # Includes social login buttons
+│   │   ├── signup-step2.hbs
+│   │   ├── signup-step3.hbs
+│   │   └── social-verify.hbs # NEW: Social login email verification
+│   ├── errors/
+│   │   └── 501.hbs
+│   ├── layouts/
+│   │   ├── auth.hbs
+│   │   └── main.hbs
+│   ├── partials/
+│   │   └── header.hbs
+│   ├── contact.hbs
+│   └── index.hbs
+├── app.js           # Express app setup with Passport initialization
+└── server.js        # HTTP server with graceful shutdown
+
+public/
+├── css/
+│   ├── auth.css     # Updated with social login styles
+│   ├── header.css   # Updated logout button styles
+│   └── main.css
+├── js/
+│   ├── auth.js      # Updated with social login handlers
+│   └── main.js
+└── images/
+
+.env.example         # Updated with OAuth environment variables
+package.json         # Updated with OAuth packages (passport, etc.)
 ```
 
 ## Testing
@@ -76,11 +148,54 @@ src/
 - **Node.js**: >=18.0.0
 - **Environment variables**: Required setup via `.env.example`
 - **Airtable**: API key and base configuration needed
+- **OAuth Providers**: Google, Apple, and Microsoft app configurations required
+
+### OAuth Configuration
+
+To enable social login, configure OAuth applications and add these environment variables:
+
+**Google OAuth** (Google Cloud Console):
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET` 
+- `GOOGLE_CALLBACK_URL` (default: http://localhost:3000/auth/google/callback)
+
+**Microsoft OAuth** (Azure AD):
+- `MICROSOFT_CLIENT_ID`
+- `MICROSOFT_CLIENT_SECRET`
+- `MICROSOFT_CALLBACK_URL` (default: http://localhost:3000/auth/microsoft/callback)
+
+**Apple OAuth** (Apple Developer Console):
+- `APPLE_CLIENT_ID` (Service ID)
+- `APPLE_TEAM_ID`
+- `APPLE_KEY_ID`
+- `APPLE_PRIVATE_KEY` (Private key file content)
+- `APPLE_CALLBACK_URL` (default: http://localhost:3000/auth/apple/callback)
+
+Social logins require email verification before account activation.
 
 ## Key Files for Modification
 
 - **Routes**: Add new routes in `src/routes/`
 - **Business logic**: Add services in `src/services/`
 - **Authentication**: Modify `src/middleware/auth.middleware.js`
+- **OAuth Integration**: `src/services/oauth.service.js` for social login modifications
 - **UI**: Update Handlebars templates in `src/views/`
 - **Styles**: CSS files in `public/css/`
+
+## Key Dependencies
+
+### OAuth & Authentication:
+- `passport` - Authentication middleware
+- `passport-google-oauth20` - Google OAuth strategy
+- `passport-apple` - Apple OAuth strategy  
+- `passport-microsoft` - Microsoft OAuth strategy
+- `bcryptjs` - Password hashing
+- `jsonwebtoken` - JWT tokens
+
+### Core Framework:
+- `express` - Web application framework
+- `express-handlebars` - Templating engine
+- `airtable` - Database integration
+- `nodemailer` - Email sending
+- `@microsoft/microsoft-graph-client` - Microsoft Graph API
+- to memorize

@@ -1,4 +1,5 @@
 const airtableService = require('./airtable.service');
+const jwt = require('jsonwebtoken');
 const { logger } = require('../utils');
 
 class AuthService {
@@ -20,20 +21,32 @@ class AuthService {
         throw new Error('Database not configured');
       }
 
-      const record = await airtableService.create(this.tableName, {
-        'Email': userData.email,
-        'Password': userData.password,
-        'First Name': userData.firstName,
-        'Last Name': userData.lastName,
-        'Email Verified': userData.emailVerified,
-        'Email Verification Token': userData.emailVerificationToken,
-        'Email Verification Expires': userData.emailVerificationExpires,
-        'Terms Accepted': userData.termsAccepted,
-        'Privacy Accepted': userData.privacyAccepted,
-        'Status': userData.status,
-        'Created At': userData.createdAt,
-        'Updated At': userData.updatedAt
-      });
+      // Handle both camelCase format (regular signup) and Airtable field format (OAuth)
+      let fields = {};
+      
+      // If userData has Airtable field names, use them directly
+      if (userData['Email']) {
+        // OAuth/direct Airtable format - copy all fields
+        fields = { ...userData };
+      } else {
+        // Regular signup camelCase format
+        fields = {
+          'Email': userData.email,
+          'Password': userData.password,
+          'First Name': userData.firstName,
+          'Last Name': userData.lastName,
+          'Email Verified': userData.emailVerified,
+          'Email Verification Token': userData.emailVerificationToken,
+          'Email Verification Expires': userData.emailVerificationExpires,
+          'Terms Accepted': userData.termsAccepted,
+          'Privacy Accepted': userData.privacyAccepted,
+          'Status': userData.status,
+          'Created At': userData.createdAt,
+          'Updated At': userData.updatedAt
+        };
+      }
+
+      const record = await airtableService.create(this.tableName, fields);
 
       return this.formatUserRecord(record);
     } catch (error) {
@@ -247,8 +260,38 @@ class AuthService {
       status: fields['Status'] || 'pending',
       createdAt: fields['Created At'],
       updatedAt: fields['Updated At'],
-      lastLoginAt: fields['Last Login At']
+      lastLoginAt: fields['Last Login At'],
+      googleId: fields['Google ID'],
+      appleId: fields['Apple ID'],
+      microsoftId: fields['Microsoft ID'],
+      registrationMethod: fields['Registration Method']
     };
+  }
+
+  /**
+   * Generate JWT token for user
+   * @param {string} userId - User ID
+   * @param {string} email - User email
+   * @returns {string} JWT token
+   */
+  generateToken(userId, email) {
+    try {
+      logger.info(`Generating JWT token for user: ${userId}`);
+      
+      const token = jwt.sign(
+        { 
+          userId: userId,
+          email: email
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      return token;
+    } catch (error) {
+      logger.error('Error generating JWT token:', error);
+      throw new Error('Failed to generate authentication token');
+    }
   }
 
   /**

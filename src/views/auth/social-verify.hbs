@@ -1,0 +1,369 @@
+<!-- Social Login Email Verification -->
+
+<!-- Header -->
+<div class="auth-header">
+  <div class="auth-icon">
+    {{#eq provider "google"}}
+      <svg width="24" height="24" viewBox="0 0 24 24">
+        <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+    {{/eq}}
+    {{#eq provider "apple"}}
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#000000">
+        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+      </svg>
+    {{/eq}}
+    {{#eq provider "microsoft"}}
+      <svg width="24" height="24" viewBox="0 0 24 24">
+        <path fill="#f25022" d="M1 1h10v10H1z"/>
+        <path fill="#00a4ef" d="M13 1h10v10H13z"/>
+        <path fill="#7fba00" d="M1 13h10v10H1z"/>
+        <path fill="#ffb900" d="M13 13h10v10H13z"/>
+      </svg>
+    {{/eq}}
+  </div>
+  <h1 class="auth-title">Verify Your Email</h1>
+  <p class="auth-subtitle">
+    We sent a 6-digit code to <strong>{{email}}</strong><br>
+    Enter it below to complete your {{provider}} sign-in
+  </p>
+</div>
+
+<!-- Verification Form -->
+<form id="socialVerifyForm" class="auth-form" novalidate>
+  {{#if csrfToken}}
+    <input type="hidden" name="_csrf" value="{{csrfToken}}">
+  {{/if}}
+  <input type="hidden" name="email" value="{{email}}">
+  <input type="hidden" name="provider" value="{{provider}}">
+  
+  <!-- Code Input -->
+  <div class="form-group">
+    <label for="code" class="form-label">Enter verification code</label>
+    <div class="code-input-container">
+      <input 
+        type="text" 
+        id="code" 
+        name="code" 
+        class="form-control code-input" 
+        placeholder="000000"
+        maxlength="6"
+        pattern="[0-9]{6}"
+        required
+        autocomplete="one-time-code"
+        autofocus
+      >
+    </div>
+    <div class="field-error" id="code-error"></div>
+    <div class="field-help">
+      We sent a 6-digit code to <strong>{{email}}</strong>
+    </div>
+  </div>
+  
+  <!-- Resend Code -->
+  <div class="resend-section">
+    <p class="resend-text">
+      Didn't receive the code? 
+      <button type="button" class="resend-btn" id="resendBtn">
+        Resend code
+      </button>
+    </p>
+    <div class="resend-timer" id="resendTimer">
+      Resend available in <span id="countdown">60</span> seconds
+    </div>
+  </div>
+  
+  <!-- Submit Button -->
+  <div class="form-group">
+    <button type="submit" class="btn btn-primary btn-large btn-block" id="submitBtn">
+      <span class="btn-text">Verify Email</span>
+      <span class="btn-spinner" id="btnSpinner">
+        <svg class="spinner" viewBox="0 0 24 24">
+          <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="4"></circle>
+        </svg>
+      </span>
+    </button>
+  </div>
+  
+  <!-- Back to Sign In -->
+  <div class="form-footer">
+    <p class="footer-text">
+      <a href="/auth/sign-in" class="auth-link">← Back to sign in</a>
+    </p>
+  </div>
+</form>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-content">
+    <div class="loading-spinner">
+      <svg class="spinner-large" viewBox="0 0 24 24">
+        <circle class="spinner-circle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+      </svg>
+    </div>
+    <p class="loading-text">Verifying your email...</p>
+  </div>
+</div>
+
+<script>
+// Social verification form handler
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('socialVerifyForm');
+  const codeField = document.getElementById('code');
+  const submitBtn = document.getElementById('submitBtn');
+  const resendBtn = document.getElementById('resendBtn');
+  const resendTimer = document.getElementById('resendTimer');
+  const countdown = document.getElementById('countdown');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const email = '{{email}}';
+  
+  let isSubmitting = false;
+  let resendCountdown = 60;
+  let countdownInterval;
+
+  // Start resend countdown
+  startResendCountdown();
+  
+  // Auto-format code input
+  codeField.addEventListener('input', function() {
+    // Only allow numbers
+    this.value = this.value.replace(/\D/g, '');
+    
+    // Clear error when user starts typing
+    if (this.classList.contains('error') && this.value.length > 0) {
+      clearFieldError('code');
+    }
+    
+    // Auto-submit when 6 digits entered
+    if (this.value.length === 6 && /^\d{6}$/.test(this.value)) {
+      // Small delay to show the complete code
+      setTimeout(() => {
+        if (!isSubmitting) {
+          form.dispatchEvent(new Event('submit'));
+        }
+      }, 300);
+    }
+  });
+  
+  // Handle paste event
+  codeField.addEventListener('paste', function(e) {
+    e.preventDefault();
+    const paste = (e.clipboardData || window.clipboardData).getData('text');
+    const cleanPaste = paste.replace(/\D/g, '').substring(0, 6);
+    this.value = cleanPaste;
+    
+    // Clear error and auto-submit if valid
+    if (cleanPaste.length === 6) {
+      clearFieldError('code');
+      setTimeout(() => {
+        if (!isSubmitting) {
+          form.dispatchEvent(new Event('submit'));
+        }
+      }, 300);
+    }
+  });
+  
+  // Form submission handler
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    if (isSubmitting) return;
+    
+    const code = codeField.value.trim();
+    
+    // Basic validation
+    if (!code) {
+      showFieldError('code', 'Verification code is required');
+      return;
+    }
+    
+    if (!/^\d{6}$/.test(code)) {
+      showFieldError('code', 'Please enter a valid 6-digit code');
+      return;
+    }
+    
+    // Clear previous errors
+    clearFieldError('code');
+    
+    // Start loading state
+    isSubmitting = true;
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    loadingOverlay.classList.add('show');
+    
+    try {
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData);
+      
+      const response = await fetch('/auth/social-verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(data)
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Success - redirect to complete profile step or dashboard
+        showAlert('Email verified successfully! Redirecting...', 'success');
+        setTimeout(() => {
+          window.location.href = result.data.redirectTo || '/dashboard';
+        }, 1500);
+      } else {
+        // Show error
+        if (result.field) {
+          showFieldError(result.field, result.message);
+        } else {
+          showAlert(result.message || 'Invalid verification code. Please try again.', 'error');
+        }
+        
+        // If code expired, show resend option
+        if (result.error === 'CODE_EXPIRED') {
+          resendCountdown = 0;
+          updateResendUI();
+        }
+      }
+    } catch (error) {
+      console.error('Social verification error:', error);
+      showAlert('Network error. Please check your connection and try again.', 'error');
+    } finally {
+      // End loading state
+      isSubmitting = false;
+      submitBtn.classList.remove('loading');
+      submitBtn.disabled = false;
+      loadingOverlay.classList.remove('show');
+    }
+  });
+  
+  // Resend code handler
+  resendBtn.addEventListener('click', async function() {
+    if (resendCountdown > 0) return;
+    
+    this.disabled = true;
+    this.textContent = 'Sending...';
+    
+    try {
+      // For social logins, we need to resend the social verification code
+      const response = await fetch('/auth/resend-social-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ email })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        showAlert('New verification code sent!', 'success');
+        resendCountdown = 60;
+        startResendCountdown();
+        codeField.value = '';
+        codeField.focus();
+      } else {
+        showAlert(result.message || 'Failed to resend code. Please try signing in again.', 'error');
+      }
+    } catch (error) {
+      console.error('Resend code error:', error);
+      showAlert('Network error. Please try again.', 'error');
+    } finally {
+      this.disabled = false;
+      this.textContent = 'Resend code';
+    }
+  });
+  
+  // Start resend countdown
+  function startResendCountdown() {
+    clearInterval(countdownInterval);
+    updateResendUI();
+    
+    countdownInterval = setInterval(() => {
+      resendCountdown--;
+      updateResendUI();
+      
+      if (resendCountdown <= 0) {
+        clearInterval(countdownInterval);
+      }
+    }, 1000);
+  }
+  
+  // Update resend UI
+  function updateResendUI() {
+    if (resendCountdown > 0) {
+      resendTimer.style.display = 'block';
+      resendBtn.style.display = 'none';
+      countdown.textContent = resendCountdown;
+    } else {
+      resendTimer.style.display = 'none';
+      resendBtn.style.display = 'inline';
+      resendBtn.disabled = false;
+    }
+  }
+});
+
+// Show field error
+function showFieldError(fieldName, message) {
+  const field = document.getElementById(fieldName);
+  const errorElement = document.getElementById(`${fieldName}-error`);
+  
+  if (field && errorElement) {
+    field.classList.add('error');
+    errorElement.textContent = message;
+    errorElement.classList.add('show');
+  }
+}
+
+// Clear field error
+function clearFieldError(fieldName) {
+  const field = document.getElementById(fieldName);
+  const errorElement = document.getElementById(`${fieldName}-error`);
+  
+  if (field && errorElement) {
+    field.classList.remove('error');
+    errorElement.textContent = '';
+    errorElement.classList.remove('show');
+  }
+}
+
+// Show general alert
+function showAlert(message, type = 'error') {
+  // Remove existing alerts
+  const existingAlerts = document.querySelectorAll('.alert.dynamic');
+  existingAlerts.forEach(alert => alert.remove());
+  
+  // Create new alert
+  const alert = document.createElement('div');
+  alert.className = `alert alert-${type} dynamic`;
+  alert.innerHTML = `
+    <span class="alert-message">${message}</span>
+    <button type="button" class="alert-close" onclick="this.parentElement.remove()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  `;
+  
+  // Insert at top of form
+  const form = document.querySelector('.auth-form');
+  if (form) {
+    form.insertBefore(alert, form.firstChild);
+  }
+  
+  // Auto-remove success messages
+  if (type === 'success') {
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.remove();
+      }
+    }, 5000);
+  }
+}
+</script>

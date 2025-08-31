@@ -4,6 +4,8 @@ const { body } = require('express-validator');
 
 const { authController } = require('../controllers');
 const { validationMiddleware } = require('../middleware');
+const authService = require('../services/auth.service');
+const { logger } = require('../utils');
 
 const router = express.Router();
 
@@ -208,33 +210,160 @@ router.post('/reset-password/:token',
 // OAUTH ROUTES (Placeholder routes - to be implemented)
 
 // OAuth Google
-router.get('/google', (req, res) => {
-  // TODO: Implement Google OAuth
-  res.status(501).render('errors/501', {
-    title: 'Not Implemented',
-    message: 'Google OAuth is not yet implemented. Please use email signup for now.',
-    layout: 'auth'
+router.get('/google', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.authenticateGoogle()(req, res, next);
+});
+
+router.get('/google/callback', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.handleGoogleCallback()(req, res, (err) => {
+    if (err) {
+      logger.error('Google OAuth callback error:', err);
+      return res.redirect('/auth/sign-in?error=oauth_failed');
+    }
+    
+    if (req.user && req.user.pendingVerification) {
+      return res.redirect(`/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=google`);
+    }
+    
+    if (req.user) {
+      // Set JWT token in cookie and redirect to dashboard
+      const token = authService.generateToken(req.user.id, req.user.email);
+      res.cookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      return res.redirect('/dashboard');
+    }
+    
+    res.redirect('/auth/sign-in?error=oauth_failed');
   });
 });
 
 // OAuth Apple
-router.get('/apple', (req, res) => {
-  // TODO: Implement Apple OAuth
-  res.status(501).render('errors/501', {
-    title: 'Not Implemented', 
-    message: 'Apple OAuth is not yet implemented. Please use email signup for now.',
-    layout: 'auth'
+router.get('/apple', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.authenticateApple()(req, res, next);
+});
+
+router.get('/apple/callback', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.handleAppleCallback()(req, res, (err) => {
+    if (err) {
+      logger.error('Apple OAuth callback error:', err);
+      return res.redirect('/auth/sign-in?error=oauth_failed');
+    }
+    
+    if (req.user && req.user.pendingVerification) {
+      return res.redirect(`/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=apple`);
+    }
+    
+    if (req.user) {
+      // Set JWT token in cookie and redirect to dashboard
+      const token = authService.generateToken(req.user.id, req.user.email);
+      res.cookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      return res.redirect('/dashboard');
+    }
+    
+    res.redirect('/auth/sign-in?error=oauth_failed');
   });
 });
 
 // OAuth Microsoft
-router.get('/microsoft', (req, res) => {
-  // TODO: Implement Microsoft OAuth
-  res.status(501).render('errors/501', {
-    title: 'Not Implemented',
-    message: 'Microsoft OAuth is not yet implemented. Please use email signup for now.',
+router.get('/microsoft', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.authenticateMicrosoft()(req, res, next);
+});
+
+router.get('/microsoft/callback', (req, res, next) => {
+  const oauthService = require('../services/oauth.service');
+  oauthService.handleMicrosoftCallback()(req, res, (err) => {
+    if (err) {
+      logger.error('Microsoft OAuth callback error:', err);
+      return res.redirect('/auth/sign-in?error=oauth_failed');
+    }
+    
+    if (req.user && req.user.pendingVerification) {
+      return res.redirect(`/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=microsoft`);
+    }
+    
+    if (req.user) {
+      // Set JWT token in cookie and redirect to dashboard
+      const token = authService.generateToken(req.user.id, req.user.email);
+      res.cookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      return res.redirect('/dashboard');
+    }
+    
+    res.redirect('/auth/sign-in?error=oauth_failed');
+  });
+});
+
+// Social Login Verification Page
+router.get('/social-verify', (req, res) => {
+  const { email, provider } = req.query;
+  
+  if (!email || !provider) {
+    return res.redirect('/auth/sign-in');
+  }
+  
+  res.render('auth/social-verify', {
+    title: 'Verify Your Email',
+    email: email,
+    provider: provider,
     layout: 'auth'
   });
+});
+
+// Social Login Verification Handler
+router.post('/social-verify', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and verification code are required'
+      });
+    }
+    
+    const oauthService = require('../services/oauth.service');
+    const result = await oauthService.completeSocialVerification(email, code);
+    
+    if (result.success) {
+      // Set JWT token in cookie
+      res.cookie('auth_token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      
+      return res.json({
+        success: true,
+        message: 'Email verified successfully!',
+        data: {
+          redirectTo: '/dashboard'
+        }
+      });
+    }
+    
+  } catch (error) {
+    logger.error('Social verification error:', error);
+    
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Verification failed. Please try again.'
+    });
+  }
 });
 
 module.exports = router;

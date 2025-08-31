@@ -250,19 +250,25 @@
 
 /* Divider */
 .divider {
+  display: flex;
+  align-items: center;
+  margin: 2rem 0;
   text-align: center;
-  position: relative;
-  margin: 30px 0;
 }
 
-.divider::before {
+.divider::before,
+.divider::after {
   content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
+  flex: 1;
   height: 1px;
-  background: #374151;
+  background: #3d3d3d;
+}
+
+.divider-text {
+  padding: 0 1rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  white-space: nowrap;
 }
 
 .divider span {
@@ -395,10 +401,15 @@
 }
 
 .field-help {
-  margin-top: 8px;
+  margin-top: 0.5rem;
   font-size: 14px;
   color: #9ca3af;
   text-align: center;
+}
+
+.field-help small {
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
 /* Resend Section */
@@ -694,6 +705,12 @@
 @keyframes stroke {
   0%, 100% { stroke-dashoffset: 31.416; }
   50% { stroke-dashoffset: 0; }
+}
+
+@keyframes spinner-stroke {
+  0% { stroke-dashoffset: 31.416; }
+  50% { stroke-dashoffset: 7.854; }
+  100% { stroke-dashoffset: 31.416; }
 }
 
 /* Field Errors */
