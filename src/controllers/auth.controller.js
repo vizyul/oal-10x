@@ -72,6 +72,7 @@ class AuthController {
             emailVerificationToken: verificationCode,
             emailVerificationExpires: codeExpires.toISOString(),
             status: 'pending_verification',
+            'Registration Method': 'email',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
@@ -335,14 +336,22 @@ class AuthController {
         termsAccepted: terms === 'true',
         privacyAccepted: privacy === 'true',
         status: 'active',
+        'Registration Method': 'email',
         updatedAt: new Date().toISOString()
       });
 
       logger.info(`Registration completed for user: ${user.id}`);
 
-      // Send welcome email
+      // Send welcome email and mark as sent
       try {
         await emailService.sendWelcomeEmail(email, firstName);
+        
+        // Mark that welcome email has been sent
+        await authService.updateUser(user.id, {
+          'Welcome Email Sent': true,
+          'Welcome Email Sent At': new Date().toISOString()
+        });
+        
         logger.info(`Welcome email sent to ${email}`);
       } catch (emailError) {
         logger.error('Failed to send welcome email:', emailError);

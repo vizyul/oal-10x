@@ -248,15 +248,39 @@ router.get('/apple', (req, res, next) => {
   oauthService.authenticateApple()(req, res, next);
 });
 
-router.get('/apple/callback', (req, res, next) => {
+// Apple OAuth uses POST for callback, not GET
+router.post('/apple/callback', (req, res, next) => {
   const oauthService = require('../services/oauth.service');
+  logger.info('Apple OAuth callback route hit', {
+    query: req.query,
+    body: req.body,
+    bodyKeys: Object.keys(req.body || {}),
+    hasIdToken: !!req.body?.id_token,
+    hasUser: !!req.body?.user,
+    headers: {
+      'user-agent': req.get('User-Agent'),
+      'content-type': req.get('Content-Type')
+    }
+  });
+  
   oauthService.handleAppleCallback()(req, res, (err) => {
     if (err) {
-      logger.error('Apple OAuth callback error:', err);
+      logger.error('Apple OAuth callback error:', {
+        error: err.message,
+        stack: err.stack,
+        query: req.query,
+        body: req.body
+      });
       return res.redirect('/auth/sign-in?error=oauth_failed');
     }
     
+    logger.info('Apple OAuth callback success', {
+      user: req.user ? 'User object present' : 'No user object',
+      pendingVerification: req.user?.pendingVerification
+    });
+    
     if (req.user && req.user.pendingVerification) {
+      logger.info(`Redirecting to Apple social verification for email: ${req.user.email}`);
       return res.redirect(`/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=apple`);
     }
     
@@ -268,9 +292,11 @@ router.get('/apple/callback', (req, res, next) => {
         secure: process.env.NODE_ENV === 'production',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
+      logger.info(`Apple OAuth user logged in successfully: ${req.user.email}`);
       return res.redirect('/dashboard');
     }
     
+    logger.warn('Apple OAuth callback completed but no user found');
     res.redirect('/auth/sign-in?error=oauth_failed');
   });
 });

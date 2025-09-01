@@ -55,8 +55,111 @@ class OAuthService {
         callbackURL: process.env.APPLE_CALLBACK_URL || '/auth/apple/callback',
         keyID: process.env.APPLE_KEY_ID,
         privateKeyString: process.env.APPLE_PRIVATE_KEY,
-        scope: ['name', 'email']
-      }, this.handleOAuthCallback.bind(this, 'apple')));
+        scope: ['name', 'email'],
+        passReqToCallback: true // Apple needs access to request for ID token
+      }, this.handleAppleOAuthCallback.bind(this)));
+      
+      logger.info('Apple OAuth Strategy configured successfully');
+    } else {
+      logger.warn('Apple OAuth Strategy not configured - missing required environment variables');
+    }
+  }
+
+  // Special handler for Apple OAuth (needs to decode ID token)
+  async handleAppleOAuthCallback(req, accessToken, refreshToken, profile, jwtClaims, done) {
+    try {
+      logger.info('Apple OAuth callback received', {
+        hasProfile: !!profile,
+        hasJwtClaims: !!jwtClaims,
+        profileKeys: Object.keys(profile || {}),
+        jwtClaimsKeys: Object.keys(jwtClaims || {}),
+        jwtClaims: jwtClaims
+      });
+
+      let userData = null;
+
+      // Apple provides user data in the request body/query, not JWT claims
+      let appleUserInfo = null;
+      
+      // Try to get user info from request body first (most common)
+      if (req.body && req.body.user) {
+        try {
+          appleUserInfo = JSON.parse(req.body.user);
+          logger.info('Apple user info from request body:', appleUserInfo);
+        } catch (e) {
+          logger.warn('Could not parse Apple user info from request body:', e.message);
+        }
+      }
+      
+      // Try to get user info from query params as fallback
+      if (!appleUserInfo && req.query && req.query.user) {
+        try {
+          appleUserInfo = JSON.parse(req.query.user);
+          logger.info('Apple user info from query params:', appleUserInfo);
+        } catch (e) {
+          logger.warn('Could not parse Apple user info from query params:', e.message);
+        }
+      }
+
+      // Extract user data from Apple's response
+      if (appleUserInfo && appleUserInfo.email) {
+        userData = {
+          email: appleUserInfo.email,
+          firstName: appleUserInfo.name?.firstName,
+          lastName: appleUserInfo.name?.lastName,
+          profilePicture: null
+        };
+        logger.info('Apple user data extracted from Apple response:', userData);
+      } else if (jwtClaims && jwtClaims.email) {
+        // Fallback to JWT claims if available
+        userData = {
+          email: jwtClaims.email,
+          firstName: null,
+          lastName: null,
+          profilePicture: null
+        };
+        logger.info('Apple user data extracted from JWT claims:', userData);
+      } else if (profile && profile.email) {
+        // Final fallback to profile if available
+        userData = {
+          email: profile.email,
+          firstName: profile.name?.firstName,
+          lastName: profile.name?.lastName,
+          profilePicture: null
+        };
+        logger.info('Apple user data extracted from profile:', userData);
+      }
+
+      if (!userData || !userData.email) {
+        throw new Error('No email address provided by Apple');
+      }
+
+      logger.info('Apple OAuth user data extracted:', {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName
+      });
+
+      // Create a profile-like object for consistency with other providers
+      const appleProfile = {
+        id: userData.email, // Use email as ID since Apple doesn't provide a consistent user ID
+        email: userData.email,
+        name: {
+          firstName: userData.firstName,
+          lastName: userData.lastName
+        },
+        provider: 'apple'
+      };
+
+      // Use the standard OAuth callback logic
+      return await this.handleOAuthCallback('apple', accessToken, refreshToken, appleProfile, done);
+
+    } catch (error) {
+      logger.error('Apple OAuth callback error:', {
+        message: error.message,
+        stack: error.stack
+      });
+      return done(error, null);
     }
   }
 
@@ -64,7 +167,8 @@ class OAuthService {
     try {
       logger.info(`OAuth callback received for ${provider}`, { 
         profileId: profile.id, 
-        email: profile.emails?.[0]?.value 
+        email: profile.emails?.[0]?.value || profile.email,
+        profileData: JSON.stringify(profile, null, 2)
       });
 
       // Extract user data from profile
@@ -87,6 +191,15 @@ class OAuthService {
         if (provider === 'apple' && !existingUser.appleId) needsUpdate = true;  
         if (provider === 'microsoft' && !existingUser.microsoftId) needsUpdate = true;
         
+        logger.info(`OAuth ID check for ${provider}:`, {
+          provider,
+          hasGoogleId: !!existingUser.googleId,
+          hasAppleId: !!existingUser.appleId,
+          hasMicrosoftId: !!existingUser.microsoftId,
+          needsUpdate,
+          profileId: profile.id
+        });
+        
         if (needsUpdate) {
           await authService.updateUser(existingUser.id, {
             [oauthIdField]: profile.id,
@@ -96,6 +209,28 @@ class OAuthService {
 
         // If user exists and email is verified, log them in
         if (existingUser.emailVerified) {
+          // Send welcome email ONLY if this is first time using OAuth AND we haven't sent a welcome email before
+          const hasReceivedWelcomeEmail = existingUser['Welcome Email Sent'] || existingUser.welcomeEmailSent || false;
+          
+          if (needsUpdate && !hasReceivedWelcomeEmail) {
+            try {
+              const firstName = existingUser['First Name'] || existingUser.firstName || 'there';
+              await emailService.sendWelcomeEmail(userData.email, firstName);
+              
+              // Mark that we've sent the welcome email
+              await authService.updateUser(existingUser.id, {
+                'Welcome Email Sent': true,
+                'Welcome Email Sent At': new Date().toISOString()
+              });
+              
+              logger.info(`Welcome email sent to existing user using OAuth for first time: ${userData.email}`);
+            } catch (emailError) {
+              logger.error('Failed to send welcome email to existing OAuth user:', emailError);
+              // Don't fail the login if welcome email fails
+            }
+          } else {
+            logger.info(`Skipping welcome email for ${userData.email} - ${hasReceivedWelcomeEmail ? 'already sent' : 'not first OAuth login'}`);
+          }
           return done(null, existingUser);
         } else {
           // If email not verified, send verification email
@@ -239,6 +374,23 @@ class OAuthService {
       };
 
       await authService.updateUser(user.id, updateFields);
+
+      // Send welcome email for new social users and mark as sent
+      try {
+        const firstName = user['First Name'] || user.firstName || 'there';
+        await emailService.sendWelcomeEmail(email, firstName);
+        
+        // Mark that welcome email has been sent
+        await authService.updateUser(user.id, {
+          'Welcome Email Sent': true,
+          'Welcome Email Sent At': new Date().toISOString()
+        });
+        
+        logger.info(`Welcome email sent to social user: ${email}`);
+      } catch (emailError) {
+        logger.error('Failed to send welcome email to social user:', emailError);
+        // Don't fail the verification if welcome email fails
+      }
 
       // Generate JWT token
       const token = authService.generateToken(user.id, email);

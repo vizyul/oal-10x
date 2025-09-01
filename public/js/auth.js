@@ -112,14 +112,26 @@ function setupRealTimeValidation(form) {
     const inputs = form.querySelectorAll('input[required]');
     
     inputs.forEach(input => {
-        input.addEventListener('blur', function() {
-            validateField(this);
-        });
+        let hasInteracted = false;
         
+        // Mark as interacted when user starts typing
         input.addEventListener('input', function() {
+            hasInteracted = true;
             if (this.classList.contains('error')) {
                 validateField(this);
             }
+        });
+        
+        // Only validate on blur if user has interacted with this specific field
+        input.addEventListener('blur', function() {
+            if (hasInteracted) {
+                validateField(this);
+            }
+        });
+        
+        // Also mark as interacted if they focused and typed
+        input.addEventListener('keydown', function() {
+            hasInteracted = true;
         });
     });
 }
@@ -299,12 +311,18 @@ async function handleSigninSubmit(e) {
     const submitBtn = document.getElementById('submitBtn');
     const loadingOverlay = document.getElementById('loadingOverlay');
     
-    // Basic validation
-    const email = formData.get('email');
-    const password = formData.get('password');
+    // Validate all fields when form is submitted
+    const inputs = form.querySelectorAll('input[required]');
+    let isFormValid = true;
     
-    if (!email || !password) {
-        showAlert('Please fill in all required fields', 'error');
+    inputs.forEach(input => {
+        if (!validateField(input)) {
+            isFormValid = false;
+        }
+    });
+    
+    if (!isFormValid) {
+        showAlert('Please fix the errors below', 'error');
         return;
     }
     

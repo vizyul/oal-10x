@@ -517,7 +517,7 @@ This is an automated email, please do not reply.
             
             <p>You can now start using our platform to bring your ministry content to life through AI. Explore our features and begin your journey with us.</p>
             
-            <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
+            <p>If you have any questions or need assistance, feel free to reach out to our support team at <a href="mailto:support@ourailegacy.com" style="color: #c99b31; text-decoration: none;">support@ourailegacy.com</a>.</p>
             
             <p>God bless!</p>
             <p>The Our AI Legacy Team</p>
@@ -539,7 +539,7 @@ Welcome to Our AI Legacy! Your account has been successfully created and verifie
 
 You can now start using our platform to bring your ministry content to life through AI. Explore our features and begin your journey with us.
 
-If you have any questions or need assistance, feel free to reach out to our support team.
+If you have any questions or need assistance, feel free to reach out to our support team at support@ourailegacy.com.
 
 God bless!
 The Our AI Legacy Team

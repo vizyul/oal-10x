@@ -11,6 +11,13 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# SSL Certificates (never commit these!)
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+
 # Runtime data
 pids
 *.pid
