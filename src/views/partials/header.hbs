@@ -17,7 +17,82 @@
           <li><a href="/auth/sign-up" class="nav-link btn-get-started">Get Started</a></li>
           <li>
             {{#if user}}
-              <a href="/auth/logout" class="nav-link auth-link">Sign Out</a>
+              <!-- User Profile Dropdown -->
+              <div class="user-profile-dropdown">
+                <button class="profile-trigger" id="profileTrigger" aria-label="User profile menu">
+                  <div class="profile-avatar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" fill="currentColor"/>
+                      <path d="M12 14C7.58172 14 4 17.5817 4 22H20C20 17.5817 16.4183 14 12 14Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="profile-name">{{user.firstName}}</span>
+                  <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                
+                <div class="profile-menu" id="profileMenu">
+                  <div class="profile-menu-header">
+                    <div class="profile-info">
+                      <div class="profile-name-large">{{user.firstName}} {{user.lastName}}</div>
+                      <div class="profile-email">{{user.email}}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="profile-menu-divider"></div>
+                  
+                  <div class="profile-menu-items">
+                    <a href="/profile" class="profile-menu-item">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" fill="currentColor"/>
+                        <path d="M12 14C7.58172 14 4 17.5817 4 22H20C20 17.5817 16.4183 14 12 14Z" fill="currentColor"/>
+                      </svg>
+                      <span>Profile</span>
+                    </a>
+                    
+                    <a href="/subscription" class="profile-menu-item">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V7C21 5.89543 20.1046 5 19 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                        <path d="M3 7L12 13L21 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span>Subscription</span>
+                    </a>
+                    
+                    <div class="profile-menu-item theme-selector">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Sun rays for light theme -->
+                        <path d="M12 1V3M12 21V23M4.22 4.22L5.64 5.64M18.36 18.36L19.78 19.78M1 12H3M21 12H23M4.22 19.78L5.64 18.36M18.36 5.64L19.78 4.22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <!-- Sun/Moon circle -->
+                        <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <!-- Moon crescent overlay -->
+                        <path d="M12 8C13.5 8 15 9.5 15 12C15 14.5 13.5 16 12 16C10.5 16 9.5 14.5 9.5 12C9.5 9.5 10.5 8 12 8Z" fill="currentColor" opacity="0.6"/>
+                      </svg>
+                      <div class="theme-options">
+                        <span>Theme</span>
+                        <select id="themeSelector" class="theme-select" data-current-theme="{{userTheme}}">
+                          <option value="light">Light</option>
+                          <option value="dark">Dark</option>
+                          <option value="system">System</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="profile-menu-divider"></div>
+                  
+                  <div class="profile-menu-items">
+                    <a href="/auth/logout" class="profile-menu-item profile-menu-logout">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      <span>Sign Out</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
             {{else}}
               <a href="/auth/sign-in" class="nav-link btn-login">Sign In</a>
             {{/if}}
@@ -37,11 +112,12 @@
 
 
 <script>
-// Mobile menu toggle functionality
+// Mobile menu toggle functionality and Profile dropdown
 document.addEventListener('DOMContentLoaded', function() {
   const mobileMenuToggle = document.getElementById('mobileMenuToggle');
   const navLinks = document.querySelector('.nav-links');
   
+  // Mobile menu functionality
   if (mobileMenuToggle && navLinks) {
     mobileMenuToggle.addEventListener('click', function() {
       navLinks.classList.toggle('active');
@@ -58,17 +134,19 @@ document.addEventListener('DOMContentLoaded', function() {
         lines[2].style.transform = 'rotate(0) translate(0, 0)';
       }
     });
-    
-    // Close menu when clicking outside
-    document.addEventListener('click', function(event) {
-      if (!mobileMenuToggle.contains(event.target) && !navLinks.contains(event.target)) {
-        navLinks.classList.remove('active');
-        const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
-        lines[0].style.transform = 'rotate(0) translate(0, 0)';
-        lines[1].style.opacity = '1';
-        lines[2].style.transform = 'rotate(0) translate(0, 0)';
-      }
-    });
   }
+  
+  // Close mobile menu when clicking outside
+  document.addEventListener('click', function(event) {
+    if (mobileMenuToggle && navLinks && 
+        !mobileMenuToggle.contains(event.target) && 
+        !navLinks.contains(event.target)) {
+      navLinks.classList.remove('active');
+      const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
+      lines[0].style.transform = 'rotate(0) translate(0, 0)';
+      lines[1].style.opacity = '1';
+      lines[2].style.transform = 'rotate(0) translate(0, 0)';
+    }
+  });
 });
 </script>

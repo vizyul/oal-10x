@@ -82,9 +82,14 @@
     </main>
     
     <!-- Footer -->
-    {{#if showFooter}}
-        {{> footer}}
-    {{/if}}
+    {{> footer}}
+    
+    <!-- Theme initialization -->
+    <script>
+        // Initialize theme from server-side data or localStorage
+        const serverTheme = '{{userTheme}}' || localStorage.getItem('theme-preference') || 'light';
+        document.documentElement.setAttribute('data-theme', serverTheme);
+    </script>
     
     <!-- JavaScript -->
     <script src="/js/main.js"></script>

@@ -339,6 +339,114 @@ router.post('/auth/resend-verification', [
 });
 
 // Handle 404 for API routes
+// User Preferences Routes
+const PreferencesService = require('../services/preferences.service');
+const preferencesService = new PreferencesService();
+
+// Get user preferences
+router.get('/preferences', authMiddleware, async (req, res) => {
+  try {
+    // Only get preferences, don't create them on GET requests
+    const preferences = await preferencesService.getUserPreferences(req.user.email);
+    
+    res.json({
+      success: true,
+      data: preferences || null // Return null if no preferences exist
+    });
+  } catch (error) {
+    logger.error('Error getting user preferences:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get preferences',
+      error: error.message
+    });
+  }
+});
+
+// Update theme preference
+router.post('/preferences/theme', [
+  authMiddleware,
+  body('themeMode')
+    .isIn(['light', 'dark', 'system'])
+    .withMessage('Theme mode must be light, dark, or system'),
+  validationMiddleware
+], async (req, res) => {
+  try {
+    const { themeMode } = req.body;
+    
+    const preferences = await preferencesService.updateUserPreferences(req.user.email, {
+      themeMode
+    });
+    
+    res.json({
+      success: true,
+      data: preferences
+    });
+  } catch (error) {
+    logger.error('Error updating theme preference:', error);
+    
+    // Handle specific Airtable errors
+    if (error.statusCode === 404) {
+      return res.status(503).json({
+        success: false,
+        message: 'User preferences system is not set up yet. Please contact support.',
+        error: 'User_Preferences table not found'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update theme preference',
+      error: error.message
+    });
+  }
+});
+
+// Update multiple preferences
+router.put('/preferences', [
+  authMiddleware,
+  body('themeMode')
+    .optional()
+    .isIn(['light', 'dark', 'system'])
+    .withMessage('Theme mode must be light, dark, or system'),
+  body('emailNotifications')
+    .optional()
+    .isBoolean()
+    .withMessage('Email notifications must be true or false'),
+  body('marketingCommunications')
+    .optional()
+    .isBoolean()
+    .withMessage('Marketing communications must be true or false'),
+  body('weeklyDigest')
+    .optional()
+    .isBoolean()
+    .withMessage('Weekly digest must be true or false'),
+  validationMiddleware
+], async (req, res) => {
+  try {
+    const updates = {};
+    
+    if (req.body.themeMode !== undefined) updates.themeMode = req.body.themeMode;
+    if (req.body.emailNotifications !== undefined) updates.emailNotifications = req.body.emailNotifications;
+    if (req.body.marketingCommunications !== undefined) updates.marketingCommunications = req.body.marketingCommunications;
+    if (req.body.weeklyDigest !== undefined) updates.weeklyDigest = req.body.weeklyDigest;
+    
+    const preferences = await preferencesService.updateUserPreferences(req.user.email, updates);
+    
+    res.json({
+      success: true,
+      data: preferences
+    });
+  } catch (error) {
+    logger.error('Error updating user preferences:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update preferences',
+      error: error.message
+    });
+  }
+});
+
 router.use('*', (req, res) => {
   res.status(404).json({
     success: false,

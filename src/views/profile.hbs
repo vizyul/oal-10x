@@ -1,0 +1,437 @@
+<!-- Profile Header Section -->
+<section class="profile-header">
+  <div class="container">
+    <div class="profile-header-content">
+      <div class="profile-avatar-large">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" fill="currentColor"/>
+          <path d="M12 14C7.58172 14 4 17.5817 4 22H20C20 17.5817 16.4183 14 12 14Z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="profile-header-info">
+        <h1>{{user.firstName}} {{user.lastName}}</h1>
+        <p class="profile-email">{{user.email}}</p>
+        <p class="profile-status">
+          {{#if user.emailVerified}}
+            <span class="status-verified">✓ Email Verified</span>
+          {{else}}
+            <span class="status-unverified">Email Not Verified</span>
+          {{/if}}
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Profile Content Section -->
+<section class="profile-content">
+  <div class="container">
+    <div class="profile-grid">
+      <!-- Personal Information -->
+      <div class="profile-section">
+        <div class="section-header">
+          <h2>Personal Information</h2>
+          <p>Manage your account details and personal information</p>
+        </div>
+        
+        <div class="profile-card">
+          <form class="profile-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="firstName">First Name</label>
+                <input type="text" id="firstName" name="firstName" value="{{user.firstName}}" class="form-control">
+              </div>
+              <div class="form-group">
+                <label for="lastName">Last Name</label>
+                <input type="text" id="lastName" name="lastName" value="{{user.lastName}}" class="form-control">
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" name="email" value="{{user.email}}" class="form-control" readonly>
+              <small class="form-text text-muted">Contact support to change your email address</small>
+            </div>
+            
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+              <button type="button" class="btn btn-outline">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- Account Preferences -->
+      <div class="profile-section">
+        <div class="section-header">
+          <h2>Preferences</h2>
+          <p>Customize your account settings and preferences</p>
+        </div>
+        
+        <div class="profile-card">
+          <div class="preference-item">
+            <div class="preference-info">
+              <h3>Email Notifications</h3>
+              <p>Receive updates about your account and new features</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <div class="preference-item">
+            <div class="preference-info">
+              <h3>Marketing Communications</h3>
+              <p>Receive newsletters and promotional content</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox">
+              <span class="slider"></span>
+            </label>
+          </div>
+          
+          <div class="preference-item">
+            <div class="preference-info">
+              <h3>Weekly Digest</h3>
+              <p>Get a summary of your activity and insights</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Security Settings -->
+      <div class="profile-section">
+        <div class="section-header">
+          <h2>Security</h2>
+          <p>Manage your account security and authentication</p>
+        </div>
+        
+        <div class="profile-card">
+          <div class="security-item">
+            <div class="security-info">
+              <h3>Change Password</h3>
+              <p>Update your account password</p>
+            </div>
+            <button class="btn btn-outline">Change Password</button>
+          </div>
+          
+          <div class="security-item">
+            <div class="security-info">
+              <h3>Two-Factor Authentication</h3>
+              <p>Add an extra layer of security to your account</p>
+            </div>
+            <button class="btn btn-outline">Enable 2FA</button>
+          </div>
+          
+          <div class="security-item">
+            <div class="security-info">
+              <h3>Active Sessions</h3>
+              <p>See where you're logged in and manage your sessions</p>
+            </div>
+            <button class="btn btn-outline">View Sessions</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Danger Zone -->
+      <div class="profile-section">
+        <div class="section-header">
+          <h2 class="text-danger">Danger Zone</h2>
+          <p>Irreversible and destructive actions</p>
+        </div>
+        
+        <div class="profile-card danger-card">
+          <div class="danger-item">
+            <div class="danger-info">
+              <h3>Delete Account</h3>
+              <p>Permanently delete your account and all associated data</p>
+            </div>
+            <button class="btn btn-danger">Delete Account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+/* Profile specific styles */
+.profile-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 40px 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.profile-header-content {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.profile-avatar-large {
+  width: 80px;
+  height: 80px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.profile-header-info h1 {
+  margin: 0 0 8px 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #000;
+}
+
+.profile-email {
+  margin: 0 0 8px 0;
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.status-verified {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.status-unverified {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.profile-content {
+  padding: 40px 0;
+}
+
+.profile-grid {
+  display: grid;
+  gap: 40px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.profile-section .section-header {
+  margin-bottom: 24px;
+}
+
+.section-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #000;
+}
+
+.section-header p {
+  margin: 0;
+  color: #6c757d;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}
+
+.profile-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.danger-card {
+  border-color: #f5c6cb;
+  background: #ffeaa7;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #000;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.form-control[readonly] {
+  background-color: #f8f9fa;
+}
+
+.form-text {
+  font-size: 0.875rem;
+  margin-top: 6px;
+}
+
+.text-muted {
+  color: #6c757d;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn {
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-size: 1rem;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: #007bff;
+  border: 1px solid #007bff;
+}
+
+.btn-outline:hover {
+  background: #007bff;
+  color: white;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.preference-item, .security-item, .danger-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.preference-item:last-child, .security-item:last-child, .danger-item:last-child {
+  border-bottom: none;
+}
+
+.preference-info h3, .security-info h3, .danger-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #000;
+}
+
+.preference-info p, .security-info p, .danger-info p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.2s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #007bff;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+@media (max-width: 768px) {
+  .profile-header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .preference-item, .security-item, .danger-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+}
+</style>

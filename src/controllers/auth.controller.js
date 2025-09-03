@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 const { authService, airtableService, emailService } = require('../services');
+const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
 
 class AuthController {
@@ -378,6 +379,9 @@ class AuthController {
 
       res.cookie('auth_token', jwtToken, cookieOptions);
 
+      // Record signup session
+      await sessionService.recordSignup(updatedUser, req, 'email');
+
       // For API requests
       if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
         return res.status(201).json({
@@ -582,6 +586,9 @@ class AuthController {
 
       res.cookie('auth_token', token, cookieOptions);
 
+      // Record login session
+      await sessionService.recordLogin(user, req, 'email');
+
       logger.info(`User signed in successfully: ${user.id}`);
 
       // For API requests
@@ -626,6 +633,13 @@ class AuthController {
   // GET/POST /auth/logout
   async logout(req, res) {
     try {
+      // End active sessions if user is authenticated
+      if (req.user && req.user.id) {
+        // End active sessions by updating them with Ended At timestamp
+        await sessionService.endUserSessions(req.user.id);
+        logger.info(`Active sessions ended for user: ${req.user.id}`);
+      }
+      
       res.clearCookie('auth_token');
       
       if (req.xhr || req.headers.accept?.indexOf('json') > -1) {

@@ -352,11 +352,14 @@ const handleAuthError = (req, res, message) => {
   return res.redirect('/auth/sign-in');
 };
 
+const preferencesMiddleware = require('./preferences.middleware');
+
 module.exports = {
   securityMiddleware,
   validationMiddleware,
   authMiddleware,
   optionalAuthMiddleware,
   guestOnlyMiddleware,
-  errorMiddleware
+  errorMiddleware,
+  preferencesMiddleware
 };

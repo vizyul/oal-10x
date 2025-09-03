@@ -1,13 +1,13 @@
-/* Global Toolbar Styles */
+/* Global Toolbar Styles - Updated Brand Colors */
 .global-toolbar {
-  background: white;
-  border-bottom: 1px solid #e9ecef;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
   position: sticky;
   top: 0;
   z-index: 1000;
   width: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: var(--font-primary) !important;
 }
 
 .toolbar-content {
@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   text-decoration: none;
-  color: #000000;
+  color: var(--text-primary);
   transition: opacity 0.2s;
 }
 
@@ -39,14 +39,14 @@
 .brand-logo {
   height: 36px;
   width: auto;
-  margin-right: 12px;
+  margin-right: var(--space-3);
 }
 
 .brand-text {
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
-  color: #000000;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  color: var(--text-primary);
+  font-family: var(--font-primary) !important;
 }
 
 /* Navigation */
@@ -66,17 +66,17 @@
 
 .nav-link {
   text-decoration: none;
-  color: #495057;
+  color: var(--text-primary);
   font-weight: 500;
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   transition: all 0.2s;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
   position: relative;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: var(--font-primary) !important;
 }
 
 .nav-link:hover {
-  color: #c99b31;
+  color: var(--accent-color);
 }
 
 .nav-link::after {
@@ -86,7 +86,7 @@
   height: 2px;
   bottom: 0;
   left: 0;
-  background-color: #c99b31;
+  background-color: var(--accent-color);
   transition: width 0.3s ease;
 }
 
@@ -94,13 +94,15 @@
   width: 100%;
 }
 
-/* Get Started Button Styling */
+/* Get Started Button Styling - Match Home Page Style */
 .btn-get-started {
-  background: #006400 !important; /* Deep green */
-  color: white !important;
-  padding: 10px 20px !important;
-  border-radius: 6px;
+  background: var(--accent-color) !important;
+  color: var(--text-primary) !important;
+  padding: var(--space-3) var(--space-6) !important;
+  border-radius: var(--radius-md);
   font-weight: 600;
+  border: 3px solid var(--text-primary) !important;
+  font-size: var(--font-size-base);
 }
 
 .btn-get-started::after {
@@ -108,20 +110,22 @@
 }
 
 .btn-get-started:hover {
-  background: #004d00 !important; /* Darker green on hover */
+  background: #a8832b !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 100, 0, 0.3);
-  color: white !important;
+  box-shadow: var(--shadow-hover);
+  color: var(--text-primary) !important;
+  border-color: var(--text-primary) !important;
 }
 
-/* Login Button Styling */
+/* Login Button Styling - Match Profile Button */
 .btn-login {
   background: transparent !important;
-  color: #000000 !important;
-  padding: 8px 18px !important;
-  border: 2px solid #000000;
-  border-radius: 6px;
+  color: var(--text-primary) !important;
+  padding: var(--space-2) var(--space-4) !important;
+  border: 3px solid var(--text-primary) !important;
+  border-radius: var(--radius-sm);
   font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .btn-login::after {
@@ -129,20 +133,294 @@
 }
 
 .btn-login:hover {
-  background: #000000 !important;
-  color: white !important;
+  background: var(--background-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--accent-color) !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-hover);
 }
 
-/* Auth Link Special Styling (for Logout) */
+/* User Profile Dropdown */
+.user-profile-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: 3px solid var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-family: var(--font-primary);
+}
+
+.profile-trigger:hover {
+  background: var(--background-secondary);
+  color: var(--text-primary);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+}
+
+.profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--background-secondary);
+  border-radius: 50%;
+  color: var(--text-secondary);
+}
+
+.profile-trigger:hover .profile-avatar {
+  background: var(--accent-color);
+  color: var(--brand-black);
+}
+
+.profile-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dropdown-chevron {
+  transition: transform 0.2s ease;
+  color: currentColor;
+}
+
+/* Profile Menu */
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-hover);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.profile-menu.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.profile-menu-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.profile-info {
+  text-align: left;
+}
+
+.profile-name-large {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-email {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 8px 0;
+}
+
+.profile-menu-items {
+  padding: 8px 0;
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-menu-item:hover {
+  background: var(--background-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.profile-menu-item svg {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.profile-menu-item:hover svg {
+  color: var(--text-primary) !important;
+}
+
+/* Ensure proper contrast for dark theme profile menu */
+[data-theme="dark"] .profile-menu-item:hover {
+  background: var(--bistre) !important;
+  color: var(--white) !important;
+}
+
+[data-theme="dark"] .profile-menu-item:hover svg {
+  color: var(--white) !important;
+}
+
+/* Ensure all child elements in profile menu items are consistent */
+.profile-menu-item:hover * {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .profile-menu-item:hover * {
+  color: var(--white) !important;
+}
+
+.profile-menu-logout {
+  color: #dc3545;
+}
+
+.profile-menu-logout:hover {
+  background: #fee !important;
+  color: #dc3545 !important;
+}
+
+.profile-menu-logout svg {
+  color: #dc3545 !important;
+}
+
+.profile-menu-logout:hover svg {
+  color: #dc3545 !important;
+}
+
+.profile-menu-logout:hover * {
+  color: #dc3545 !important;
+}
+
+/* Theme Selector */
+.theme-selector {
+  cursor: default !important;
+}
+
+.theme-selector:hover {
+  background: #f8f9fa !important;
+}
+
+.theme-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.theme-select {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 80px;
+  font-family: inherit;
+}
+
+.theme-select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(195, 157, 67, 0.1);
+}
+
+.theme-select option {
+  background: var(--background-primary) !important;
+  color: var(--text-primary) !important;
+  padding: 8px 12px;
+}
+
+/* Hover state for all options */
+.theme-select option:hover {
+  background: var(--accent-color) !important;
+  color: var(--brand-black) !important;
+}
+
+/* Selected option styling - Light theme */
+.theme-select option:checked,
+.theme-select option[selected] {
+  background: var(--black) !important;
+  color: var(--satin-sheen-gold) !important;
+  font-weight: 600;
+}
+
+/* Selected option styling - Dark theme */
+[data-theme="dark"] .theme-select option:checked,
+[data-theme="dark"] .theme-select option[selected] {
+  background: var(--satin-sheen-gold) !important;
+  color: var(--white) !important;
+  font-weight: 600;
+}
+
+/* Override browser default blue selection */
+.theme-select option:focus,
+.theme-select option:active {
+  background: var(--accent-color) !important;
+  color: var(--brand-black) !important;
+}
+
+[data-theme="dark"] .theme-select option:focus,
+[data-theme="dark"] .theme-select option:active {
+  background: var(--accent-color) !important;
+  color: var(--brand-black) !important;
+}
+
+/* Webkit-specific styling for better browser support */
+.theme-select option:checked {
+  background: var(--black) linear-gradient(0deg, var(--black) 0%, var(--black) 100%) !important;
+  color: var(--satin-sheen-gold) !important;
+}
+
+[data-theme="dark"] .theme-select option:checked {
+  background: var(--satin-sheen-gold) linear-gradient(0deg, var(--satin-sheen-gold) 0%, var(--satin-sheen-gold) 100%) !important;
+  color: var(--white) !important;
+}
+
+/* Force override of browser default styles */
+.theme-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Auth Link Special Styling - Theme-aware */
 .auth-link {
   background: transparent !important;
-  color: #000000 !important;
+  color: var(--text-primary) !important;
   padding: 8px 18px !important;
-  border: 2px solid #000000;
+  border: 3px solid var(--text-primary);
   border-radius: 6px;
   font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .auth-link::after {
@@ -150,10 +428,11 @@
 }
 
 .auth-link:hover {
-  background: #000000 !important;
-  color: white !important;
+  background: var(--background-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--accent-color) !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-hover);
 }
 
 /* Mobile Menu Toggle */
@@ -251,6 +530,58 @@
     background: #f8f9fa !important;
     transform: none !important;
     box-shadow: none !important;
+  }
+  
+  /* Profile dropdown mobile styles */
+  .profile-trigger {
+    background: none !important;
+    border: none !important;
+    padding: 12px 24px !important;
+    border-radius: 0 !important;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .profile-trigger:hover {
+    background: #f8f9fa !important;
+    color: #000000 !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .profile-menu {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    background: #f8f9fa;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  
+  .profile-menu.active {
+    max-height: 300px;
+  }
+  
+  .profile-menu-header {
+    background: white;
+    margin: 0 24px;
+    border-radius: 4px;
+  }
+  
+  .profile-menu-item {
+    background: transparent;
+    padding: 12px 48px;
+    border-bottom: 1px solid #e9ecef;
+  }
+  
+  .profile-menu-item:hover {
+    background: white !important;
   }
   
   .mobile-menu-toggle {

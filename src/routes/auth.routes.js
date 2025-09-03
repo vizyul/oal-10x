@@ -5,6 +5,7 @@ const { body } = require('express-validator');
 const { authController } = require('../controllers');
 const { validationMiddleware } = require('../middleware');
 const authService = require('../services/auth.service');
+const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
 
 const router = express.Router();
@@ -217,7 +218,7 @@ router.get('/google', (req, res, next) => {
 
 router.get('/google/callback', (req, res, next) => {
   const oauthService = require('../services/oauth.service');
-  oauthService.handleGoogleCallback()(req, res, (err) => {
+  oauthService.handleGoogleCallback()(req, res, async (err) => {
     if (err) {
       logger.error('Google OAuth callback error:', err);
       return res.redirect('/auth/sign-in?error=oauth_failed');
@@ -229,12 +230,16 @@ router.get('/google/callback', (req, res, next) => {
     
     if (req.user) {
       // Set JWT token in cookie and redirect to dashboard
-      const token = authService.generateToken(req.user.id, req.user.email);
+      const token = authService.generateToken(req.user.id, req.user.email, req.user);
       res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
+      
+      // Record OAuth login session
+      await sessionService.recordLogin(req.user, req, 'google');
+      
       return res.redirect('/dashboard');
     }
     
@@ -249,7 +254,7 @@ router.get('/apple', (req, res, next) => {
 });
 
 // Apple OAuth uses POST for callback, not GET
-router.post('/apple/callback', (req, res, next) => {
+router.post('/apple/callback', async (req, res, next) => {
   const oauthService = require('../services/oauth.service');
   logger.info('Apple OAuth callback route hit', {
     query: req.query,
@@ -263,7 +268,7 @@ router.post('/apple/callback', (req, res, next) => {
     }
   });
   
-  oauthService.handleAppleCallback()(req, res, (err) => {
+  oauthService.handleAppleCallback()(req, res, async (err) => {
     if (err) {
       logger.error('Apple OAuth callback error:', {
         error: err.message,
@@ -271,27 +276,51 @@ router.post('/apple/callback', (req, res, next) => {
         query: req.query,
         body: req.body
       });
+      
+      // Special handling for Apple subsequent login issues
+      if (err.message && err.message.includes('subsequent login')) {
+        return res.redirect('/auth/sign-in?error=apple_reauth_required&message=' + encodeURIComponent('Apple Sign In requires re-authentication. Please try signing in again.'));
+      }
+      
       return res.redirect('/auth/sign-in?error=oauth_failed');
     }
     
     logger.info('Apple OAuth callback success', {
       user: req.user ? 'User object present' : 'No user object',
-      pendingVerification: req.user?.pendingVerification
+      pendingVerification: req.user?.pendingVerification,
+      userId: req.user?.id,
+      userEmail: req.user?.email,
+      userKeys: req.user ? Object.keys(req.user) : []
     });
     
     if (req.user && req.user.pendingVerification) {
       logger.info(`Redirecting to Apple social verification for email: ${req.user.email}`);
-      return res.redirect(`/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=apple`);
+      const redirectUrl = `/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=apple${req.user.isApplePrivateEmail ? '&privateEmail=true' : ''}`;
+      return res.redirect(redirectUrl);
     }
     
     if (req.user) {
+      // Debug log the user object before token generation
+      logger.info(`Apple OAuth callback - user object for token generation:`, {
+        id: req.user.id,
+        email: req.user.email,
+        emailVerified: req.user.emailVerified,
+        status: req.user.status,
+        firstName: req.user.firstName,
+        userKeys: Object.keys(req.user)
+      });
+      
       // Set JWT token in cookie and redirect to dashboard
-      const token = authService.generateToken(req.user.id, req.user.email);
+      const token = authService.generateToken(req.user.id, req.user.email, req.user);
       res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
+      
+      // Record OAuth login session
+      await sessionService.recordLogin(req.user, req, 'apple');
+      
       logger.info(`Apple OAuth user logged in successfully: ${req.user.email}`);
       return res.redirect('/dashboard');
     }
@@ -309,7 +338,7 @@ router.get('/microsoft', (req, res, next) => {
 
 router.get('/microsoft/callback', (req, res, next) => {
   const oauthService = require('../services/oauth.service');
-  oauthService.handleMicrosoftCallback()(req, res, (err) => {
+  oauthService.handleMicrosoftCallback()(req, res, async (err) => {
     if (err) {
       logger.error('Microsoft OAuth callback error:', err);
       return res.redirect('/auth/sign-in?error=oauth_failed');
@@ -321,12 +350,16 @@ router.get('/microsoft/callback', (req, res, next) => {
     
     if (req.user) {
       // Set JWT token in cookie and redirect to dashboard
-      const token = authService.generateToken(req.user.id, req.user.email);
+      const token = authService.generateToken(req.user.id, req.user.email, req.user);
       res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
+      
+      // Record OAuth login session
+      await sessionService.recordLogin(req.user, req, 'microsoft');
+      
       return res.redirect('/dashboard');
     }
     
@@ -336,16 +369,19 @@ router.get('/microsoft/callback', (req, res, next) => {
 
 // Social Login Verification Page
 router.get('/social-verify', (req, res) => {
-  const { email, provider } = req.query;
+  const { email, provider, privateEmail } = req.query;
   
   if (!email || !provider) {
     return res.redirect('/auth/sign-in');
   }
   
+  const isApplePrivateEmail = privateEmail === 'true';
+  
   res.render('auth/social-verify', {
     title: 'Verify Your Email',
     email: email,
     provider: provider,
+    isApplePrivateEmail: isApplePrivateEmail,
     layout: 'auth'
   });
 });
@@ -372,6 +408,11 @@ router.post('/social-verify', async (req, res) => {
         secure: process.env.NODE_ENV === 'production',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
+      
+      // Record social verification login session
+      // Determine login method from user's registration method or use generic 'social'
+      const loginMethod = result.user.registrationMethod || 'social';
+      await sessionService.recordLogin(result.user, req, loginMethod);
       
       return res.json({
         success: true,

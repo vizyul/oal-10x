@@ -1,12 +1,15 @@
 const express = require('express');
 const authRoutes = require('./auth.routes');
-const { optionalAuthMiddleware } = require('../middleware');
+const { optionalAuthMiddleware, preferencesMiddleware } = require('../middleware');
 const { emailService } = require('../services');
 
 const router = express.Router();
 
 // Apply optional authentication middleware to all routes
 router.use(optionalAuthMiddleware);
+
+// Apply preferences middleware to load user theme preferences
+router.use(preferencesMiddleware);
 
 // Authentication routes
 router.use('/auth', authRoutes);
@@ -17,6 +20,7 @@ router.get('/', (req, res) => {
     title: 'Welcome to Our AI Legacy',
     description: 'Empowering ministry through responsible AI innovation',
     user: req.user,
+    userTheme: req.userTheme,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -35,6 +39,30 @@ router.get('/dashboard', require('../middleware').authMiddleware, (req, res) => 
   });
 });
 
+// Profile route (protected)
+router.get('/profile', require('../middleware').authMiddleware, (req, res) => {
+  res.render('profile', {
+    title: 'Profile',
+    description: 'Manage your profile and preferences',
+    user: req.user,
+    showHeader: true,
+    showFooter: true,
+    showNav: true
+  });
+});
+
+// Subscription route (protected)
+router.get('/subscription', require('../middleware').authMiddleware, (req, res) => {
+  res.render('subscription', {
+    title: 'Subscription',
+    description: 'Manage your subscription and billing',
+    user: req.user,
+    showHeader: true,
+    showFooter: true,
+    showNav: true
+  });
+});
+
 // API routes
 router.use('/api', require('./api.routes'));
 
@@ -43,6 +71,7 @@ router.get('/terms', (req, res) => {
   res.render('legal/terms', {
     title: 'Terms & Conditions',
     description: 'Our AI Legacy Terms & Conditions',
+    user: req.user,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -53,6 +82,7 @@ router.get('/privacy', (req, res) => {
   res.render('legal/privacy', {
     title: 'Privacy Policy',
     description: 'Our AI Legacy Privacy Policy',
+    user: req.user,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -64,6 +94,7 @@ router.get('/about', (req, res) => {
   res.render('about', {
     title: 'About Our AI Legacy',
     description: 'Learn about our mission and vision',
+    user: req.user,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -75,11 +106,91 @@ router.get('/contact', (req, res) => {
   res.render('contact', {
     title: 'Contact Us',
     description: 'Get in touch with Our AI Legacy',
+    user: req.user,
     showHeader: true,
     showFooter: true,
     showNav: true,
     additionalCSS: ['/css/contact.css']
   });
+});
+
+// Demo page
+router.get('/demo', (req, res) => {
+  res.render('demo', {
+    title: 'Request Demo',
+    description: 'Schedule a demo of Our AI Legacy platform',
+    user: req.user,
+    showHeader: true,
+    showFooter: true,
+    showNav: true
+  });
+});
+
+// Demo form submission
+router.post('/demo', async (req, res) => {
+  try {
+    const { name, email, organization, role, congregationSize, interest, timeline } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !organization) {
+      return res.render('demo', {
+        title: 'Request Demo',
+        description: 'Schedule a demo of Our AI Legacy platform',
+        user: req.user,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        error: 'Please fill in all required fields.',
+        formData: req.body
+      });
+    }
+    
+    // Send demo request email to sales team
+    const demoEmailContent = `
+      <h2>New Demo Request</h2>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Organization:</strong> ${organization}</p>
+      <p><strong>Role:</strong> ${role || 'Not specified'}</p>
+      <p><strong>Congregation Size:</strong> ${congregationSize || 'Not specified'}</p>
+      <p><strong>Timeline:</strong> ${timeline || 'Not specified'}</p>
+      <p><strong>Interest/Notes:</strong></p>
+      <p>${interest ? interest.replace(/\n/g, '<br>') : 'No additional notes provided'}</p>
+    `;
+    
+    const result = await emailService.sendEmail(
+      'sales@ourailegacy.com',
+      `Demo Request: ${organization}`,
+      demoEmailContent
+    );
+    
+    if (result.success) {
+      res.render('demo', {
+        title: 'Request Demo',
+        description: 'Schedule a demo of Our AI Legacy platform',
+        user: req.user,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        success: 'Thank you for your demo request! Our team will contact you within 24 hours to schedule your personalized demonstration.'
+      });
+    } else {
+      throw new Error('Failed to send demo request');
+    }
+    
+  } catch (error) {
+    console.error('Demo form error:', error);
+    res.render('demo', {
+      title: 'Request Demo',
+      description: 'Schedule a demo of Our AI Legacy platform',
+      user: req.user,
+      showHeader: true,
+      showFooter: true,
+      showNav: true,
+      error: 'There was an error submitting your demo request. Please try again.',
+      formData: req.body
+    });
+  }
 });
 
 // Contact form submission
@@ -92,6 +203,7 @@ router.post('/contact', async (req, res) => {
       return res.render('contact', {
         title: 'Contact Us',
         description: 'Get in touch with Our AI Legacy',
+        user: req.user,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -121,6 +233,7 @@ router.post('/contact', async (req, res) => {
       res.render('contact', {
         title: 'Contact Us',
         description: 'Get in touch with Our AI Legacy',
+        user: req.user,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -136,6 +249,7 @@ router.post('/contact', async (req, res) => {
     res.render('contact', {
       title: 'Contact Us',
       description: 'Get in touch with Our AI Legacy',
+      user: req.user,
       showHeader: true,
       showFooter: true,
       showNav: true,

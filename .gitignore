@@ -110,3 +110,16 @@ setup-airtable.js
 test-contact-route.js
 test-email.js
 verify-tenant.js
+
+# Session testing files (Claude Code generated)
+test-*.js
+debug-*.js
+add-welcome*.js
+youtube_plan.md
+
+# Style recommendation file
+style-recommendation.html
+
+# Errors folder
+errors/
+powershell_scripts/

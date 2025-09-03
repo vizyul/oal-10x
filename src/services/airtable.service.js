@@ -74,11 +74,23 @@ class AirtableService {
 
       // Use firstPage() with optimized query - limit to 1 for findUserByEmail since we only need one
       const isEmailLookup = fieldName === 'Email';
-      const records = await this.base(tableName).select({
-        filterByFormula: `{${fieldName}} = "${fieldValue}"`,
-        maxRecords: isEmailLookup ? 1 : 10, // Only get 1 record for email lookups
-        fields: isEmailLookup ? ['Email', 'Password', 'First Name', 'Last Name', 'Email Verified', 'Email Verification Token', 'Email Verification Expires', 'Status', 'Created At', 'Updated At'] : undefined // Only get needed fields for auth
-      }).firstPage();
+      
+      // For email lookups, use case-insensitive comparison
+      const filterFormula = isEmailLookup 
+        ? `LOWER({${fieldName}}) = LOWER("${fieldValue}")`
+        : `{${fieldName}} = "${fieldValue}"`;
+      
+      const selectOptions = {
+        filterByFormula: filterFormula,
+        maxRecords: isEmailLookup ? 1 : 10 // Only get 1 record for email lookups
+      };
+      
+      // Only add fields parameter for email lookups
+      if (isEmailLookup) {
+        selectOptions.fields = ['Email', 'Password', 'First Name', 'Last Name', 'Email Verified', 'Email Verification Token', 'Email Verification Expires', 'Status', 'Created At', 'Updated At', 'Last Login At', 'Terms Accepted', 'Privacy Accepted', 'Registration Method', 'Google ID', 'Microsoft ID', 'Apple ID', 'Welcome Email Sent', 'Welcome Email Sent At'];
+      }
+      
+      const records = await this.base(tableName).select(selectOptions).firstPage();
 
       logger.info(`Found ${records.length} records in ${tableName}`);
       return records;

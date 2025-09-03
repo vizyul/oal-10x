@@ -96,6 +96,76 @@ class AuthService {
   }
 
   /**
+   * Find user by Apple ID
+   * @param {string} appleId - Apple user ID
+   * @returns {Promise<Object|null>} User object or null
+   */
+  async findUserByAppleId(appleId) {
+    try {
+      logger.info(`Finding user by Apple ID: ${appleId}`);
+      
+      if (!airtableService.base) {
+        logger.warn('Airtable not configured - returning null for Apple ID lookup');
+        return null;
+      }
+
+      const records = await airtableService.findByField(
+        this.tableName,
+        'Apple ID',
+        appleId
+      );
+
+      if (records.length === 0) {
+        logger.info(`No user found with Apple ID: ${appleId}`);
+        return null;
+      }
+
+      const user = this.formatUserRecord(records[0]);
+      logger.info(`User found by Apple ID: ${user.email}`);
+      
+      return user;
+    } catch (error) {
+      logger.error('Error finding user by Apple ID:', error);
+      throw new Error('Failed to find user by Apple ID');
+    }
+  }
+
+  /**
+   * Find most recent Apple user (fallback for Apple subsequent login issues)
+   * @returns {Promise<Object|null>} Most recent Apple user or null
+   */
+  async findMostRecentAppleUser() {
+    try {
+      logger.info('Finding most recent Apple user as fallback');
+      
+      if (!airtableService.base) {
+        logger.warn('Airtable not configured - returning null for Apple user lookup');
+        return null;
+      }
+
+      // Get Apple users sorted by updated timestamp descending (most recent first)
+      const records = await airtableService.base(this.tableName).select({
+        filterByFormula: "AND({Registration Method} = 'apple', {Status} = 'active')",
+        sort: [{ field: 'Updated At', direction: 'desc' }],
+        maxRecords: 1
+      }).firstPage();
+
+      if (records.length === 0) {
+        logger.info('No active Apple users found');
+        return null;
+      }
+
+      const user = this.formatUserRecord(records[0]);
+      logger.info(`Found most recent Apple user: ${user.email}`);
+      
+      return user;
+    } catch (error) {
+      logger.error('Error finding most recent Apple user:', error);
+      throw new Error('Failed to find Apple user');
+    }
+  }
+
+  /**
    * Find user by ID
    * @param {string} userId - User ID
    * @returns {Promise<Object|null>} User object or null if not found
@@ -153,6 +223,15 @@ class AuthService {
       if (updateData.lastLoginAt) mappedData['Last Login At'] = updateData.lastLoginAt;
       if (updateData.termsAccepted !== undefined) mappedData['Terms Accepted'] = updateData.termsAccepted;
       if (updateData.privacyAccepted !== undefined) mappedData['Privacy Accepted'] = updateData.privacyAccepted;
+      
+      // Handle welcome email fields
+      if (updateData['Welcome Email Sent'] !== undefined) mappedData['Welcome Email Sent'] = updateData['Welcome Email Sent'];
+      if (updateData['Welcome Email Sent At']) mappedData['Welcome Email Sent At'] = updateData['Welcome Email Sent At'];
+      
+      // Handle OAuth ID fields
+      if (updateData['Google ID']) mappedData['Google ID'] = updateData['Google ID'];
+      if (updateData['Microsoft ID']) mappedData['Microsoft ID'] = updateData['Microsoft ID'];
+      if (updateData['Apple ID']) mappedData['Apple ID'] = updateData['Apple ID'];
       
       // Always update the "Updated At" timestamp
       mappedData['Updated At'] = new Date().toISOString();
@@ -245,6 +324,7 @@ class AuthService {
 
     const fields = record.fields;
     
+    
     return {
       id: record.id,
       email: fields['Email'],
@@ -264,7 +344,9 @@ class AuthService {
       googleId: fields['Google ID'],
       appleId: fields['Apple ID'],
       microsoftId: fields['Microsoft ID'],
-      registrationMethod: fields['Registration Method']
+      registrationMethod: fields['Registration Method'],
+      welcomeEmailSent: fields['Welcome Email Sent'] || false,
+      welcomeEmailSentAt: fields['Welcome Email Sent At']
     };
   }
 
@@ -274,15 +356,31 @@ class AuthService {
    * @param {string} email - User email
    * @returns {string} JWT token
    */
-  generateToken(userId, email) {
+  generateToken(userId, email, userData = null) {
     try {
       logger.info(`Generating JWT token for user: ${userId}`);
       
+      const payload = { 
+        userId: userId,
+        email: email
+      };
+      
+      // Include additional user data if provided (for newer tokens to avoid database lookups)
+      if (userData) {
+        payload.firstName = userData.firstName;
+        payload.lastName = userData.lastName;
+        payload.emailVerified = userData.emailVerified;
+        payload.status = userData.status;
+        
+        logger.info(`JWT payload debug for ${email}:`, {
+          firstName: userData.firstName,
+          emailVerified: userData.emailVerified,
+          status: userData.status
+        });
+      }
+      
       const token = jwt.sign(
-        { 
-          userId: userId,
-          email: email
-        },
+        payload,
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
       );
