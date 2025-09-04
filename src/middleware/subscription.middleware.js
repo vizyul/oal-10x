@@ -383,8 +383,8 @@ async function incrementUserUsage(userId, resource, increment = 1) {
         await airtable.create('Subscription_Usage', {
           user_id: [userId],
           subscription_id: [subscriptionRecord.id],
-          period_start: new Date(subscription.current_period_start).toISOString(),
-          period_end: new Date(subscription.current_period_end).toISOString(),
+          period_start: new Date(subscription.current_period_start).toISOString().split('T')[0],
+          period_end: new Date(subscription.current_period_end).toISOString().split('T')[0],
           [fieldName]: increment,
           videos_processed: resource === 'videos' ? increment : 0,
           api_calls_made: resource === 'api_calls' ? increment : 0,

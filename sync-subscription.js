@@ -87,8 +87,8 @@ async function syncSubscriptionData() {
       await airtable.update('User_Subscriptions', subscriptionRecord.id, {
         subscription_tier: tier,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
         cancel_at_period_end: subscription.cancel_at_period_end
       });
       console.log('Subscription record updated');
@@ -102,8 +102,8 @@ async function syncSubscriptionData() {
         stripe_subscription_id: subscription.id,
         subscription_tier: tier,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
         cancel_at_period_end: subscription.cancel_at_period_end,
         trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
         trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null
@@ -115,8 +115,8 @@ async function syncSubscriptionData() {
     await airtable.create('Subscription_Usage', {
       user_id: [user.id],
       subscription_id: subscription.id,
-      period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
+      period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
       videos_processed: 0,
       api_calls_made: 0,
       storage_used_mb: 0,
