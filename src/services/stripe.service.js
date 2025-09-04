@@ -521,7 +521,12 @@ class StripeService {
     const tiers = stripeConfig.subscriptionTiers;
     
     for (const [tierName, config] of Object.entries(tiers)) {
-      if (config.priceId === priceId) {
+      // Check monthly price ID
+      if (config.monthly && config.monthly.priceId === priceId) {
+        return tierName;
+      }
+      // Check yearly price ID  
+      if (config.yearly && config.yearly.priceId === priceId) {
         return tierName;
       }
     }
