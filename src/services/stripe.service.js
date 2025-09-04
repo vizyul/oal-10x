@@ -2,6 +2,7 @@ const stripe = require('stripe')(require('../config/stripe.config').getSecretKey
 const stripeConfig = require('../config/stripe.config');
 const airtable = require('./airtable.service');
 const { logger } = require('../utils');
+const { clearCachedUser } = require('../middleware');
 
 class StripeService {
   constructor() {
@@ -279,6 +280,9 @@ class StripeService {
       subscription_status: subscription.status
     });
 
+    // Clear cached user data to force reload with new subscription info
+    clearCachedUser(userId);
+
     // Create initial usage record for the subscription
     await this.createUsageRecord(userId, subscription, subscriptionRecord);
 
@@ -323,6 +327,9 @@ class StripeService {
         subscription_status: subscription.status
       });
 
+      // Clear cached user data to force reload with new subscription info
+      clearCachedUser(userId);
+
       logger.info('Subscription updated:', { 
         subscriptionId: subscription.id, 
         userId, 
@@ -361,6 +368,9 @@ class StripeService {
       subscription_status: 'canceled'
     });
 
+    // Clear cached user data to force reload with new subscription info
+    clearCachedUser(userId);
+
     logger.info('Subscription canceled:', { 
       subscriptionId: subscription.id, 
       userId 
@@ -394,6 +404,9 @@ class StripeService {
     await airtable.update('Users', userId, {
       subscription_status: 'paused'
     });
+
+    // Clear cached user data to force reload with new subscription info
+    clearCachedUser(userId);
 
     logger.info('Subscription paused:', { 
       subscriptionId: subscription.id, 
@@ -432,6 +445,9 @@ class StripeService {
       subscription_tier: tier,
       subscription_status: 'active'
     });
+
+    // Clear cached user data to force reload with new subscription info
+    clearCachedUser(userId);
 
     logger.info('Subscription resumed:', { 
       subscriptionId: subscription.id, 
@@ -480,6 +496,9 @@ class StripeService {
       await airtable.update('Users', userId, {
         subscription_status: 'past_due'
       });
+
+      // Clear cached user data to force reload with new subscription info
+      clearCachedUser(userId);
 
       logger.warn('Payment failed:', { 
         invoiceId: invoice.id, 

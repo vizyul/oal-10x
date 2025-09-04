@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## System Environment
+
+**Operating System**: Windows 11
+**Important**: Use Windows commands, not Unix/Linux commands
+- Use `dir` instead of `ls` to list files
+- Use `type` instead of `cat` to read files  
+- Use Windows path separators (`\` or `/` both work)
+- Use `cd /d` to change drives if needed
+- PowerShell and Command Prompt both available
+
 ## Project Overview
 
 "Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for ministry use.

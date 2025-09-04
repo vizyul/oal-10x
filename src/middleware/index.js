@@ -124,6 +124,11 @@ const setCachedUser = (userId, user) => {
   }
 };
 
+const clearCachedUser = (userId) => {
+  userCache.delete(userId);
+  logger.debug('Cleared cached user data:', { userId });
+};
+
 // Authentication middleware
 const authMiddleware = async (req, res, next) => {
   try {
@@ -372,5 +377,6 @@ module.exports = {
   guestOnlyMiddleware,
   errorMiddleware,
   preferencesMiddleware,
-  subscriptionMiddleware
+  subscriptionMiddleware,
+  clearCachedUser
 };
