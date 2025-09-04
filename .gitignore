@@ -6,6 +6,7 @@ yarn-error.log*
 
 # Environment variables
 .env
+.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -116,6 +117,12 @@ test-*.js
 debug-*.js
 add-welcome*.js
 youtube_plan.md
+setup-enhanced-airtable-tables.js
+setup-subscription-tables.js
+stripe-subscription-plan.md
+create-test-user.js
+generate-jwt-token.js
+TEST-USER-SETUP.md
 
 # Style recommendation file
 style-recommendation.html

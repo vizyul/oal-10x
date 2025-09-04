@@ -51,17 +51,14 @@ router.get('/profile', require('../middleware').authMiddleware, (req, res) => {
   });
 });
 
-// Subscription route (protected)
-router.get('/subscription', require('../middleware').authMiddleware, (req, res) => {
-  res.render('subscription', {
-    title: 'Subscription',
-    description: 'Manage your subscription and billing',
-    user: req.user,
-    showHeader: true,
-    showFooter: true,
-    showNav: true
-  });
-});
+// Subscription routes
+router.use('/subscription', require('./subscription-web.routes'));
+
+// Videos routes
+router.use('/videos', require('./videos-web.routes'));
+
+// Webhook routes (must be BEFORE /api routes to bypass auth middleware)
+router.use('/webhook', require('./webhook.routes'));
 
 // API routes
 router.use('/api', require('./api.routes'));

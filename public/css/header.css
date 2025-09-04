@@ -319,6 +319,156 @@
   color: #dc3545 !important;
 }
 
+/* Navigation Services & Subscription */
+.nav-separator {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+  margin: 0 8px;
+}
+
+.nav-service {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  background: var(--background-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 16px !important;
+  transition: all 0.2s ease;
+}
+
+.nav-service::after {
+  display: none;
+}
+
+.nav-service:hover {
+  background: var(--accent-color);
+  color: var(--brand-black) !important;
+  border-color: var(--accent-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(195, 157, 67, 0.2);
+}
+
+.nav-service svg {
+  color: var(--accent-color, #C39D43);
+}
+
+.nav-service:hover svg {
+  color: var(--brand-black);
+}
+
+.subscription-status-nav {
+  position: relative;
+}
+
+.subscription-tier {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px !important;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  font-weight: 600;
+}
+
+.subscription-tier::after {
+  display: none;
+}
+
+.tier-free {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.tier-basic {
+  background: #f0f9ff;
+  color: var(--accent-color, #C39D43);
+  border-color: var(--accent-color, #C39D43);
+}
+
+.tier-premium {
+  background: #e0e7ff;
+  color: #5b21b6;
+  border-color: #7c3aed;
+}
+
+.tier-enterprise {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #f59e0b;
+}
+
+.subscription-tier:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.usage-badge {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.tier-basic .usage-badge {
+  background: rgba(195, 157, 67, 0.1);
+  color: var(--accent-color, #C39D43);
+}
+
+.tier-premium .usage-badge {
+  background: rgba(91, 33, 182, 0.1);
+  color: #5b21b6;
+}
+
+.tier-enterprise .usage-badge {
+  background: rgba(146, 64, 14, 0.1);
+  color: #92400e;
+}
+
+.nav-upgrade-btn {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white !important;
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  padding: 8px 16px !important;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  animation: gentle-pulse 2s infinite;
+}
+
+.nav-upgrade-btn::after {
+  display: none;
+}
+
+.nav-upgrade-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  border-color: #047857;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(16, 185, 129, 0.3);
+  color: white !important;
+}
+
+.nav-upgrade-btn svg {
+  color: #fbbf24;
+}
+
+@keyframes gentle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+}
+
 /* Theme Selector */
 .theme-selector {
   cursor: default !important;

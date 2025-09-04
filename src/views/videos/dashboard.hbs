@@ -1,0 +1,79 @@
+{{#> layouts/main}}
+
+<div class="video-dashboard">
+  <div class="dashboard-header">
+    <h1>Video Dashboard</h1>
+    <p>Manage your video content and AI-generated insights</p>
+    
+    {{#if subscription}}
+    <div class="subscription-info">
+      <span class="tier-badge tier-{{subscription.tier}}">{{capitalize subscription.tier}} Plan</span>
+      <span class="usage-info">{{subscription.usage.videos}}/{{subscription.limits.videos}} videos used</span>
+    </div>
+    {{/if}}
+  </div>
+
+  <div class="dashboard-actions">
+    {{#if (gt subscription.limits.videos 0)}}
+    <a href="/videos/upload" class="btn btn-primary">Upload Video</a>
+    {{else}}
+    <a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>
+    {{/if}}
+    <a href="/videos/library" class="btn btn-secondary">View Library</a>
+    {{#if subscription.features.analyticsAccess}}
+    <a href="/videos/analytics" class="btn btn-outline">Analytics</a>
+    {{/if}}
+  </div>
+
+  <div class="recent-videos">
+    <div class="section-header">
+      <h2>Recent Videos</h2>
+      <a href="/videos/library" class="view-all-link">View All</a>
+    </div>
+    
+    <div class="video-grid" id="recent-videos-grid">
+      <div class="loading-placeholder">Loading recent videos...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+  try {
+    const videosResponse = await fetch('/api/videos?limit=6');
+    const videosData = await videosResponse.json();
+    
+    const gridElement = document.getElementById('recent-videos-grid');
+    
+    if (videosData.success && videosData.data.videos.length > 0) {
+      gridElement.innerHTML = videosData.data.videos.map(video => `
+        <div class="video-card">
+          <div class="video-info">
+            <h4 class="video-title">${video.video_title}</h4>
+            <p class="video-channel">${video.channel_name || 'Unknown Channel'}</p>
+            <div class="video-status status-${video.status}">${video.status}</div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      const videoLimit = {{{subscription.limits.videos}}};
+      const uploadAction = videoLimit > 0 
+        ? `<a href="/videos/upload" class="btn btn-primary">Upload Video</a>`
+        : `<a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>`;
+        
+      gridElement.innerHTML = `
+        <div class="empty-state">
+          <h3>No videos yet</h3>
+          <p>${videoLimit > 0 ? 'Upload your first video to get started.' : 'Upgrade your plan to start uploading videos.'}</p>
+          ${uploadAction}
+        </div>
+      `;
+    }
+  } catch (error) {
+    console.error('Error loading videos:', error);
+    document.getElementById('recent-videos-grid').innerHTML = '<div class="error-state">Failed to load videos</div>';
+  }
+});
+</script>
+
+{{/layouts/main}}

@@ -895,3 +895,20 @@ html {
     min-width: 140px;
   }
 }
+
+/* System dialog and alert button overrides only */
+button[data-testid="confirm"],
+button[data-testid="ok"],
+.confirm-button,
+.ok-button,
+.dialog-button,
+.alert-button,
+dialog button {
+  background: #000000 !important;
+  color: #FEFEFE !important;
+  border: 1px solid #333333 !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+}

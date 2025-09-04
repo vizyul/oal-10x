@@ -1,0 +1,257 @@
+{{#> layouts/main}}
+
+<!-- Error/Success Notification -->
+<div id="notification" class="notification" style="display: none;">
+  <div class="notification-content">
+    <div class="notification-icon">
+      <svg class="error-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
+        <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <svg class="success-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="2" fill="none"/>
+        <polyline points="22,4 12,14.01 9,11.01" stroke="currentColor" stroke-width="2" fill="none"/>
+      </svg>
+    </div>
+    <div class="notification-message"></div>
+    <button class="notification-close" onclick="closeNotification()">&times;</button>
+  </div>
+</div>
+
+<div class="subscription-upgrade-container">
+  <div class="hero-section">
+    <h1>Choose Your Plan</h1>
+    <p class="hero-subtitle">Transform your content with AI-powered tools</p>
+    {{#if subscription}}
+      <div class="current-plan-badge">
+        Current Plan: <strong>{{capitalize subscription.tier}}</strong>
+        {{#if subscription.usage}}
+          <span class="usage-info">{{subscription.usage.videos}}/{{subscription.limits.videos}} videos used</span>
+        {{/if}}
+      </div>
+    {{/if}}
+    
+    <!-- Billing Toggle -->
+    <div class="billing-toggle">
+      <div class="toggle-container">
+        <span class="toggle-label" id="monthly-label">Monthly</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="billing-toggle">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label" id="yearly-label">Yearly</span>
+        <span class="savings-badge">Save 2 months!</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pricing-grid">
+    {{#each tiers}}
+    <div class="pricing-card {{#if (eq key ../currentTier)}}current-plan{{/if}}">
+      <div class="card-header">
+        <h3>Amplify - {{name}}</h3>
+        
+        <!-- Monthly Pricing -->
+        <div class="pricing-info monthly-pricing">
+          <div class="price">${{monthly.price}}</div>
+          <div class="period">/month</div>
+        </div>
+        
+        <!-- Yearly Pricing -->
+        <div class="pricing-info yearly-pricing" style="display: none;">
+          <div class="original-price">
+            <span class="crossed-out">${{yearly.originalMonthlyTotal}}</span>
+            <span class="savings-text">Save ${{yearly.savings}}</span>
+          </div>
+          <div class="price">${{yearly.price}}</div>
+          <div class="period">/year</div>
+          <div class="monthly-equivalent">${{yearly.monthlyEquivalent}}/month</div>
+        </div>
+      </div>
+
+      <div class="features-list">
+        {{#each features}}
+        <div class="feature-item">
+          <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
+          <span>{{this}}</span>
+        </div>
+        {{/each}}
+
+        {{#if analyticsAccess}}
+        <div class="feature-item premium-feature">
+          <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
+          <span>Advanced Analytics</span>
+        </div>
+        {{/if}}
+
+        {{#if apiAccess}}
+        <div class="feature-item enterprise-feature">
+          <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
+          <span>API Access</span>
+        </div>
+        {{/if}}
+      </div>
+
+      <div class="card-footer">
+        {{#if (eq key ../currentTier)}}
+        <button class="btn btn-current" disabled>Current Plan</button>
+        {{else}}
+        <button class="btn btn-primary subscribe-btn" 
+                data-monthly-price-id="{{monthly.priceId}}" 
+                data-yearly-price-id="{{yearly.priceId}}" 
+                data-tier="{{key}}">
+          {{#if (eq key "basic")}}Start Free Trial{{else}}Upgrade to {{name}}{{/if}}
+        </button>
+        {{/if}}
+      </div>
+    </div>
+    {{/each}}
+  </div>
+
+  <div class="faq-section">
+    <h2>Frequently Asked Questions</h2>
+    <div class="faq-grid">
+      <div class="faq-item">
+        <h4>Can I change my plan anytime?</h4>
+        <p>Yes, you can upgrade or downgrade your plan at any time. Changes take effect at your next billing cycle.</p>
+      </div>
+      <div class="faq-item">
+        <h4>What happens if I exceed my video limit?</h4>
+        <p>You'll be prompted to upgrade your plan. Your account won't be suspended, but you'll need a higher tier to process more videos.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Is there a free trial?</h4>
+        <p>Yes! All paid plans include a 14-day free trial. You can cancel anytime during the trial period.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Can I cancel my subscription?</h4>
+        <p>Absolutely. You can cancel your subscription at any time from your billing portal. You'll retain access until your current billing period ends.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stripe Checkout Integration -->
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+  const stripePublishableKey = '{{{stripePublishableKey}}}';
+  const stripe = Stripe(stripePublishableKey);
+  
+  // Notification system
+  function showNotification(message, type = 'error') {
+    const notification = document.getElementById('notification');
+    const messageEl = notification.querySelector('.notification-message');
+    const errorIcon = notification.querySelector('.error-icon');
+    const successIcon = notification.querySelector('.success-icon');
+    
+    messageEl.textContent = message;
+    notification.className = 'notification ' + type;
+    
+    // Show appropriate icon
+    if (type === 'error') {
+      errorIcon.style.display = 'block';
+      successIcon.style.display = 'none';
+    } else {
+      errorIcon.style.display = 'none';
+      successIcon.style.display = 'block';
+    }
+    
+    notification.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      closeNotification();
+    }, 5000);
+  }
+  
+  function closeNotification() {
+    document.getElementById('notification').style.display = 'none';
+  }
+  
+  // Handle billing toggle
+  document.addEventListener('DOMContentLoaded', function() {
+    const billingToggle = document.getElementById('billing-toggle');
+    const monthlyLabel = document.getElementById('monthly-label');
+    const yearlyLabel = document.getElementById('yearly-label');
+    const monthlyPricing = document.querySelectorAll('.monthly-pricing');
+    const yearlyPricing = document.querySelectorAll('.yearly-pricing');
+    
+    // Set initial state
+    monthlyLabel.classList.add('active');
+    yearlyLabel.classList.remove('active');
+    
+    billingToggle.addEventListener('change', function() {
+      const isYearly = this.checked;
+      
+      // Update labels
+      monthlyLabel.classList.toggle('active', !isYearly);
+      yearlyLabel.classList.toggle('active', isYearly);
+      
+      // Toggle pricing display
+      monthlyPricing.forEach(el => el.style.display = isYearly ? 'none' : 'block');
+      yearlyPricing.forEach(el => el.style.display = isYearly ? 'block' : 'none');
+    });
+  });
+  
+  document.querySelectorAll('.subscribe-btn').forEach(button => {
+    button.addEventListener('click', async (e) => {
+      const isYearly = document.getElementById('billing-toggle').checked;
+      const monthlyPriceId = e.target.dataset.monthlyPriceId;
+      const yearlyPriceId = e.target.dataset.yearlyPriceId;
+      const priceId = isYearly ? yearlyPriceId : monthlyPriceId;
+      const tier = e.target.dataset.tier;
+      
+      if (!priceId) {
+        showNotification('Price ID not configured for this tier. Please contact support.', 'error');
+        return;
+      }
+      
+      // Show loading state
+      e.target.disabled = true;
+      e.target.textContent = 'Processing...';
+      
+      try {
+        // Create checkout session
+        const response = await fetch('/api/subscription/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ priceId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Redirect to Stripe Checkout in the same window
+          const { error } = await stripe.redirectToCheckout({
+            sessionId: data.sessionId
+          });
+          
+          if (error) {
+            console.error('Stripe error:', error);
+            showNotification('There was an error processing your request. Please try again.', 'error');
+          }
+        } else {
+          showNotification(data.message || 'Failed to create checkout session', 'error');
+        }
+      } catch (error) {
+        console.error('Checkout error:', error);
+        showNotification('There was an error processing your request. Please try again.', 'error');
+      } finally {
+        // Reset button state
+        e.target.disabled = false;
+        e.target.textContent = tier === 'basic' ? 'Start Free Trial' : 'Upgrade to ' + tier;
+      }
+    });
+  });
+</script>
+
+{{/layouts/main}}

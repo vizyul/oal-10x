@@ -17,9 +17,10 @@ const securityMiddleware = [
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://js.stripe.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"]
+        connectSrc: ["'self'", "https://api.stripe.com"],
+        frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"]
       }
     },
     crossOriginEmbedderPolicy: false
@@ -348,11 +349,19 @@ const handleAuthError = (req, res, message) => {
   }
   
   // For web requests, redirect to login
-  req.flash('error', message);
+  try {
+    if (req.flash && typeof req.flash === 'function') {
+      req.flash('error', message);
+    }
+  } catch (flashError) {
+    logger.debug('Flash not available:', flashError.message);
+  }
+  
   return res.redirect('/auth/sign-in');
 };
 
 const preferencesMiddleware = require('./preferences.middleware');
+const subscriptionMiddleware = require('./subscription.middleware');
 
 module.exports = {
   securityMiddleware,
@@ -361,5 +370,6 @@ module.exports = {
   optionalAuthMiddleware,
   guestOnlyMiddleware,
   errorMiddleware,
-  preferencesMiddleware
+  preferencesMiddleware,
+  subscriptionMiddleware
 };

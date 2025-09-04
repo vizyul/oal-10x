@@ -1,0 +1,128 @@
+{{#> layouts/main}}
+
+<div class="subscription-success">
+  <div class="success-container">
+    <div class="success-icon">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22,4 12,14.01 9,11.01"></polyline>
+      </svg>
+    </div>
+    
+    <h1>Welcome to {{capitalize subscription.tier}}!</h1>
+    <p class="success-message">Your subscription has been activated successfully. You now have access to all {{capitalize subscription.tier}} features.</p>
+    
+    <div class="subscription-details">
+      <div class="detail-card">
+        <h3>What's Next?</h3>
+        <div class="next-steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h4>Start Processing Videos</h4>
+              <p>Upload your first video and let our AI create summaries, titles, and more.</p>
+            </div>
+          </div>
+          
+          <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h4>Connect YouTube</h4>
+              <p>Link your YouTube channel to import and process existing videos.</p>
+            </div>
+          </div>
+          
+          {{#if subscription.features.analyticsAccess}}
+          <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h4>View Analytics</h4>
+              <p>Track your content performance with advanced analytics dashboard.</p>
+            </div>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+      
+      <div class="detail-card">
+        <h3>Your Plan Includes</h3>
+        <div class="plan-features">
+          {{#each subscription.features}}
+          <div class="feature-item">
+            <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            <span>{{this}}</span>
+          </div>
+          {{/each}}
+          
+          {{#if subscription.features.analyticsAccess}}
+          <div class="feature-item">
+            <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            <span>Advanced Analytics Dashboard</span>
+          </div>
+          {{/if}}
+          
+          {{#if subscription.features.apiAccess}}
+          <div class="feature-item">
+            <svg class="check-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            <span>API Access for Custom Integration</span>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+    
+    <div class="action-buttons">
+      <a href="/videos/upload" class="btn btn-primary btn-large">
+        <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        Start Processing Videos
+      </a>
+      
+      <a href="/subscription" class="btn btn-secondary">View Dashboard</a>
+    </div>
+    
+    {{#if sessionId}}
+    <div class="receipt-info">
+      <p>Need a receipt? <a href="#" id="view-receipt-link">View your receipt</a></p>
+    </div>
+    {{/if}}
+  </div>
+</div>
+
+<script>
+  {{#if sessionId}}
+  // Handle receipt viewing
+  document.getElementById('view-receipt-link')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/subscription/receipt?session_id={{sessionId}}');
+      const data = await response.json();
+      
+      if (data.success && data.receiptUrl) {
+        window.open(data.receiptUrl, '_blank');
+      } else {
+        alert('Receipt not available at this time. Please check your email or contact support.');
+      }
+    } catch (error) {
+      console.error('Receipt error:', error);
+      alert('Unable to retrieve receipt. Please check your email or contact support.');
+    }
+  });
+  {{/if}}
+
+  // Auto-redirect to dashboard after 30 seconds
+  setTimeout(() => {
+    if (confirm('Would you like to go to your dashboard now?')) {
+      window.location.href = '/subscription';
+    }
+  }, 30000);
+</script>
+
+{{/layouts/main}}

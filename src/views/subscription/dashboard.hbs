@@ -1,0 +1,202 @@
+{{#> layouts/main}}
+
+<div class="subscription-dashboard">
+  <div class="dashboard-header">
+    <h1>Subscription Dashboard</h1>
+    <p>Manage your subscription and track your usage</p>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- Current Plan Card -->
+    <div class="dashboard-card plan-card">
+      <div class="card-header">
+        <h3>Current Plan</h3>
+        {{#if subscription.status}}
+        <span class="status-badge status-{{subscription.status}}">{{capitalize subscription.status}}</span>
+        {{/if}}
+      </div>
+      <div class="card-content">
+        <div class="plan-info">
+          <h4>{{capitalize subscription.tier}} Plan</h4>
+          {{#if subscription.details}}
+          <p class="billing-cycle">
+            Current period: {{formatDate subscription.details.currentPeriodStart}} - {{formatDate subscription.details.currentPeriodEnd}}
+          </p>
+          {{#if subscription.details.cancelAtPeriodEnd}}
+          <div class="cancel-notice">
+            <svg class="warning-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            Your subscription will cancel on {{formatDate subscription.details.currentPeriodEnd}}
+          </div>
+          {{/if}}
+          {{/if}}
+        </div>
+      </div>
+      <div class="card-actions">
+        {{#if (eq subscription.tier "free")}}
+        <a href="/subscription/upgrade" class="btn btn-primary">Upgrade Plan</a>
+        {{else}}
+        <button id="manage-billing-btn" class="btn btn-secondary">Manage Billing</button>
+        <a href="/subscription/upgrade" class="btn btn-outline">Change Plan</a>
+        {{/if}}
+      </div>
+    </div>
+
+    <!-- Usage Card -->
+    {{#if subscription.usage}}
+    <div class="dashboard-card usage-card">
+      <div class="card-header">
+        <h3>Current Usage</h3>
+        <a href="/subscription/usage" class="view-details-link">View Details</a>
+      </div>
+      <div class="card-content">
+        <div class="usage-metrics">
+          <div class="metric">
+            <div class="metric-header">
+              <span class="metric-label">Videos Processed</span>
+              <span class="metric-value">{{subscription.usage.videos}}/{{subscription.limits.videos}}</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: {{subscription.percentages.videos}}%"></div>
+            </div>
+          </div>
+
+          {{#if subscription.usage.ai_summaries}}
+          <div class="metric">
+            <div class="metric-header">
+              <span class="metric-label">AI Summaries</span>
+              <span class="metric-value">{{subscription.usage.ai_summaries}}</span>
+            </div>
+          </div>
+          {{/if}}
+
+          {{#if subscription.features.analyticsAccess}}
+          <div class="metric">
+            <div class="metric-header">
+              <span class="metric-label">Analytics Views</span>
+              <span class="metric-value">{{subscription.usage.analytics}}</span>
+            </div>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+    {{/if}}
+
+    <!-- Features Card -->
+    <div class="dashboard-card features-card">
+      <div class="card-header">
+        <h3>Your Features</h3>
+      </div>
+      <div class="card-content">
+        <div class="features-list">
+          <div class="feature-item">
+            <svg class="feature-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="feature-info">
+              <h4>Video Processing</h4>
+              <p>{{subscription.limits.videos}} videos per month</p>
+            </div>
+          </div>
+
+          <div class="feature-item {{#unless subscription.features.analyticsAccess}}disabled{{/unless}}">
+            <svg class="feature-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="feature-info">
+              <h4>Advanced Analytics</h4>
+              <p>{{#if subscription.features.analyticsAccess}}Included{{else}}Requires Premium{{/if}}</p>
+            </div>
+            {{#unless subscription.features.analyticsAccess}}
+            <span class="upgrade-badge">Upgrade</span>
+            {{/unless}}
+          </div>
+
+          <div class="feature-item {{#unless subscription.features.apiAccess}}disabled{{/unless}}">
+            <svg class="feature-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="feature-info">
+              <h4>API Access</h4>
+              <p>{{#if subscription.features.apiAccess}}Included{{else}}Requires Enterprise{{/if}}</p>
+            </div>
+            {{#unless subscription.features.apiAccess}}
+            <span class="upgrade-badge">Upgrade</span>
+            {{/unless}}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="dashboard-card actions-card">
+      <div class="card-header">
+        <h3>Quick Actions</h3>
+      </div>
+      <div class="card-content">
+        <div class="action-buttons">
+          {{#if (gt subscription.limits.videos 0)}}
+          <a href="/videos/upload" class="action-btn">
+            <svg class="action-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <span>Upload Video</span>
+          </a>
+          {{else}}
+          <a href="/subscription/upgrade" class="action-btn">
+            <svg class="action-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <span>Upgrade to Upload</span>
+          </a>
+          {{/if}}
+          
+          <a href="/videos/library" class="action-btn">
+            <svg class="action-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+            </svg>
+            <span>Video Library</span>
+          </a>
+          
+          {{#if subscription.features.analyticsAccess}}
+          <a href="/videos/analytics" class="action-btn">
+            <svg class="action-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span>Analytics</span>
+          </a>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Handle billing portal access
+  document.getElementById('manage-billing-btn')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/subscription/create-portal-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.message || 'Failed to access billing portal');
+      }
+    } catch (error) {
+      console.error('Portal error:', error);
+      alert('There was an error accessing the billing portal. Please try again.');
+    }
+  });
+</script>
+
+{{/layouts/main}}

@@ -338,6 +338,8 @@ class AuthController {
         privacyAccepted: privacy === 'true',
         status: 'active',
         'Registration Method': 'email',
+        subscription_tier: 'free',
+        subscription_status: 'none',
         updatedAt: new Date().toISOString()
       });
 

@@ -13,8 +13,47 @@
       <nav class="toolbar-nav">
         <ul class="nav-links">
           <li><a href="/" class="nav-link">Home</a></li>
+          <!-- Always show Contact Us -->
           <li><a href="/contact" class="nav-link">Contact Us</a></li>
+          
+          {{#if user}}
+          <!-- Authenticated User Navigation -->
+          <li class="nav-separator"></li>
+          <li>
+            <a href="/videos" class="nav-link nav-service">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+              <span>Videos</span>
+            </a>
+          </li>
+          <li>
+            <div class="subscription-status-nav">
+              {{#if subscription}}
+              <a href="/subscription" class="nav-link subscription-tier tier-{{subscription.tier}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <span>{{capitalize subscription.tier}}</span>
+                {{#if subscription.usage}}
+                <span class="usage-badge">{{subscription.usage.videos}}/{{subscription.limits.videos}}</span>
+                {{/if}}
+              </a>
+              {{else}}
+              <a href="/subscription/upgrade" class="nav-link nav-upgrade-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <span>Upgrade</span>
+              </a>
+              {{/if}}
+            </div>
+          </li>
+          {{else}}
+          <!-- Non-authenticated Navigation -->
           <li><a href="/auth/sign-up" class="nav-link btn-get-started">Get Started</a></li>
+          {{/if}}
           <li>
             {{#if user}}
               <!-- User Profile Dropdown -->

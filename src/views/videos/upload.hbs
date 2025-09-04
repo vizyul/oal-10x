@@ -1,0 +1,127 @@
+{{#> layouts/main}}
+
+<div class="video-upload-page">
+  <div class="upload-header">
+    <h1>Upload Video</h1>
+    <p>Add videos by URL or connect your YouTube account to import content</p>
+    
+    {{#if subscription}}
+    <div class="usage-status">
+      <div class="usage-bar">
+        <div class="usage-fill" style="width: {{subscription.percentages.videos}}%"></div>
+      </div>
+      <span class="usage-text">
+        {{subscription.usage.videos}}/{{subscription.limits.videos}} videos used this month
+        {{#if (eq subscription.limits.videos subscription.usage.videos)}}
+        <span class="limit-reached">Limit reached - <a href="/subscription/upgrade">Upgrade plan</a></span>
+        {{/if}}
+      </span>
+    </div>
+    {{/if}}
+  </div>
+
+  {{#if success}}
+  <div class="alert alert-success">{{success}}</div>
+  {{/if}}
+
+  {{#if error}}
+  <div class="alert alert-error">{{error}}</div>
+  {{/if}}
+
+  <div class="upload-methods">
+    <div class="upload-method active">
+      <div class="method-header">
+        <h3>Upload by URL</h3>
+        <p>Paste a YouTube video URL to import and process</p>
+      </div>
+      
+      <form id="url-upload-form" class="upload-form">
+        <div class="form-group">
+          <label for="youtube-url">YouTube Video URL</label>
+          <input 
+            type="url" 
+            id="youtube-url" 
+            name="youtube_url" 
+            placeholder="https://www.youtube.com/watch?v=..." 
+            required
+            class="form-input"
+          >
+        </div>
+        
+        <div class="form-group">
+          <label for="video-title">Custom Title (Optional)</label>
+          <input 
+            type="text" 
+            id="video-title" 
+            name="video_title" 
+            placeholder="Leave blank to use original title"
+            class="form-input"
+          >
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-large" id="upload-btn">
+          Process Video
+        </button>
+      </form>
+    </div>
+  </div>
+  
+  <div id="upload-progress" class="upload-progress hidden">
+    <div class="progress-container">
+      <h4>Processing Video...</h4>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <p class="progress-message" id="progress-message">Initializing...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const urlForm = document.getElementById('url-upload-form');
+  const uploadBtn = document.getElementById('upload-btn');
+  const progressDiv = document.getElementById('upload-progress');
+
+  urlForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(urlForm);
+    const videoData = Object.fromEntries(formData.entries());
+    
+    progressDiv.classList.remove('hidden');
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Processing...';
+    
+    try {
+      const response = await fetch('/api/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(videoData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        document.getElementById('progress-message').textContent = 'Video processing started!';
+        setTimeout(() => {
+          window.location.href = `/videos?success=Video uploaded successfully`;
+        }, 2000);
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert(error.message || 'Failed to upload video. Please try again.');
+      
+      progressDiv.classList.add('hidden');
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Process Video';
+    }
+  });
+});
+</script>
+
+{{/layouts/main}}

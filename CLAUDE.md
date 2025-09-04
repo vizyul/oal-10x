@@ -146,9 +146,13 @@ package.json         # Updated with OAuth packages (passport, etc.)
 ## Environment Requirements
 
 - **Node.js**: >=18.0.0
-- **Environment variables**: Required setup via `.env.example`
+- **Environment variables**: Actual configuration is in `.env` file (not `.env.example`)
 - **Airtable**: API key and base configuration needed
 - **OAuth Providers**: Google, Apple, and Microsoft app configurations required
+
+### Important Notes
+- **Always check `.env` file for actual environment variables**, not `.env.example`
+- The `.env.example` is just a template - real values are in `.env`
 
 ### OAuth Configuration
 

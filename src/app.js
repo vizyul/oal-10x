@@ -43,6 +43,10 @@ app.engine('.hbs', engine({
     },
     json: (context) => {
       return JSON.stringify(context);
+    },
+    capitalize: (str) => {
+      if (!str || typeof str !== 'string') return str;
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
     }
   }
 }));
@@ -72,6 +76,16 @@ app.use(oauthService.initialize());
 
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Test endpoint for webhook accessibility
+app.get('/webhook/test', (req, res) => {
+  console.log('🧪 Test webhook endpoint hit!');
+  res.json({ 
+    success: true, 
+    message: 'Webhook endpoint is accessible!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Routes
 app.use('/', routes);

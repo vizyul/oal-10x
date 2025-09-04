@@ -344,7 +344,9 @@ class OAuthService {
               emailVerified: true,
               status: 'active',
               emailVerificationToken: null,
-              emailVerificationExpires: null
+              emailVerificationExpires: null,
+              subscription_tier: 'free',
+              subscription_status: 'none'
             });
             
             // Send welcome email if not sent before
@@ -399,7 +401,9 @@ class OAuthService {
           emailVerified: true,
           status: 'active',
           emailVerificationToken: null,
-          emailVerificationExpires: null
+          emailVerificationExpires: null,
+          subscription_tier: 'free',
+          subscription_status: 'none'
         });
         
         // Send welcome email
@@ -509,6 +513,8 @@ class OAuthService {
       'Registration Method': provider,
       'Terms Accepted': true,
       'Privacy Accepted': true,
+      'subscription_tier': 'free',
+      'subscription_status': 'none',
       [`${provider.charAt(0).toUpperCase() + provider.slice(1)} ID`]: providerId,
       'Created At': new Date().toISOString(),
       'Updated At': new Date().toISOString()
