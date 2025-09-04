@@ -11,8 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Start development**: `npm run dev` - Uses nodemon to watch for changes
 - **Start production**: `npm start` - Runs the server directly
 - **Run tests**: `npm test` - Executes Jest test suite
-- **Lint code**: `npm run lint` - ESLint checks
-- **Fix linting**: `npm run lint:fix` - Auto-fix linting issues
+- **Code validation**: Use `node -c <filename>` for syntax checking (lint is not configured on this system)
 
 ### Port Management (Windows)
 

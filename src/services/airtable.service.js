@@ -245,6 +245,71 @@ class AirtableService {
   }
 
   /**
+   * Find records by multiple field conditions (AND logic)
+   * @param {string} tableName - Name of the table
+   * @param {Object} fieldConditions - Object with field names as keys and values to match
+   * @returns {Promise<Array>} Matching records
+   */
+  async findByMultipleFields(tableName, fieldConditions) {
+    try {
+      if (!this.base) {
+        throw new Error('Airtable not configured');
+      }
+
+      logger.info(`Finding records in ${tableName} with conditions:`, fieldConditions);
+
+      // Build filter formula for multiple fields
+      const conditions = Object.entries(fieldConditions)
+        .filter(([key, value]) => value !== null && value !== undefined)
+        .map(([fieldName, fieldValue]) => {
+          if (Array.isArray(fieldValue)) {
+            // Handle array values (for linked records)
+            return `ARRAYJOIN({${fieldName}}) = "${fieldValue.join(',')}"`;
+          }
+          return `{${fieldName}} = "${fieldValue}"`;
+        });
+
+      if (conditions.length === 0) {
+        logger.warn('No valid conditions provided for findByMultipleFields');
+        return [];
+      }
+
+      const filterFormula = conditions.length === 1 
+        ? conditions[0]
+        : `AND(${conditions.join(', ')})`;
+
+      const selectOptions = {
+        filterByFormula: filterFormula,
+        maxRecords: 10
+      };
+
+      const records = await this.base(tableName).select(selectOptions).firstPage();
+
+      logger.info(`Found ${records.length} records in ${tableName} matching conditions`);
+      return records;
+    } catch (error) {
+      logger.error(`Error finding records by multiple fields in ${tableName}:`, error.message || error);
+      throw new Error(`Failed to find records in ${tableName}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if a record exists with given field conditions
+   * @param {string} tableName - Name of the table
+   * @param {Object} fieldConditions - Object with field names as keys and values to match
+   * @returns {Promise<Object|null>} First matching record or null
+   */
+  async findDuplicate(tableName, fieldConditions) {
+    try {
+      const records = await this.findByMultipleFields(tableName, fieldConditions);
+      return records.length > 0 ? records[0] : null;
+    } catch (error) {
+      logger.error(`Error checking for duplicate in ${tableName}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Get table schema information
    * @param {string} tableName - Name of the table
    * @returns {Promise<Object>} Table schema
