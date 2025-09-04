@@ -200,18 +200,57 @@ const subscriptionController = {
    */
   async handleWebhook(req, res) {
     let event;
+    
+    console.log('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
+    logger.info('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
+
+    // Debug: Log all incoming webhook details
+    logger.info('Webhook received:', {
+      method: req.method,
+      headers: {
+        'x-test-webhook': req.headers['x-test-webhook'],
+        'x-event-type': req.headers['x-event-type'],
+        'stripe-signature': req.headers['stripe-signature'] ? 'present' : 'missing'
+      },
+      NODE_ENV: process.env.NODE_ENV,
+      bodyType: typeof req.body,
+      bodyLength: req.body ? req.body.length : 0
+    });
 
     try {
       const signature = req.headers['stripe-signature'];
       const webhookSecret = stripeConfig.getWebhookSecret();
 
-      if (!signature || !webhookSecret) {
-        logger.error('Missing webhook signature or secret');
-        return res.status(400).json({ error: 'Missing signature or secret' });
-      }
+      // Development bypass for testing without Stripe signatures
+      if (process.env.NODE_ENV === 'development' && req.headers['x-test-webhook'] === 'true') {
+        logger.info('Development mode: bypassing webhook signature verification');
+        const subscriptionData = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        
+        // Log the subscription data for debugging
+        logger.info('Test subscription data received:', { 
+          id: subscriptionData.id,
+          metadata: subscriptionData.metadata,
+          user_id: subscriptionData.metadata?.user_id,
+          fullData: JSON.stringify(subscriptionData, null, 2)
+        });
+        
+        event = {
+          id: 'test_' + Date.now(),
+          type: req.headers['x-event-type'] || 'customer.subscription.created',
+          data: { 
+            object: subscriptionData
+          }
+        };
+      } else {
+        // Production webhook signature verification
+        if (!signature || !webhookSecret) {
+          logger.error('Missing webhook signature or secret');
+          return res.status(400).json({ error: 'Missing signature or secret' });
+        }
 
-      const stripe = require('stripe')(stripeConfig.getSecretKey());
-      event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+        const stripe = require('stripe')(stripeConfig.getSecretKey());
+        event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+      }
 
       logger.info('Received webhook event:', { 
         type: event.type, 

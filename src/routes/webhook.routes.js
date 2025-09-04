@@ -23,14 +23,14 @@ router.get('/test', (req, res) => {
  * @desc    Handle Stripe webhook events - COMPLETELY PUBLIC
  * @access  Public (verified via Stripe signature)
  */
-router.post('/stripe',
-  express.raw({ type: 'application/json' }),
+router.post('/',
   (req, res, next) => {
     console.log('🔗 Webhook received!', {
       method: req.method,
       url: req.url,
       headers: req.headers,
-      bodyLength: req.body ? req.body.length : 0
+      bodyLength: req.body ? req.body.length : 0,
+      bodyType: typeof req.body
     });
     next();
   },

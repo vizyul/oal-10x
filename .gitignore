@@ -130,3 +130,6 @@ style-recommendation.html
 # Errors folder
 errors/
 powershell_scripts/
+
+# Stripe webhook test files
+test-subscription-*.json

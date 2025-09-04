@@ -63,6 +63,9 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// Stripe webhook endpoint (needs raw body for signature verification)
+app.use('/webhook/stripe', express.raw({ type: 'application/json' }), require('./routes/webhook.routes'));
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
