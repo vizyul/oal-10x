@@ -233,6 +233,10 @@ class AuthService {
       if (updateData['Microsoft ID']) mappedData['Microsoft ID'] = updateData['Microsoft ID'];
       if (updateData['Apple ID']) mappedData['Apple ID'] = updateData['Apple ID'];
       
+      // Handle subscription fields
+      if (updateData.subscription_tier) mappedData['subscription_tier'] = updateData.subscription_tier;
+      if (updateData.subscription_status) mappedData['subscription_status'] = updateData.subscription_status;
+      
       // Always update the "Updated At" timestamp
       mappedData['Updated At'] = new Date().toISOString();
 
@@ -346,7 +350,9 @@ class AuthService {
       microsoftId: fields['Microsoft ID'],
       registrationMethod: fields['Registration Method'],
       welcomeEmailSent: fields['Welcome Email Sent'] || false,
-      welcomeEmailSentAt: fields['Welcome Email Sent At']
+      welcomeEmailSentAt: fields['Welcome Email Sent At'],
+      subscription_tier: fields['subscription_tier'] || 'free',
+      subscription_status: fields['subscription_status'] || 'none'
     };
   }
 

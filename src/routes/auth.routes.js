@@ -7,6 +7,7 @@ const { validationMiddleware } = require('../middleware');
 const authService = require('../services/auth.service');
 const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
+const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
 
 const router = express.Router();
 
@@ -240,7 +241,7 @@ router.get('/google/callback', (req, res, next) => {
       // Record OAuth login session
       await sessionService.recordLogin(req.user, req, 'google');
       
-      return res.redirect('/dashboard');
+      return res.redirect(getPostAuthRedirectUrl(req.user));
     }
     
     res.redirect('/auth/sign-in?error=oauth_failed');
@@ -322,7 +323,7 @@ router.post('/apple/callback', async (req, res, next) => {
       await sessionService.recordLogin(req.user, req, 'apple');
       
       logger.info(`Apple OAuth user logged in successfully: ${req.user.email}`);
-      return res.redirect('/dashboard');
+      return res.redirect(getPostAuthRedirectUrl(req.user));
     }
     
     logger.warn('Apple OAuth callback completed but no user found');
@@ -360,7 +361,7 @@ router.get('/microsoft/callback', (req, res, next) => {
       // Record OAuth login session
       await sessionService.recordLogin(req.user, req, 'microsoft');
       
-      return res.redirect('/dashboard');
+      return res.redirect(getPostAuthRedirectUrl(req.user));
     }
     
     res.redirect('/auth/sign-in?error=oauth_failed');
@@ -418,7 +419,7 @@ router.post('/social-verify', async (req, res) => {
         success: true,
         message: 'Email verified successfully!',
         data: {
-          redirectTo: '/dashboard'
+          redirectTo: getPostAuthRedirectUrl(result.user)
         }
       });
     }

@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { authService, airtableService, emailService } = require('../services');
 const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
+const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
 
 class AuthController {
   // GET /auth/sign-up - Step 1: Email input
@@ -12,7 +13,7 @@ class AuthController {
     try {
       // Check if user is already authenticated
       if (req.user) {
-        return res.redirect('/dashboard');
+        return res.redirect(getPostAuthRedirectUrl(req.user));
       }
 
       res.render('auth/signup-step1', {
@@ -397,14 +398,15 @@ class AuthController {
               lastName
             },
             token: jwtToken,
-            redirectTo: '/dashboard'
+            redirectTo: getPostAuthRedirectUrl({ id: user.id, email: user.email, firstName, lastName, subscription_tier: 'free' })
           }
         });
       }
 
-      // Redirect to dashboard
+      // Redirect based on subscription tier
       req.flash('success', 'Welcome to Our AI Legacy! Your account has been created successfully.');
-      res.redirect('/dashboard');
+      const redirectUrl = getPostAuthRedirectUrl({ id: user.id, email: user.email, firstName, lastName, subscription_tier: 'free' });
+      res.redirect(redirectUrl);
 
     } catch (error) {
       logger.error('Complete registration error:', error);
@@ -491,7 +493,7 @@ class AuthController {
     try {
       // Check if user is already authenticated
       if (req.user) {
-        return res.redirect('/dashboard');
+        return res.redirect(getPostAuthRedirectUrl(req.user));
       }
 
       const { verified } = req.query;
@@ -606,13 +608,13 @@ class AuthController {
               lastName: user.lastName
             },
             token,
-            redirectTo: '/dashboard'
+            redirectTo: getPostAuthRedirectUrl(user)
           }
         });
       }
 
       // For regular form submission
-      res.redirect('/dashboard');
+      res.redirect(getPostAuthRedirectUrl(user));
 
     } catch (error) {
       logger.error('Sign in error:', error);

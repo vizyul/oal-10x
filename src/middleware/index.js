@@ -278,7 +278,8 @@ const guestOnlyMiddleware = (req, res, next) => {
     }
     
     // For web requests
-    return res.redirect('/dashboard');
+    const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
+    return res.redirect(getPostAuthRedirectUrl(req.user));
   }
   
   next();

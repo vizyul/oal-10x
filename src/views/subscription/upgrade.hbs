@@ -48,7 +48,7 @@
 
   <div class="pricing-grid">
     {{#each tiers}}
-    <div class="pricing-card {{#if (eq key ../currentTier)}}current-plan{{/if}}">
+    <div class="pricing-card pricing-card-{{key}} {{#if (eq key ../currentTier)}}current-plan{{/if}}">
       <div class="card-header">
         <h3>Amplify - {{name}}</h3>
         

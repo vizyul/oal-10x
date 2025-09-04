@@ -384,6 +384,113 @@
   font-weight: 600;
 }
 
+/* Tier-specific background colors */
+/* Basic tier keeps the default white background */
+.pricing-card-basic {
+  /* No changes - keep the default white background */
+}
+
+/* Premium tier - brand gold background */
+.pricing-card-premium {
+  background: #C39D43;
+  color: #1a1a1a;
+}
+
+.pricing-card-premium .card-header h3 {
+  color: #1a1a1a;
+}
+
+.pricing-card-premium .price {
+  color: #1a1a1a;
+}
+
+.pricing-card-premium .period {
+  color: #4a4a4a;
+}
+
+.pricing-card-premium .monthly-equivalent {
+  color: #4a4a4a;
+}
+
+.pricing-card-premium .feature-item {
+  color: #1a1a1a;
+}
+
+.pricing-card-premium .check-icon {
+  color: #1a1a1a;
+}
+
+.pricing-card-premium .subscribe-btn {
+  background: linear-gradient(135deg, #1a1a1a, #333333);
+  color: #C39D43;
+  border: 1px solid #1a1a1a;
+}
+
+.pricing-card-premium .subscribe-btn:hover {
+  background: linear-gradient(135deg, #333333, #1a1a1a);
+  color: #ffffff;
+}
+
+.pricing-card-premium .crossed-out {
+  color: #666666;
+}
+
+.pricing-card-premium .savings-text {
+  background-color: #1a1a1a;
+  color: #C39D43;
+}
+
+/* Enterprise tier - black background */
+.pricing-card-enterprise {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 2px solid #333333;
+}
+
+.pricing-card-enterprise .card-header h3 {
+  color: #ffffff;
+}
+
+.pricing-card-enterprise .price {
+  color: #C39D43;
+}
+
+.pricing-card-enterprise .period {
+  color: #cccccc;
+}
+
+.pricing-card-enterprise .monthly-equivalent {
+  color: #cccccc;
+}
+
+.pricing-card-enterprise .feature-item {
+  color: #ffffff;
+}
+
+.pricing-card-enterprise .check-icon {
+  color: #C39D43;
+}
+
+.pricing-card-enterprise .subscribe-btn {
+  background: linear-gradient(135deg, #C39D43, #A67E33);
+  color: #1a1a1a;
+  border: 1px solid #C39D43;
+}
+
+.pricing-card-enterprise .subscribe-btn:hover {
+  background: linear-gradient(135deg, #A67E33, #C39D43);
+  color: #ffffff;
+}
+
+.pricing-card-enterprise .crossed-out {
+  color: #999999;
+}
+
+.pricing-card-enterprise .savings-text {
+  background-color: #C39D43;
+  color: #1a1a1a;
+}
+
 .card-header h3 {
   font-size: 1.5rem;
   font-weight: 700;
