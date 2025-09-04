@@ -197,6 +197,16 @@ class StripeService {
     const userId = subscription.metadata.user_id;
     const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
     
+    // Debug: Log date formatting
+    const startDate = new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z';
+    const endDate = new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z';
+    logger.info('Subscription dates:', {
+      rawStart: subscription.current_period_start,
+      rawEnd: subscription.current_period_end,
+      formattedStart: startDate,
+      formattedEnd: endDate
+    });
+    
     // Create subscription record
     await airtable.create('User_Subscriptions', {
       user_id: [userId],
@@ -204,8 +214,8 @@ class StripeService {
       stripe_subscription_id: subscription.id,
       subscription_tier: tier,
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z',
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z',
+      current_period_start: startDate,
+      current_period_end: endDate,
       cancel_at_period_end: subscription.cancel_at_period_end,
       trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
       trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
