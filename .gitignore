@@ -133,3 +133,6 @@ powershell_scripts/
 
 # Stripe webhook test files
 test-subscription-*.json
+
+# Documentation and styling change files
+SUBSCRIPTION_STYLING_CHANGES.md
