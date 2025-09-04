@@ -204,11 +204,11 @@ class StripeService {
       stripe_subscription_id: subscription.id,
       subscription_tier: tier,
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z',
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z',
       cancel_at_period_end: subscription.cancel_at_period_end,
-      trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-      trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null
+      trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
+      trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
     });
 
     // Update user record
@@ -250,8 +250,8 @@ class StripeService {
       await airtable.update('User_Subscriptions', subscriptionRecord.id, {
         subscription_tier: tier,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z',
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z',
         cancel_at_period_end: subscription.cancel_at_period_end
       });
 
@@ -360,8 +360,8 @@ class StripeService {
       
       await airtable.update('User_Subscriptions', subscriptionRecord.id, {
         status: 'active',
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z',
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z'
       });
     }
 
@@ -453,8 +453,8 @@ class StripeService {
       await airtable.create('Subscription_Usage', {
         user_id: [userId],
         subscription_id: subscription.id,
-        period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        period_start: new Date(subscription.current_period_start * 1000).toISOString().split('.')[0] + 'Z',
+        period_end: new Date(subscription.current_period_end * 1000).toISOString().split('.')[0] + 'Z',
         videos_processed: 0,
         api_calls_made: 0,
         storage_used_mb: 0,
