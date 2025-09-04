@@ -207,19 +207,45 @@ class StripeService {
       formattedEnd: endDate
     });
     
-    // Create subscription record
-    await airtable.create('User_Subscriptions', {
-      user_id: [userId],
-      stripe_customer_id: subscription.customer,
-      stripe_subscription_id: subscription.id,
-      subscription_tier: tier,
-      status: subscription.status,
-      current_period_start: startDate,
-      current_period_end: endDate,
-      cancel_at_period_end: subscription.cancel_at_period_end,
-      trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
-      trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
-    });
+    // Check for existing subscription record to prevent duplicates
+    const existingSubscriptions = await airtable.findByField(
+      'User_Subscriptions', 
+      'stripe_subscription_id', 
+      subscription.id
+    );
+
+    let subscriptionRecord;
+    if (existingSubscriptions.length > 0) {
+      // Update existing record
+      subscriptionRecord = existingSubscriptions[0];
+      await airtable.update('User_Subscriptions', subscriptionRecord.id, {
+        user_id: [userId],
+        stripe_customer_id: subscription.customer,
+        subscription_tier: tier,
+        status: subscription.status,
+        current_period_start: startDate,
+        current_period_end: endDate,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
+      });
+      logger.info('Updated existing subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
+    } else {
+      // Create new subscription record
+      subscriptionRecord = await airtable.create('User_Subscriptions', {
+        user_id: [userId],
+        stripe_customer_id: subscription.customer,
+        stripe_subscription_id: subscription.id,
+        subscription_tier: tier,
+        status: subscription.status,
+        current_period_start: startDate,
+        current_period_end: endDate,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
+      });
+      logger.info('Created new subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
+    }
 
     // Update user record
     await airtable.update('Users', userId, {
@@ -228,7 +254,7 @@ class StripeService {
     });
 
     // Create initial usage record for the subscription
-    await this.createUsageRecord(userId, subscription);
+    await this.createUsageRecord(userId, subscription, subscriptionRecord);
 
     logger.info('Subscription created:', { 
       subscriptionId: subscription.id, 
@@ -401,7 +427,7 @@ class StripeService {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const userId = subscription.metadata.user_id;
 
-      // Create usage record for new billing period
+      // Create usage record for new billing period (will find subscription record internally)
       await this.createUsageRecord(userId, subscription);
 
       logger.info('Payment succeeded:', { 
@@ -458,21 +484,67 @@ class StripeService {
   /**
    * Create usage record for new billing period
    */
-  async createUsageRecord(userId, subscription) {
+  async createUsageRecord(userId, subscription, subscriptionRecord = null) {
     try {
-      await airtable.create('Subscription_Usage', {
+      // If subscriptionRecord is not provided, find it
+      if (!subscriptionRecord) {
+        const existingSubscriptions = await airtable.findByField(
+          'User_Subscriptions', 
+          'stripe_subscription_id', 
+          subscription.id
+        );
+        subscriptionRecord = existingSubscriptions.length > 0 ? existingSubscriptions[0] : null;
+      }
+
+      if (!subscriptionRecord) {
+        logger.error('No subscription record found for usage creation:', { 
+          subscriptionId: subscription.id, 
+          userId 
+        });
+        return;
+      }
+
+      // Check for existing usage record for this period to prevent duplicates
+      const existingUsage = await airtable.findByField('Subscription_Usage', 'user_id', userId);
+      const periodStart = new Date(subscription.current_period_start * 1000).toISOString().split('T')[0];
+      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString().split('T')[0];
+      
+      const existingPeriodUsage = existingUsage.find(usage => 
+        usage.period_start === periodStart && usage.period_end === periodEnd
+      );
+
+      if (existingPeriodUsage) {
+        logger.info('Usage record already exists for period:', { 
+          userId, 
+          periodStart, 
+          periodEnd,
+          usageId: existingPeriodUsage.id 
+        });
+        return;
+      }
+
+      const usageRecord = await airtable.create('Subscription_Usage', {
         user_id: [userId],
-        subscription_id: subscription.id,
-        period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
-        period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
+        subscription_id: [subscriptionRecord.id], // Use the User_Subscriptions record ID, not Stripe subscription ID
+        period_start: periodStart,
+        period_end: periodEnd,
         videos_processed: 0,
         api_calls_made: 0,
         storage_used_mb: 0,
         ai_summaries_generated: 0,
         analytics_views: 0
       });
+
+      logger.info('Created usage record:', { 
+        usageId: usageRecord.id,
+        userId, 
+        subscriptionRecordId: subscriptionRecord.id,
+        periodStart,
+        periodEnd
+      });
     } catch (error) {
-      logger.error('Error creating usage record:', error);
+      logger.error('Error creating record in Subscription_Usage:', error);
+      logger.error('Error creating usage record:', {});
     }
   }
 
