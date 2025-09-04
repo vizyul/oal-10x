@@ -352,7 +352,8 @@ class AuthService {
       welcomeEmailSent: fields['Welcome Email Sent'] || false,
       welcomeEmailSentAt: fields['Welcome Email Sent At'],
       subscription_tier: fields['subscription_tier'] || 'free',
-      subscription_status: fields['subscription_status'] || 'none'
+      subscription_status: fields['subscription_status'] || 'none',
+      stripe_customer_id: fields['stripe_customer_id']
     };
   }
 
@@ -377,11 +378,16 @@ class AuthService {
         payload.lastName = userData.lastName;
         payload.emailVerified = userData.emailVerified;
         payload.status = userData.status;
+        payload.subscription_tier = userData.subscription_tier;
+        payload.subscription_status = userData.subscription_status;
+        payload.stripe_customer_id = userData.stripe_customer_id;
         
         logger.info(`JWT payload debug for ${email}:`, {
           firstName: userData.firstName,
           emailVerified: userData.emailVerified,
-          status: userData.status
+          status: userData.status,
+          subscription_tier: userData.subscription_tier,
+          subscription_status: userData.subscription_status
         });
       }
       

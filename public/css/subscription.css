@@ -370,6 +370,57 @@
   background-color: #f0fdf4;
 }
 
+/* Override colors specifically for current plan enterprise cards */
+.pricing-card.current-plan.pricing-card-enterprise {
+  background-color: #f0fdf4;
+  color: #1a1a1a;
+  border-color: #10b981;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .card-header h3 {
+  color: #1a1a1a;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .price {
+  color: #059669;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .period {
+  color: #374151;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .monthly-equivalent {
+  color: #374151;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .feature-item {
+  color: #1a1a1a;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .check-icon {
+  color: #059669;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .subscribe-btn {
+  background-color: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .subscribe-btn:hover {
+  background-color: #059669;
+  color: white;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .crossed-out {
+  color: #6b7280;
+}
+
+.pricing-card.current-plan.pricing-card-enterprise .savings-text {
+  background-color: #059669;
+  color: white;
+}
+
 .pricing-card.current-plan::before {
   content: "Current Plan";
   position: absolute;

@@ -1,6 +1,6 @@
 const express = require('express');
 const authRoutes = require('./auth.routes');
-const { optionalAuthMiddleware, preferencesMiddleware } = require('../middleware');
+const { optionalAuthMiddleware, preferencesMiddleware, subscriptionMiddleware } = require('../middleware');
 const { emailService } = require('../services');
 
 const router = express.Router();
@@ -10,6 +10,9 @@ router.use(optionalAuthMiddleware);
 
 // Apply preferences middleware to load user theme preferences
 router.use(preferencesMiddleware);
+
+// Apply subscription middleware to add subscription info for authenticated users
+router.use(subscriptionMiddleware.addSubscriptionInfo);
 
 // Authentication routes
 router.use('/auth', authRoutes);
@@ -21,6 +24,7 @@ router.get('/', (req, res) => {
     description: 'Empowering ministry through responsible AI innovation',
     user: req.user,
     userTheme: req.userTheme,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -33,6 +37,7 @@ router.get('/dashboard', require('../middleware').authMiddleware, (req, res) => 
     title: 'Dashboard',
     description: 'Your AI Legacy dashboard',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -45,6 +50,7 @@ router.get('/profile', require('../middleware').authMiddleware, (req, res) => {
     title: 'Profile',
     description: 'Manage your profile and preferences',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -69,6 +75,7 @@ router.get('/terms', (req, res) => {
     title: 'Terms & Conditions',
     description: 'Our AI Legacy Terms & Conditions',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -80,6 +87,7 @@ router.get('/privacy', (req, res) => {
     title: 'Privacy Policy',
     description: 'Our AI Legacy Privacy Policy',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -92,6 +100,7 @@ router.get('/about', (req, res) => {
     title: 'About Our AI Legacy',
     description: 'Learn about our mission and vision',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -104,6 +113,7 @@ router.get('/contact', (req, res) => {
     title: 'Contact Us',
     description: 'Get in touch with Our AI Legacy',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true,
@@ -117,6 +127,7 @@ router.get('/demo', (req, res) => {
     title: 'Request Demo',
     description: 'Schedule a demo of Our AI Legacy platform',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true
@@ -134,6 +145,7 @@ router.post('/demo', async (req, res) => {
         title: 'Request Demo',
         description: 'Schedule a demo of Our AI Legacy platform',
         user: req.user,
+        subscription: req.subscriptionInfo,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -166,6 +178,7 @@ router.post('/demo', async (req, res) => {
         title: 'Request Demo',
         description: 'Schedule a demo of Our AI Legacy platform',
         user: req.user,
+        subscription: req.subscriptionInfo,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -181,6 +194,7 @@ router.post('/demo', async (req, res) => {
       title: 'Request Demo',
       description: 'Schedule a demo of Our AI Legacy platform',
       user: req.user,
+      subscription: req.subscriptionInfo,
       showHeader: true,
       showFooter: true,
       showNav: true,
@@ -201,6 +215,7 @@ router.post('/contact', async (req, res) => {
         title: 'Contact Us',
         description: 'Get in touch with Our AI Legacy',
         user: req.user,
+        subscription: req.subscriptionInfo,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -231,6 +246,7 @@ router.post('/contact', async (req, res) => {
         title: 'Contact Us',
         description: 'Get in touch with Our AI Legacy',
         user: req.user,
+        subscription: req.subscriptionInfo,
         showHeader: true,
         showFooter: true,
         showNav: true,
@@ -247,6 +263,7 @@ router.post('/contact', async (req, res) => {
       title: 'Contact Us',
       description: 'Get in touch with Our AI Legacy',
       user: req.user,
+      subscription: req.subscriptionInfo,
       showHeader: true,
       showFooter: true,
       showNav: true,

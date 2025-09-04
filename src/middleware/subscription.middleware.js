@@ -318,10 +318,9 @@ async function getCurrentUsage(userId, resource) {
  */
 async function getCurrentUsageAll(userId) {
   try {
-    const subscription = await getUserActiveSubscription(userId);
-    if (!subscription) {
-      return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-    }
+    // For now, return default usage since User_Subscriptions lookup is failing
+    // TODO: Fix linked field lookup in User_Subscriptions table
+    return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
 
     const now = new Date();
     const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);

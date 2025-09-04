@@ -115,6 +115,7 @@ verify-tenant.js
 # Session testing files (Claude Code generated)
 test-*.js
 debug-*.js
+check-*.js
 add-welcome*.js
 youtube_plan.md
 setup-enhanced-airtable-tables.js

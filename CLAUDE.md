@@ -211,4 +211,26 @@ Social logins require email verification before account activation.
 - `airtable` - Database integration
 - `nodemailer` - Email sending
 - `@microsoft/microsoft-graph-client` - Microsoft Graph API
-- to memorize
+
+## Test and Debug Scripts
+
+When creating temporary test scripts, debug scripts, or utility scripts for debugging purposes:
+
+- **ALWAYS name them with prefixes** like `test-`, `debug-`, `check-`, or similar
+- These files are **automatically excluded from git** via .gitignore patterns
+- **Clean up temporary scripts** when debugging is complete
+- **Examples**: `test-user-subscription.js`, `debug-auth.js`, `check-database.js`
+
+The .gitignore file already includes patterns like:
+- `test-*.js`
+- `debug-*.js` 
+- `check-*.js`
+
+This ensures debugging scripts are never accidentally committed to the repository.
+
+# Important Instruction Reminders
+
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

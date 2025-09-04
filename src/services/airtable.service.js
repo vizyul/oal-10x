@@ -75,10 +75,18 @@ class AirtableService {
       // Use firstPage() with optimized query - limit to 1 for findUserByEmail since we only need one
       const isEmailLookup = fieldName === 'Email';
       
-      // For email lookups, use case-insensitive comparison
-      const filterFormula = isEmailLookup 
-        ? `LOWER({${fieldName}}) = LOWER("${fieldValue}")`
-        : `{${fieldName}} = "${fieldValue}"`;
+      // Handle different field types
+      let filterFormula;
+      if (isEmailLookup) {
+        // Case-insensitive email comparison
+        filterFormula = `LOWER({${fieldName}}) = LOWER("${fieldValue}")`;
+      } else if (fieldName === 'user_id') {
+        // Handle linked field arrays - check if the record ID is in the array
+        filterFormula = `FIND("${fieldValue}", ARRAYJOIN({${fieldName}})) > 0`;
+      } else {
+        // Standard equality check
+        filterFormula = `{${fieldName}} = "${fieldValue}"`;
+      }
       
       const selectOptions = {
         filterByFormula: filterFormula,
@@ -87,7 +95,7 @@ class AirtableService {
       
       // Only add fields parameter for email lookups
       if (isEmailLookup) {
-        selectOptions.fields = ['Email', 'Password', 'First Name', 'Last Name', 'Email Verified', 'Email Verification Token', 'Email Verification Expires', 'Status', 'Created At', 'Updated At', 'Last Login At', 'Terms Accepted', 'Privacy Accepted', 'Registration Method', 'Google ID', 'Microsoft ID', 'Apple ID', 'Welcome Email Sent', 'Welcome Email Sent At'];
+        selectOptions.fields = ['Email', 'Password', 'First Name', 'Last Name', 'Email Verified', 'Email Verification Token', 'Email Verification Expires', 'Status', 'Created At', 'Updated At', 'Last Login At', 'Terms Accepted', 'Privacy Accepted', 'Registration Method', 'Google ID', 'Microsoft ID', 'Apple ID', 'Welcome Email Sent', 'Welcome Email Sent At', 'subscription_tier', 'subscription_status', 'stripe_customer_id'];
       }
       
       const records = await this.base(tableName).select(selectOptions).firstPage();

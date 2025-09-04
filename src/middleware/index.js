@@ -156,8 +156,16 @@ const authMiddleware = async (req, res, next) => {
     
     // Use JWT data if available (for newer tokens), otherwise fall back to database
     let user;
+    let needsTokenRefresh = false;
+    
     if (decoded.firstName && decoded.emailVerified !== undefined) {
-      // JWT contains user data - use it directly
+      // JWT contains user data - check if subscription fields are missing
+      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
+        // Old token format - needs refresh with subscription data
+        needsTokenRefresh = true;
+      }
+      
+      // Use JWT data for now
       user = {
         id: decoded.userId,
         email: decoded.email,
@@ -165,10 +173,14 @@ const authMiddleware = async (req, res, next) => {
         lastName: decoded.lastName,
         fullName: `${decoded.firstName} ${decoded.lastName}`,
         emailVerified: decoded.emailVerified,
-        status: decoded.status
+        status: decoded.status,
+        subscription_tier: decoded.subscription_tier,
+        subscription_status: decoded.subscription_status,
+        stripe_customer_id: decoded.stripe_customer_id
       };
     } else {
       // Fallback to cache/database for older tokens
+      needsTokenRefresh = true;
       user = getCachedUser(decoded.userId);
       
       if (!user) {
@@ -177,6 +189,34 @@ const authMiddleware = async (req, res, next) => {
         if (user) {
           setCachedUser(decoded.userId, user);
         }
+      }
+    }
+    
+    // Auto-refresh token if needed
+    if (needsTokenRefresh && user) {
+      try {
+        // Get fresh user data from database
+        const freshUser = await authService.findUserById(user.id);
+        if (freshUser) {
+          // Generate new token with fresh data
+          const newToken = require('../services/auth.service').generateToken(freshUser.id, freshUser.email, freshUser);
+          
+          // Set new token in response header for the current request
+          res.cookie('auth_token', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+          });
+          
+          // Update user object with fresh data
+          user = freshUser;
+          setCachedUser(user.id, user);
+          
+          logger.info('Auto-refreshed JWT token for user:', user.email);
+        }
+      } catch (error) {
+        logger.error('Auto token refresh failed:', error);
+        // Continue with existing user data - don't fail the request
       }
     }
     
@@ -233,8 +273,16 @@ const optionalAuthMiddleware = async (req, res, next) => {
     
     // Use JWT data if available (for newer tokens), otherwise fall back to database
     let user;
+    let needsTokenRefresh = false;
+    
     if (decoded.firstName && decoded.emailVerified !== undefined) {
-      // JWT contains user data - use it directly
+      // JWT contains user data - check if subscription fields are missing
+      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
+        // Old token format - needs refresh with subscription data
+        needsTokenRefresh = true;
+      }
+      
+      // Use JWT data for now
       user = {
         id: decoded.userId,
         email: decoded.email,
@@ -242,10 +290,14 @@ const optionalAuthMiddleware = async (req, res, next) => {
         lastName: decoded.lastName,
         fullName: `${decoded.firstName} ${decoded.lastName}`,
         emailVerified: decoded.emailVerified,
-        status: decoded.status
+        status: decoded.status,
+        subscription_tier: decoded.subscription_tier,
+        subscription_status: decoded.subscription_status,
+        stripe_customer_id: decoded.stripe_customer_id
       };
     } else {
       // Fallback to cache/database for older tokens
+      needsTokenRefresh = true;
       user = getCachedUser(decoded.userId);
       
       if (!user) {
@@ -254,6 +306,34 @@ const optionalAuthMiddleware = async (req, res, next) => {
         if (user) {
           setCachedUser(decoded.userId, user);
         }
+      }
+    }
+    
+    // Auto-refresh token if needed
+    if (needsTokenRefresh && user) {
+      try {
+        // Get fresh user data from database
+        const freshUser = await authService.findUserById(user.id);
+        if (freshUser) {
+          // Generate new token with fresh data
+          const newToken = require('../services/auth.service').generateToken(freshUser.id, freshUser.email, freshUser);
+          
+          // Set new token in response header for the current request
+          res.cookie('auth_token', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+          });
+          
+          // Update user object with fresh data
+          user = freshUser;
+          setCachedUser(user.id, user);
+          
+          logger.info('Auto-refreshed JWT token for user:', user.email);
+        }
+      } catch (error) {
+        logger.error('Auto token refresh failed:', error);
+        // Continue with existing user data - don't fail the request
       }
     }
     
