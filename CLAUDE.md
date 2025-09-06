@@ -5,12 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## System Environment
 
 **Operating System**: Windows 11
-**Important**: Use Windows commands, not Unix/Linux commands
+**Important**: ALWAYS use Windows commands, never Unix/Linux/Mac commands
 - Use `dir` instead of `ls` to list files
 - Use `type` instead of `cat` to read files  
 - Use Windows path separators (`\` or `/` both work)
 - Use `cd /d` to change drives if needed
 - PowerShell and Command Prompt both available
+- Use `netstat -ano | findstr :PORT` to check ports
+- Use `taskkill //F //PID <process_id>` to kill processes
 
 ## Project Overview
 
