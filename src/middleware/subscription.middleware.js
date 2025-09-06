@@ -186,16 +186,26 @@ const subscriptionMiddleware = {
         const tierConfig = stripeConfig.getTierConfig(userTier);
         const usage = await getCurrentUsageAll(req.user.id);
 
+        const limits = {
+          videos: getResourceLimit(tierConfig, 'videos'),
+          api_calls: getResourceLimit(tierConfig, 'api_calls'),
+          storage: getResourceLimit(tierConfig, 'storage')
+        };
+
+        const percentages = {
+          videos: limits.videos === -1 ? 0 : Math.min((usage.videos / limits.videos) * 100, 100),
+          api_calls: limits.api_calls === -1 ? 0 : Math.min((usage.api_calls / limits.api_calls) * 100, 100),
+          storage: limits.storage === -1 ? 0 : Math.min((usage.storage / limits.storage) * 100, 100)
+        };
+
         req.subscriptionInfo = {
           tier: userTier,
           status: req.user.subscription_status || 'none',
           features: tierConfig || {},
           usage: usage,
-          limits: {
-            videos: getResourceLimit(tierConfig, 'videos'),
-            api_calls: getResourceLimit(tierConfig, 'api_calls'),
-            storage: getResourceLimit(tierConfig, 'storage')
-          }
+          limits: limits,
+          percentages: percentages,
+          remainingVideos: Math.max(0, limits.videos - usage.videos)
         };
       }
       next();
@@ -318,10 +328,6 @@ async function getCurrentUsage(userId, resource) {
  */
 async function getCurrentUsageAll(userId) {
   try {
-    // For now, return default usage since User_Subscriptions lookup is failing
-    // TODO: Fix linked field lookup in User_Subscriptions table
-    return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-
     const now = new Date();
     const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
     const currentUsage = usageRecords.find(usage => {

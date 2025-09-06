@@ -13,7 +13,6 @@
 .toolbar-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 12px 0;
   min-height: 60px;
 }
@@ -53,6 +52,7 @@
 .toolbar-nav {
   display: flex;
   align-items: center;
+  margin-left: auto;
 }
 
 .nav-links {
@@ -606,8 +606,9 @@
 
 /* Container Override for Toolbar */
 .global-toolbar .container {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: none;
+  width: 100%;
+  margin: 0;
   padding: 0 24px;
 }
 

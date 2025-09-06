@@ -70,7 +70,7 @@ class AirtableService {
         throw new Error('Airtable not configured');
       }
 
-      logger.info(`Finding records in ${tableName} where ${fieldName} = ${fieldValue}`);
+      // Finding records in Airtable
 
       // Use firstPage() with optimized query - limit to 1 for findUserByEmail since we only need one
       const isEmailLookup = fieldName === 'Email';
@@ -154,7 +154,7 @@ class AirtableService {
         throw new Error('Airtable not configured');
       }
 
-      logger.info(`Updating record in ${tableName}`, { id: recordId, fields });
+      logger.info(`Updating record in ${tableName}`, { id: recordId, fieldCount: Object.keys(fields).length });
 
       const records = await this.base(tableName).update([
         { id: recordId, fields }

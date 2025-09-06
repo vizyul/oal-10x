@@ -1,0 +1,299 @@
+{{#> layouts/main}}
+
+<div class="video-dashboard">
+  <div class="dashboard-header">
+    <h1>Video Library</h1>
+    <p>Browse and manage all your videos</p>
+    
+    {{#if subscription}}
+    <div class="subscription-info">
+      <span class="tier-badge tier-{{subscription.tier}}">{{capitalize subscription.tier}} Plan</span>
+      <span class="usage-info">{{subscription.usage.videos}}/{{subscription.limits.videos}} videos used</span>
+    </div>
+    {{/if}}
+  </div>
+
+  <div class="dashboard-actions">
+    {{#if subscription}}
+      {{#if (gt subscription.limits.videos 0)}}
+      <a href="/videos/upload" class="btn btn-primary">Upload Video</a>
+      {{else}}
+      <a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>
+      {{/if}}
+      <a href="/videos" class="btn btn-secondary">Back to Dashboard</a>
+      {{#if subscription.features.analyticsAccess}}
+      <a href="/videos/analytics" class="btn btn-outline">Analytics</a>
+      {{/if}}
+    {{else}}
+    <a href="/subscription/upgrade" class="btn btn-primary">Get Subscription to Upload Videos</a>
+    <a href="/videos" class="btn btn-secondary">Back to Dashboard</a>
+    {{/if}}
+  </div>
+
+  <!-- Video Library Grid -->
+  <div class="video-library">
+    <div class="section-header">
+      <h2>All Videos</h2>
+      <div class="library-controls">
+        <select id="status-filter" class="form-input">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="completed">Completed</option>
+          <option value="error">Error</option>
+        </select>
+        <select id="sort-order" class="form-input">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="title">Title A-Z</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="video-grid" class="video-grid">
+      <div class="loading-placeholder">
+        <p>Loading videos...</p>
+      </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="pagination-container" id="pagination-container" style="display: none;">
+      <div class="pagination-info">
+        <span id="pagination-info">Showing 1-10 of 0 videos</span>
+      </div>
+      <div class="pagination-controls">
+        <button id="prev-page" class="btn btn-secondary btn-small" disabled>Previous</button>
+        <span id="page-numbers"></span>
+        <button id="next-page" class="btn btn-secondary btn-small" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Video Library Specific CSS -->
+<style>
+.library-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.library-controls .form-input {
+  min-width: 150px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  padding: 1rem 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-info {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.875rem;
+}
+
+#page-numbers {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-number {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.page-number:hover {
+  background: #f8fafc;
+  border-color: var(--accent-color, #C39D43);
+}
+
+.page-number.active {
+  background: var(--accent-color, #C39D43);
+  border-color: var(--accent-color, #C39D43);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .library-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  
+  .pagination-container {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+  }
+  
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+</style>
+
+<!-- Video Library JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let currentPage = 1;
+  let totalPages = 1;
+  let currentFilters = {};
+  
+  // DOM Elements
+  const videoGrid = document.getElementById('video-grid');
+  const statusFilter = document.getElementById('status-filter');
+  const sortOrder = document.getElementById('sort-order');
+  const paginationContainer = document.getElementById('pagination-container');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
+  const pageNumbers = document.getElementById('page-numbers');
+  const paginationInfo = document.getElementById('pagination-info');
+
+  // Load initial videos
+  loadVideos();
+
+  // Event Listeners
+  statusFilter.addEventListener('change', function() {
+    currentFilters.status = this.value;
+    currentPage = 1;
+    loadVideos();
+  });
+
+  sortOrder.addEventListener('change', function() {
+    currentFilters.sort = this.value;
+    currentPage = 1;
+    loadVideos();
+  });
+
+  prevPageBtn.addEventListener('click', function() {
+    if (currentPage > 1) {
+      currentPage--;
+      loadVideos();
+    }
+  });
+
+  nextPageBtn.addEventListener('click', function() {
+    if (currentPage < totalPages) {
+      currentPage++;
+      loadVideos();
+    }
+  });
+
+  async function loadVideos() {
+    try {
+      videoGrid.innerHTML = '<div class="loading-placeholder"><p>Loading videos...</p></div>';
+      
+      const params = new URLSearchParams({
+        page: currentPage,
+        limit: 12,
+        ...currentFilters
+      });
+
+      const response = await fetch(`/api/videos?${params}`);
+      const data = await response.json();
+
+      if (data.success) {
+        renderVideos(data.videos);
+        updatePagination(data.pagination);
+      } else {
+        throw new Error(data.message || 'Failed to load videos');
+      }
+    } catch (error) {
+      console.error('Error loading videos:', error);
+      videoGrid.innerHTML = `
+        <div class="error-state">
+          <h3>Error Loading Videos</h3>
+          <p>Unable to load your videos. Please try again later.</p>
+          <button class="btn btn-secondary" onclick="loadVideos()">Retry</button>
+        </div>
+      `;
+    }
+  }
+
+  function renderVideos(videos) {
+    if (!videos || videos.length === 0) {
+      videoGrid.innerHTML = `
+        <div class="empty-state">
+          <h3>No Videos Found</h3>
+          <p>You haven't uploaded any videos yet.</p>
+          <a href="/videos/upload" class="btn btn-primary">Upload Your First Video</a>
+        </div>
+      `;
+      return;
+    }
+
+    videoGrid.innerHTML = videos.map(video => `
+      <div class="video-card">
+        <div class="video-info">
+          <h3 class="video-title">${video.title || 'Untitled'}</h3>
+          <p class="video-channel">${video.channel || 'No Channel'}</p>
+          <span class="video-status status-${video.status}">${video.status}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function updatePagination(pagination) {
+    if (!pagination) return;
+    
+    totalPages = pagination.totalPages;
+    currentPage = pagination.currentPage;
+    
+    // Update pagination info
+    paginationInfo.textContent = `Showing ${pagination.startIndex}-${pagination.endIndex} of ${pagination.totalRecords} videos`;
+    
+    // Update navigation buttons
+    prevPageBtn.disabled = currentPage <= 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
+    
+    // Update page numbers
+    renderPageNumbers();
+    
+    // Show/hide pagination
+    paginationContainer.style.display = totalPages > 1 ? 'flex' : 'none';
+  }
+
+  function renderPageNumbers() {
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    let pageHTML = '';
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pageHTML += `<button class="page-number ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    }
+    
+    pageNumbers.innerHTML = pageHTML;
+  }
+
+  // Make goToPage globally available
+  window.goToPage = function(page) {
+    currentPage = page;
+    loadVideos();
+  };
+});
+</script>
+
+{{/layouts/main}}

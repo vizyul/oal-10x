@@ -2,6 +2,7 @@ const express = require('express');
 const authRoutes = require('./auth.routes');
 const { optionalAuthMiddleware, preferencesMiddleware, subscriptionMiddleware } = require('../middleware');
 const { emailService } = require('../services');
+const { logger } = require('../utils');
 
 const router = express.Router();
 
@@ -45,16 +46,42 @@ router.get('/dashboard', require('../middleware').authMiddleware, (req, res) => 
 });
 
 // Profile route (protected)
-router.get('/profile', require('../middleware').authMiddleware, (req, res) => {
-  res.render('profile', {
-    title: 'Profile',
-    description: 'Manage your profile and preferences',
-    user: req.user,
-    subscription: req.subscriptionInfo,
-    showHeader: true,
-    showFooter: true,
-    showNav: true
-  });
+router.get('/profile', require('../middleware').authMiddleware, async (req, res) => {
+  try {
+    const preferencesService = require('../services/preferences.service');
+    let userPreferences = null;
+    
+    try {
+      userPreferences = await preferencesService.getUserPreferences(req.user.email);
+    } catch (prefError) {
+      // If preferences don't exist, create default ones
+      logger.info(`Creating default preferences for user ${req.user.email}`);
+      userPreferences = await preferencesService.createDefaultPreferences(req.user.email);
+    }
+    
+    res.render('profile', {
+      title: 'Profile',
+      description: 'Manage your profile and preferences',
+      user: req.user,
+      preferences: userPreferences,
+      subscription: req.subscriptionInfo,
+      showHeader: true,
+      showFooter: true,
+      showNav: true
+    });
+  } catch (error) {
+    logger.error('Profile route error:', error);
+    res.render('profile', {
+      title: 'Profile',
+      description: 'Manage your profile and preferences',
+      user: req.user,
+      preferences: { aiProvider: 'gemini' }, // fallback
+      subscription: req.subscriptionInfo,
+      showHeader: true,
+      showFooter: true,
+      showNav: true
+    });
+  }
 });
 
 // Subscription routes

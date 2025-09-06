@@ -2,13 +2,13 @@
 
 <div class="video-upload-page">
   <div class="upload-header">
-    <h1>Upload Video</h1>
-    <p>Add videos by URL or connect your YouTube account to import content</p>
+    <h1>Upload Videos</h1>
+    <p>Import videos from your YouTube account or add them by URL</p>
     
     {{#if subscription}}
     <div class="usage-status">
       <div class="usage-bar">
-        <div class="usage-fill" style="width: {{subscription.percentages.videos}}%"></div>
+        <div class="usage-fill{{#if (gt subscription.usage.videos 0)}} usage-fill-active{{/if}}" style="width: {{subscription.percentages.videos}}%"></div>
       </div>
       <span class="usage-text">
         {{subscription.usage.videos}}/{{subscription.limits.videos}} videos used this month
@@ -25,42 +25,124 @@
   {{/if}}
 
   {{#if error}}
-  <div class="alert alert-error">{{error}}</div>
+  <div class="alert alert-error">
+    {{#if (eq error "oauth_denied")}}
+      YouTube connection was denied. Please try again and grant access to continue.
+    {{else if (eq error "oauth_invalid")}}
+      Invalid YouTube connection attempt. Please try connecting again.
+    {{else if (eq error "oauth_failed")}}
+      YouTube connection failed. Please check your internet connection and try again.
+    {{else if (eq error "oauth_error")}}
+      There was an error connecting to YouTube. Please try again.
+    {{else}}
+      {{error}}
+    {{/if}}
+  </div>
   {{/if}}
 
-  <div class="upload-methods">
-    <div class="upload-method active">
+  <div class="upload-methods-container">
+    <!-- YouTube OAuth Method -->
+    <div class="upload-method youtube-method">
       <div class="method-header">
-        <h3>Upload by URL</h3>
-        <p>Paste a YouTube video URL to import and process</p>
+        <h3>Import from YouTube</h3>
+        <p>Connect your YouTube account to select and import videos</p>
+      </div>
+      
+      <div id="youtube-auth-section">
+        <div id="youtube-not-connected" class="youtube-connection-status">
+          <div class="connect-youtube">
+            <p>Connect your YouTube account to browse and import your videos</p>
+            <button type="button" id="connect-youtube-btn" class="btn btn-youtube btn-large">
+              <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              Connect YouTube Account
+            </button>
+          </div>
+        </div>
+
+        <div id="youtube-connected" class="youtube-connection-status hidden">
+          <div class="connected-status">
+            <div class="status-icon success">✓</div>
+            <span>YouTube account connected</span>
+            <button type="button" id="disconnect-youtube-btn" class="btn btn-secondary btn-small">Disconnect</button>
+          </div>
+          
+          <div class="youtube-video-browser">
+            <div class="browser-controls">
+              <div class="control-group">
+                <label for="channel-selector" class="control-label">Channel:</label>
+                <select id="channel-selector" class="form-input">
+                  <option value="">Select a channel...</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <label for="playlist-selector" class="control-label">Playlist:</label>
+                <select id="playlist-selector" class="form-input hidden">
+                  <option value="">All Videos (No playlist filter)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div id="error-message" class="error-message hidden"></div>
+            
+            <div id="video-grid" class="video-selection-grid hidden">
+              <div class="selection-controls">
+                <span class="selection-count">0 videos selected</span>
+                <div class="selection-actions">
+                  <button type="button" id="select-all-btn" class="btn btn-secondary btn-small">Select All</button>
+                  <button type="button" id="clear-selection-btn" class="btn btn-secondary btn-small">Clear</button>
+                </div>
+              </div>
+              
+              <div class="videos-container" id="videos-container">
+                <!-- Video items will be loaded here -->
+              </div>
+              
+              <div class="load-more-container hidden" id="load-more-container">
+                <button type="button" id="load-more-btn" class="btn btn-secondary">Load More Videos</button>
+                <div class="video-count-info" id="video-count-info">
+                  <span id="loaded-count">0</span> of <span id="total-count">0</span> videos loaded
+                </div>
+              </div>
+              
+              <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
+                Amplify Selected Videos
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Method Divider -->
+    <div class="method-divider"></div>
+
+    <!-- URL Input Method -->
+    <div class="upload-method url-method">
+      <div class="method-header">
+        <h3>Add by URL</h3>
+        <p>Paste YouTube video URLs to import and process</p>
       </div>
       
       <form id="url-upload-form" class="upload-form">
         <div class="form-group">
-          <label for="youtube-url">YouTube Video URL</label>
-          <input 
-            type="url" 
-            id="youtube-url" 
-            name="youtube_url" 
-            placeholder="https://www.youtube.com/watch?v=..." 
+          <label for="youtube-urls">YouTube Video URLs</label>
+          <textarea 
+            id="youtube-urls" 
+            name="youtube_urls" 
+            placeholder="Enter YouTube video URLs, one per line:
+https://www.youtube.com/watch?v=...
+https://www.youtube.com/watch?v=..."
+            rows="6"
+            class="form-textarea"
             required
-            class="form-input"
-          >
+          ></textarea>
+          <div class="form-help">Enter one URL per line. You can paste multiple URLs at once.</div>
         </div>
         
-        <div class="form-group">
-          <label for="video-title">Custom Title (Optional)</label>
-          <input 
-            type="text" 
-            id="video-title" 
-            name="video_title" 
-            placeholder="Leave blank to use original title"
-            class="form-input"
-          >
-        </div>
-        
-        <button type="submit" class="btn btn-primary btn-large" id="upload-btn">
-          Process Video
+        <button type="submit" class="btn btn-primary btn-large" id="url-upload-btn">
+          Process Videos
         </button>
       </form>
     </div>
@@ -68,58 +150,619 @@
   
   <div id="upload-progress" class="upload-progress hidden">
     <div class="progress-container">
-      <h4>Processing Video...</h4>
+      <h4 id="progress-title">Processing Videos...</h4>
       <div class="progress-bar">
         <div class="progress-fill" id="progress-fill"></div>
       </div>
       <p class="progress-message" id="progress-message">Initializing...</p>
+      <div id="progress-details" class="progress-details hidden">
+        <div class="processing-list" id="processing-list">
+          <!-- Processing status for individual videos -->
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // DOM Elements
   const urlForm = document.getElementById('url-upload-form');
-  const uploadBtn = document.getElementById('upload-btn');
+  const urlUploadBtn = document.getElementById('url-upload-btn');
   const progressDiv = document.getElementById('upload-progress');
-
-  urlForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const progressFill = document.getElementById('progress-fill');
+  const progressMessage = document.getElementById('progress-message');
+  const progressTitle = document.getElementById('progress-title');
+  
+  // YouTube OAuth Elements
+  const connectYouTubeBtn = document.getElementById('connect-youtube-btn');
+  const disconnectYouTubeBtn = document.getElementById('disconnect-youtube-btn');
+  const youtubeNotConnected = document.getElementById('youtube-not-connected');
+  const youtubeConnected = document.getElementById('youtube-connected');
+  const channelSelector = document.getElementById('channel-selector');
+  const playlistSelector = document.getElementById('playlist-selector');
+  const videoGrid = document.getElementById('video-grid');
+  const videosContainer = document.getElementById('videos-container');
+  const importSelectedBtn = document.getElementById('import-selected-btn');
+  const selectAllBtn = document.getElementById('select-all-btn');
+  const clearSelectionBtn = document.getElementById('clear-selection-btn');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  const loadMoreContainer = document.getElementById('load-more-container');
+  const loadedCountEl = document.getElementById('loaded-count');
+  const totalCountEl = document.getElementById('total-count');
+  const errorMessageEl = document.getElementById('error-message');
+  
+  // State
+  let selectedVideos = new Set();
+  let availableVideos = [];
+  let subscriptionLimits = null;
+  
+  // Initialize
+  checkYouTubeConnection();
+  loadSubscriptionInfo();
+  
+  // YouTube OAuth Functions
+  async function checkYouTubeConnection() {
+    try {
+      const response = await fetch('/api/youtube/auth/status');
+      const result = await response.json();
+      
+      if (result.success && result.data.connected) {
+        showConnectedState(result.data);
+      } else {
+        showDisconnectedState();
+      }
+    } catch (error) {
+      console.error('Error checking YouTube connection:', error);
+      showDisconnectedState();
+    }
+  }
+  
+  async function loadSubscriptionInfo() {
+    try {
+      const response = await fetch('/api/subscription/status');
+      const result = await response.json();
+      
+      if (result.success) {
+        subscriptionLimits = result.data;
+      }
+    } catch (error) {
+      console.error('Error loading subscription info:', error);
+    }
+  }
+  
+  function showConnectedState(connectionData) {
+    youtubeNotConnected.classList.add('hidden');
+    youtubeConnected.classList.remove('hidden');
     
-    const formData = new FormData(urlForm);
-    const videoData = Object.fromEntries(formData.entries());
+    // Populate channels
+    channelSelector.innerHTML = '<option value="">Select a channel...</option>';
+    if (connectionData.channels) {
+      connectionData.channels.forEach(channel => {
+        const option = document.createElement('option');
+        option.value = channel.id;
+        option.textContent = channel.name;
+        channelSelector.appendChild(option);
+      });
+    }
+  }
+  
+  function showDisconnectedState() {
+    youtubeNotConnected.classList.remove('hidden');
+    youtubeConnected.classList.add('hidden');
+  }
+  
+  async function connectYouTube() {
+    try {
+      const response = await fetch('/api/youtube/auth');
+      const result = await response.json();
+      
+      if (result.success && result.data.authUrl) {
+        window.location.href = result.data.authUrl;
+      } else {
+        throw new Error(result.message || 'Failed to initiate YouTube connection');
+      }
+    } catch (error) {
+      console.error('Error connecting to YouTube:', error);
+      showError(error.message || 'Failed to connect to YouTube. Please try again.');
+    }
+  }
+  
+  async function disconnectYouTube() {
+    try {
+      const response = await fetch('/api/youtube/auth/disconnect', {
+        method: 'POST'
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        showDisconnectedState();
+        clearVideoSelection();
+      } else {
+        throw new Error(result.message || 'Failed to disconnect');
+      }
+    } catch (error) {
+      console.error('Error disconnecting YouTube:', error);
+      showError(error.message || 'Failed to disconnect. Please try again.');
+    }
+  }
+  
+  // Variables for pagination
+  let currentPageToken = null;
+  let isLoadingMore = false;
+  
+  async function loadChannelVideos(loadMore = false) {
+    const channelId = channelSelector.value;
+    if (!channelId) return;
     
-    progressDiv.classList.remove('hidden');
-    uploadBtn.disabled = true;
-    uploadBtn.textContent = 'Processing...';
+    // Prevent multiple simultaneous loads
+    if (isLoadingMore) return;
+    isLoadingMore = true;
+    
+    // Show loading state
+    if (loadMore) {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = 'Loading More...';
+    } else {
+      // Show loading indicator for initial load
+      showLoadingState();
+    }
     
     try {
-      const response = await fetch('/api/videos', {
+      const playlistId = playlistSelector.value;
+      let apiUrl = `/api/youtube/channels/${channelId}/videos`;
+      
+      // If a playlist is selected, load from that playlist instead
+      if (playlistId) {
+        apiUrl = `/api/youtube/playlists/${playlistId}/videos`;
+      }
+      
+      // Add page token for pagination if loading more
+      if (loadMore && currentPageToken) {
+        const separator = apiUrl.includes('?') ? '&' : '?';
+        apiUrl += `${separator}pageToken=${encodeURIComponent(currentPageToken)}`;
+      }
+      
+      const response = await fetch(apiUrl);
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        const { videos, nextPageToken, totalResults } = result.data;
+        
+        // Validate that videos is an array
+        if (!Array.isArray(videos)) {
+          console.error('Invalid videos data received:', videos);
+          showError('Error: Invalid video data received from server');
+          return;
+        }
+        
+        if (loadMore) {
+          // Append new videos to existing ones
+          availableVideos = [...availableVideos, ...videos];
+          displayVideos(videos, true); // Only display the new videos, append them
+        } else {
+          // First load - replace all videos and reset pagination
+          availableVideos = videos;
+          displayVideos(availableVideos, false); // Display all videos, don't append
+          videoGrid.classList.remove('hidden');
+        }
+        
+        // Update pagination state
+        currentPageToken = nextPageToken;
+        
+        // Update load more button visibility
+        updateLoadMoreButton(nextPageToken, availableVideos.length, totalResults);
+        
+        // Hide any existing error messages
+        hideError();
+      } else {
+        throw new Error(result.message || 'Failed to load videos');
+      }
+    } catch (error) {
+      console.error('Error loading videos:', error);
+      showError(error.message || 'Failed to load videos. Please try again.');
+    } finally {
+      isLoadingMore = false;
+      if (loadMore) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load More Videos';
+      } else {
+        hideLoadingState();
+      }
+    }
+  }
+  
+  function updateLoadMoreButton(nextPageToken, loadedCount, totalCount) {
+    if (nextPageToken) {
+      // There are more videos to load
+      loadMoreContainer.classList.remove('hidden');
+      loadMoreBtn.disabled = false;
+    } else {
+      // No more videos to load
+      loadMoreContainer.classList.add('hidden');
+    }
+    
+    // Update the count display
+    loadedCountEl.textContent = loadedCount;
+    totalCountEl.textContent = totalCount;
+  }
+  
+  async function loadMoreVideos() {
+    await loadChannelVideos(true); // Call with loadMore = true
+  }
+  
+  function showLoadingState() {
+    // Show loading indicator in the video grid area
+    if (videoGrid.classList.contains('hidden')) {
+      videoGrid.classList.remove('hidden');
+    }
+    videosContainer.innerHTML = '<div class="loading-indicator">Loading videos...</div>';
+  }
+  
+  function hideLoadingState() {
+    // Loading state is hidden when videos are displayed or on error
+    // The loading indicator is replaced by actual video content
+  }
+  
+  function showError(message) {
+    errorMessageEl.textContent = message;
+    errorMessageEl.classList.remove('hidden');
+    // Auto-hide after 5 seconds
+    setTimeout(() => hideError(), 5000);
+  }
+  
+  function hideError() {
+    errorMessageEl.classList.add('hidden');
+  }
+  
+  function displayVideos(videos, append = false) {
+    // Validate that videos is an array
+    if (!Array.isArray(videos)) {
+      console.error('displayVideos called with non-array:', videos);
+      showError('Error: Invalid video data received');
+      return;
+    }
+    
+    if (!append) {
+      videosContainer.innerHTML = '';
+    }
+    
+    videos.forEach(video => {
+      const videoElement = createVideoElement(video);
+      videosContainer.appendChild(videoElement);
+    });
+    
+    updateSelectionUI();
+  }
+  
+  function createVideoElement(video) {
+    const div = document.createElement('div');
+    div.className = 'video-item';
+    div.setAttribute('data-video-id', video.id);
+    div.innerHTML = `
+      <div class="video-checkbox">
+        <input type="checkbox" id="video-${video.id}" data-video-id="${video.id}" />
+        <label for="video-${video.id}" class="checkbox-label"></label>
+      </div>
+      <div class="video-thumbnail">
+        <img src="${video.thumbnail}" alt="${video.title}" />
+      </div>
+      <div class="video-details">
+        <h4 class="video-title">${video.title}</h4>
+        <p class="video-duration">${formatDuration(video.duration)}</p>
+        <p class="video-published">${formatDate(video.publishedAt)}</p>
+      </div>
+    `;
+    
+    const checkbox = div.querySelector('input[type="checkbox"]');
+    const checkboxLabel = div.querySelector('.checkbox-label');
+    
+    checkbox.addEventListener('change', handleVideoSelection);
+    
+    // Make entire video card clickable
+    div.addEventListener('click', function(event) {
+      // Don't trigger if clicking directly on checkbox or label (they handle themselves)
+      if (event.target === checkbox || event.target === checkboxLabel) {
+        return;
+      }
+      
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change'));
+    });
+    
+    // Also handle label clicks to ensure proper toggling
+    checkboxLabel.addEventListener('click', function(event) {
+      event.preventDefault();
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change'));
+    });
+    
+    // Add visual feedback for selection state
+    checkbox.addEventListener('change', function() {
+      if (this.checked) {
+        div.classList.add('selected');
+      } else {
+        div.classList.remove('selected');
+      }
+    });
+    
+    return div;
+  }
+  
+  function handleVideoSelection(event) {
+    const videoId = event.target.getAttribute('data-video-id');
+    const isChecked = event.target.checked;
+    
+    if (isChecked) {
+      // Check subscription limits
+      if (subscriptionLimits && selectedVideos.size >= subscriptionLimits.remainingVideos) {
+        event.preventDefault();
+        event.target.checked = false;
+        showError(`You can only import ${subscriptionLimits.remainingVideos} more video(s) with your current subscription.`);
+        return;
+      }
+      selectedVideos.add(videoId);
+    } else {
+      selectedVideos.delete(videoId);
+    }
+    
+    updateSelectionUI();
+  }
+  
+  function updateSelectionUI() {
+    const selectionCount = document.querySelector('.selection-count');
+    selectionCount.textContent = `${selectedVideos.size} video(s) selected`;
+    
+    if (selectedVideos.size > 0) {
+      importSelectedBtn.classList.remove('hidden');
+    } else {
+      importSelectedBtn.classList.add('hidden');
+    }
+  }
+  
+  function selectAllVideos() {
+    const maxSelectable = subscriptionLimits ? subscriptionLimits.remainingVideos : availableVideos.length;
+    const videosToSelect = Math.min(availableVideos.length, maxSelectable);
+    
+    selectedVideos.clear();
+    
+    for (let i = 0; i < videosToSelect; i++) {
+      const video = availableVideos[i];
+      selectedVideos.add(video.id);
+      const checkbox = document.getElementById(`video-${video.id}`);
+      if (checkbox) checkbox.checked = true;
+    }
+    
+    if (videosToSelect < availableVideos.length && subscriptionLimits) {
+      showError(`Only selected ${videosToSelect} videos due to subscription limits.`);
+    }
+    
+    updateSelectionUI();
+  }
+  
+  function clearVideoSelection() {
+    selectedVideos.clear();
+    
+    const checkboxes = videosContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+    
+    updateSelectionUI();
+  }
+  
+  async function importSelectedVideos() {
+    if (selectedVideos.size === 0) return;
+    
+    const videoIds = Array.from(selectedVideos);
+    
+    showProgress('Importing Videos...', `Importing ${videoIds.length} video(s)...`);
+    importSelectedBtn.disabled = true;
+    
+    try {
+      const response = await fetch('/api/youtube/videos/import', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(videoData)
+        body: JSON.stringify({ videoIds })
       });
       
       const result = await response.json();
       
       if (result.success) {
-        document.getElementById('progress-message').textContent = 'Video processing started!';
+        progressMessage.textContent = 'Videos imported successfully!';
         setTimeout(() => {
-          window.location.href = `/videos?success=Video uploaded successfully`;
+          window.location.href = `/videos?imported=true&success=Videos imported successfully`;
+        }, 2000);
+      } else {
+        throw new Error(result.message || 'Import failed');
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      showError(error.message || 'Failed to import videos. Please try again.');
+      hideProgress();
+      importSelectedBtn.disabled = false;
+    }
+  }
+  
+  // URL Upload Functions
+  async function processURLs(urls) {
+    showProgress('Processing Videos...', `Processing ${urls.length} video(s)...`);
+    urlUploadBtn.disabled = true;
+    
+    try {
+      const response = await fetch('/api/videos/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ urls })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        progressMessage.textContent = 'Videos processing started!';
+        setTimeout(() => {
+          window.location.href = `/videos?success=Videos uploaded successfully`;
         }, 2000);
       } else {
         throw new Error(result.message || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert(error.message || 'Failed to upload video. Please try again.');
-      
-      progressDiv.classList.add('hidden');
-      uploadBtn.disabled = false;
-      uploadBtn.textContent = 'Process Video';
+      showError(error.message || 'Failed to upload videos. Please try again.');
+      hideProgress();
+      urlUploadBtn.disabled = false;
     }
+  }
+  
+  // Progress Functions
+  function showProgress(title, message) {
+    progressTitle.textContent = title;
+    progressMessage.textContent = message;
+    progressDiv.classList.remove('hidden');
+  }
+  
+  function hideProgress() {
+    progressDiv.classList.add('hidden');
+  }
+  
+  // Utility Functions
+  function formatDuration(seconds) {
+    // Handle invalid or missing duration values
+    if (!seconds || isNaN(seconds) || seconds <= 0) {
+      return 'Duration unknown';
+    }
+    
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+  
+  function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  }
+  
+  function parseURLs(text) {
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+    const urls = [];
+    const errors = [];
+    
+    lines.forEach((line, index) => {
+      const youtubeRegex = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      if (youtubeRegex.test(line)) {
+        urls.push(line);
+      } else {
+        errors.push(`Line ${index + 1}: Invalid YouTube URL`);
+      }
+    });
+    
+    return { urls, errors };
+  }
+  
+  // Playlist Functions
+  async function handleChannelChange() {
+    const selectedChannelId = channelSelector.value;
+    
+    if (selectedChannelId) {
+      // Show playlist selector and load playlists
+      playlistSelector.classList.remove('hidden');
+      await loadChannelPlaylists(selectedChannelId);
+      
+      // Auto-load the first 50 videos from the selected channel
+      await loadChannelVideos(false);
+    } else {
+      // Hide playlist selector and video grid
+      playlistSelector.classList.add('hidden');
+      playlistSelector.innerHTML = '<option value="">All Videos (No playlist filter)</option>';
+      videoGrid.classList.add('hidden');
+      
+      // Reset state
+      currentPageToken = null;
+      availableVideos = [];
+      selectedVideos.clear();
+    }
+  }
+  
+  async function loadChannelPlaylists(channelId) {
+    try {
+      playlistSelector.innerHTML = '<option value="">Loading playlists...</option>';
+      
+      const response = await fetch(`/api/youtube/channels/${channelId}/playlists`);
+      const result = await response.json();
+      
+      // Reset playlist options
+      playlistSelector.innerHTML = '<option value="">All Videos (No playlist filter)</option>';
+      
+      if (result.success && result.data.playlists) {
+        result.data.playlists.forEach(playlist => {
+          const option = document.createElement('option');
+          option.value = playlist.id;
+          option.textContent = `${playlist.title} (${playlist.itemCount || 0} videos)`;
+          playlistSelector.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading playlists:', error);
+      playlistSelector.innerHTML = '<option value="">All Videos (No playlist filter)</option>';
+    }
+  }
+  
+  async function handlePlaylistChange() {
+    const selectedChannelId = channelSelector.value;
+    
+    if (selectedChannelId) {
+      // Auto-reload videos when playlist changes
+      await loadChannelVideos(false);
+    }
+  }
+  
+  // Event Listeners
+  connectYouTubeBtn?.addEventListener('click', connectYouTube);
+  disconnectYouTubeBtn?.addEventListener('click', disconnectYouTube);
+  channelSelector?.addEventListener('change', handleChannelChange);
+  playlistSelector?.addEventListener('change', handlePlaylistChange);
+  loadMoreBtn?.addEventListener('click', loadMoreVideos);
+  importSelectedBtn?.addEventListener('click', importSelectedVideos);
+  selectAllBtn?.addEventListener('click', selectAllVideos);
+  clearSelectionBtn?.addEventListener('click', clearVideoSelection);
+  
+  urlForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const urlsText = document.getElementById('youtube-urls').value.trim();
+    if (!urlsText) {
+      showError('Please enter at least one YouTube URL.');
+      return;
+    }
+    
+    const { urls, errors } = parseURLs(urlsText);
+    
+    if (errors.length > 0) {
+      showError('Please fix the following errors:\n' + errors.join('\n'));
+      return;
+    }
+    
+    if (urls.length === 0) {
+      showError('No valid YouTube URLs found.');
+      return;
+    }
+    
+    // Check subscription limits
+    if (subscriptionLimits && urls.length > subscriptionLimits.remainingVideos) {
+      showError(`You can only process ${subscriptionLimits.remainingVideos} more video(s) with your current subscription.`);
+      return;
+    }
+    
+    await processURLs(urls);
   });
 });
 </script>

@@ -19,22 +19,15 @@ class PreferencesService {
         throw new Error('Airtable not configured');
       }
 
-      logger.info(`Getting preferences for user: ${userEmail}`);
-
       // First find the user to get their record ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
       
       if (!user) {
-        logger.warn(`User not found: ${userEmail}`);
         return null;
       }
 
-      logger.info(`Looking for preferences with User field = '${user.id}'`);
-      
       // Try different query approaches for linked fields
-      logger.info(`Trying multiple query approaches for user: ${user.id}`);
-      
       // Approach 1: Direct string comparison
       let records = await this.base(this.tableName)
         .select({
@@ -42,8 +35,6 @@ class PreferencesService {
           maxRecords: 5
         })
         .firstPage();
-        
-      logger.info(`Approach 1 - Direct string: Found ${records.length} records`);
       
       if (records.length === 0) {
         // Approach 2: FIND function for array search
@@ -53,18 +44,11 @@ class PreferencesService {
             maxRecords: 5
           })
           .firstPage();
-          
-        logger.info(`Approach 2 - FIND in array: Found ${records.length} records`);
       }
       
       if (records.length === 0) {
         // Approach 3: No filter, then check manually
         const allRecords = await this.base(this.tableName).select({ maxRecords: 20 }).firstPage();
-        logger.info(`Approach 3 - Manual check: Found ${allRecords.length} total records`);
-        
-        allRecords.forEach((record, i) => {
-          logger.info(`Record ${i + 1}: User field =`, record.fields.User, `(type: ${typeof record.fields.User})`);
-        });
         
         records = allRecords.filter(record => {
           const userField = record.fields.User;
@@ -73,14 +57,9 @@ class PreferencesService {
           }
           return userField === user.id;
         });
-        
-        logger.info(`Approach 3 - After manual filter: Found ${records.length} records`);
       }
         
-      logger.info(`Found ${records.length} existing preference records for ${userEmail}`);
-
       if (records.length === 0) {
-        logger.info(`No preferences found for user: ${userEmail}`);
         return null;
       }
 
@@ -142,6 +121,7 @@ class PreferencesService {
         'Email Notifications': true,
         'Marketing Communications': false,
         'Weekly Digest': true,
+        'AI Provider': 'gemini', // Default AI provider
         'Created At': now,
         'Updated At': now
       };
@@ -168,6 +148,7 @@ class PreferencesService {
         emailNotifications: record.fields['Email Notifications'],
         marketingCommunications: record.fields['Marketing Communications'],
         weeklyDigest: record.fields['Weekly Digest'],
+        aiProvider: record.fields['AI Provider'] || 'gemini',
         createdAt: record.fields['Created At'],
         updatedAt: record.fields['Updated At']
       };
@@ -249,6 +230,7 @@ class PreferencesService {
         emailNotifications: record.fields['Email Notifications'],
         marketingCommunications: record.fields['Marketing Communications'],
         weeklyDigest: record.fields['Weekly Digest'],
+        aiProvider: record.fields['AI Provider'] || 'gemini',
         createdAt: record.fields['Created At'],
         updatedAt: record.fields['Updated At']
       };
@@ -270,7 +252,7 @@ class PreferencesService {
         throw new Error('Airtable not configured');
       }
 
-      logger.info(`Updating preferences for user: ${userEmail}`, { updates });
+      // Update preferences for user
 
       // First, get the existing record
       const existingPrefs = await this.getUserPreferences(userEmail);
@@ -311,7 +293,7 @@ class PreferencesService {
       }
 
       const record = records[0];
-      logger.info(`Updated preferences for user: ${userEmail}`);
+      // Preferences updated successfully
 
       return {
         id: record.id,
@@ -322,6 +304,7 @@ class PreferencesService {
         emailNotifications: record.fields['Email Notifications'],
         marketingCommunications: record.fields['Marketing Communications'],
         weeklyDigest: record.fields['Weekly Digest'],
+        aiProvider: record.fields['AI Provider'] || 'gemini',
         createdAt: record.fields['Created At'],
         updatedAt: record.fields['Updated At']
       };

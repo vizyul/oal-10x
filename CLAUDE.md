@@ -16,6 +16,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for ministry use.
 
+**Dual Database Architecture**: This application writes data to TWO databases independently:
+1. **Airtable** (primary) - Main data storage and user interface
+2. **PostgreSQL** (secondary) - Additional data storage for advanced features
+Both databases should receive the same data when records are created/updated.
+
+### Current Airtable Videos Table Fields (as of 2025-09-05):
+**Available Fields:**
+- `Id` (Primary Field, Number)
+- `blog` (Button)
+- `blog_text` (Long text)
+- `blog_url` (URL)
+- `chanel_handle` (Single line text) - Note: typo in field name
+- `Channel` (Button)
+- `channel_name` (Single line text)
+- `chapter` (Button)
+- `chapter_text` (Single line text)
+- `chapter_url` (URL)
+- `created_at` (Created time)
+- `description` (Long text) ✅
+- `discussion` (Button)
+- `discussion_guide_text` (Long text)
+- `discussion_guide_url` (URL)
+- `duration` (Number) ✅
+- `Last Modified` (Date)
+- `podcast` (Button)
+- `podcast_text` (Long text)
+- `podcast_url` (URL)
+- `quiz` (Button)
+- `quiz_text` (Long text)
+- `quiz_url` (URL)
+- `quote_list` (Single line text)
+- `quotes` (Button)
+- `quotes_url` (URL)
+- `recid` (Long text)
+- `thumbnail` (Attachment) ✅
+- `transcript` (Button)
+- `transcript_text` (Long text)
+- `transcript_url` (URL)
+- `upload_date` (Date) ✅
+- `user_id` (Link to another record)
+- `video_title` (Single line text)
+- `videoid` (Long text)
+- `VidUsers` (Single line text)
+- `Workflows` (Single line text)
+- `youtube_url` (Single line text)
+
+**Key Import Fields Available:**
+- Basic video info: `youtube_url`, `videoid`, `video_title`, `channel_name`, `chanel_handle`
+- Media: `thumbnail` (Attachment format), `duration` (Number)
+- Content: `description` (Long text), `upload_date` (Date)
+- Processing: `status`, `category`, `privacy_setting` (newly added fields)
+- User association: `user_id` (Link to another record)
+
+## UI/UX Guidelines
+
+**Error Messaging**: Do NOT use JavaScript dialog popup boxes (alert(), confirm(), prompt()). Always use HTML-based error messaging displayed inline on pages for better user experience and accessibility.
+
 ## Development Commands
 
 - **Start development**: `npm run dev` - Uses nodemon to watch for changes
@@ -96,11 +153,17 @@ src/
 │   ├── auth.routes.js    # Includes OAuth routes and social verification
 │   ├── index.js
 │   └── main.routes.js
-├── services/        # Business logic (Airtable, auth, email, OAuth)
+├── services/        # Business logic (Airtable, auth, email, OAuth, video processing, AI)
+│   ├── ai-chat.service.js  # NEW: Google Gemini & OpenAI ChatGPT integration
 │   ├── airtable.service.js
 │   ├── auth.service.js
+│   ├── content-generation.service.js  # NEW: AI content generation from transcripts
+│   ├── database.service.js  # PostgreSQL service for dual-database writes
 │   ├── email.service.js
-│   └── oauth.service.js  # NEW: Google, Apple, Microsoft OAuth
+│   ├── oauth.service.js  # Google, Apple, Microsoft OAuth
+│   ├── transcript.service.js  # YouTube transcript extraction with AI content trigger
+│   ├── youtube-metadata.service.js  # YouTube Data API integration
+│   └── youtube-oauth.service.js  # YouTube OAuth for channel access
 ├── utils/           # Helpers, validators, logger
 │   ├── logger.js
 │   └── validators.js
@@ -157,7 +220,10 @@ package.json         # Updated with OAuth packages (passport, etc.)
 - **Node.js**: >=18.0.0
 - **Environment variables**: Actual configuration is in `.env` file (not `.env.example`)
 - **Airtable**: API key and base configuration needed
+- **PostgreSQL**: Database connection for dual-database architecture
 - **OAuth Providers**: Google, Apple, and Microsoft app configurations required
+- **YouTube Data API**: API key for video metadata extraction
+- **Transcript API**: Custom API key for YouTube transcript extraction
 
 ### Important Notes
 - **Always check `.env` file for actual environment variables**, not `.env.example`
@@ -185,6 +251,63 @@ To enable social login, configure OAuth applications and add these environment v
 - `APPLE_CALLBACK_URL` (default: http://localhost:3000/auth/apple/callback)
 
 Social logins require email verification before account activation.
+
+### Transcript Extraction Configuration
+
+The application automatically extracts transcripts for imported YouTube videos using a custom API:
+
+**Environment Variable**:
+```env
+TRANSCRIPT_API_KEY=YT5!u1G/}/ukX1Pb+WhCbX/1*Ene/j*2dt-wkJhu/Q1Kb[cPae{yz@A72Yub@
+```
+
+**API Endpoint**: `https://io.ourailegacy.com/api/appify/get-transcript`
+
+**Features**:
+- Automatic transcript extraction during video import
+- Dual-database storage (both Airtable and PostgreSQL)
+- Asynchronous processing (doesn't block video import)
+- Graceful fallback when transcripts aren't available
+- Batch processing support for multiple videos
+
+**Implementation**:
+- `transcript.service.js` - Core transcript extraction service
+- Integrated into `youtube.controller.js` import workflow
+- Stores results in `transcript_text` fields of both databases
+- Automatically triggers AI content generation after transcript extraction
+
+### AI Content Generation System
+
+The application automatically generates additional content from video transcripts using AI:
+
+**Supported AI Providers**:
+- **Google Gemini** (via `@google/generative-ai`)
+- **OpenAI ChatGPT** (via `openai` package)
+
+**Environment Variables**:
+```env
+GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+**Generated Content Types**:
+- **Blog Posts** - Comprehensive articles from video content
+- **Discussion Guides** - Questions for group conversations
+- **Podcast Scripts** - Audio-optimized content
+- **Quiz Questions** - Comprehension assessments
+- **Quote Extractions** - Shareable key insights
+
+**Database Schema**:
+- `ai_prompts` table stores customizable prompts for each content type and AI provider
+- Prompts can be updated without code changes
+- Different prompts optimized for Gemini vs ChatGPT
+
+**Implementation**:
+- `ai-chat.service.js` - Core AI communication service
+- `content-generation.service.js` - Content generation workflow
+- `scripts/setup-ai-prompts-table.js` - Database setup script
+- Automatic generation triggered after transcript extraction
+- Results stored in video content fields (both databases)
 
 ## Key Files for Modification
 

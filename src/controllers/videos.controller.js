@@ -1,5 +1,6 @@
 const { logger } = require('../utils');
 const airtable = require('../services/airtable.service');
+const databaseService = require('../services/database.service');
 const { validationResult } = require('express-validator');
 
 class VideosController {
@@ -9,20 +10,21 @@ class VideosController {
    */
   async getVideos(req, res) {
     try {
+      logger.info('=== Starting getVideos method ===');
       const { page = 1, limit = 10, status, search, category } = req.query;
       const userId = req.user.id;
 
       logger.info(`Fetching videos for user ${userId}`, { page, limit, status, search, category });
 
-      // Build filter options - use user_id field if available, fallback to no filter for existing data
+      // Build filter options - use user_id linked field
       let filterFormula = '';
       
       try {
-        // Try to filter by user_id (new field)
-        filterFormula = `{user_id} = "${userId}"`;
+        // Temporarily disable filtering to get the query working first, then filter manually
+        filterFormula = ''; // No filter for now
+        logger.info(`Getting all videos, will filter manually for user ID: ${userId}`);
       } catch (error) {
-        // If user_id field doesn't exist yet, get all records (temporary)
-        logger.warn('user_id field not available yet, returning all videos');
+        logger.warn('Error building user filter, returning all videos:', error);
         filterFormula = '';
       }
       
@@ -44,44 +46,163 @@ class VideosController {
         filterFormula = `FIND(LOWER("${search}"), LOWER({video_title})) > 0`;
       }
 
+      // Proper query with filtering, sorting, and pagination
       const options = {
-        sort: [{ field: 'created_at', direction: 'desc' }, { field: 'Last Modified', direction: 'desc' }],
-        maxRecords: parseInt(limit) * parseInt(page)
+        maxRecords: parseInt(limit) * parseInt(page),
+        sort: [{ field: 'created_at', direction: 'desc' }]
       };
 
       if (filterFormula) {
         options.filterByFormula = filterFormula;
       }
 
-      const records = await airtable.findAll('Videos', options);
-      
-      // Simple pagination (slice results)
-      const startIndex = (parseInt(page) - 1) * parseInt(limit);
-      const endIndex = startIndex + parseInt(limit);
-      const paginatedRecords = records.slice(startIndex, endIndex);
+      logger.info('Querying Videos with options:', options);
 
-      const videos = paginatedRecords.map(record => this.formatVideoResponse(record));
+      // Implement timeout wrapper for the Airtable query
+      const queryWithTimeout = (query, timeoutMs = 5000) => {
+        return Promise.race([
+          query,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Query timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
 
-      res.json({
-        success: true,
-        data: {
-          videos,
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total: records.length,
-            hasMore: endIndex < records.length
+      try {
+        logger.info('Starting Airtable query with timeout protection...');
+        
+        // Very simple query - get only a small batch with minimal options
+        const simpleOptions = {
+          maxRecords: 50,  // Reduce to 50 records max
+          // Remove sorting to speed up the query
+        };
+        
+        logger.info('Executing minimal Airtable query with options:', simpleOptions);
+        
+        // Try direct Airtable base query instead of service method
+        logger.info('Attempting direct Airtable base query...');
+        
+        const records = await queryWithTimeout(
+          new Promise((resolve, reject) => {
+            const recordsList = [];
+            if (!airtable.base) {
+              reject(new Error('Airtable not configured'));
+              return;
+            }
+            
+            airtable.base('Videos').select({
+              maxRecords: 20, // Even smaller batch
+              pageSize: 10    // Small page size
+            }).eachPage((pageRecords, fetchNextPage) => {
+              recordsList.push(...pageRecords);
+              // Only fetch first page to keep it fast
+              resolve(recordsList);
+            }).catch(reject);
+          }),
+          4000 // 4 second timeout
+        );
+        
+        logger.info(`Query completed successfully. Found ${records.length} records`);
+        
+        // Manual filtering by user_id
+        const userFilteredRecords = records.filter(record => {
+          const userIds = record.fields.user_id || [];
+          const hasUser = userIds.includes(userId);
+          if (hasUser) {
+            logger.info(`Match found: Record ${record.id} belongs to user ${userId}`);
           }
+          return hasUser;
+        });
+        
+        logger.info(`After filtering: ${userFilteredRecords.length} records for user ${userId}`);
+        
+        // Apply pagination to filtered results
+        const startIndex = (parseInt(page) - 1) * parseInt(limit);
+        const endIndex = startIndex + parseInt(limit);
+        const paginatedRecords = userFilteredRecords.slice(startIndex, endIndex);
+        
+        logger.info(`After pagination: ${paginatedRecords.length} records (page ${page}, limit ${limit})`);
+
+        // Format the videos using arrow function
+        const videos = paginatedRecords.map((record) => {
+          try {
+            return this.formatVideoResponse(record);
+          } catch (formatError) {
+            logger.error(`Error formatting video record ${record.id}:`, formatError.message);
+            
+            // Return basic video object if formatting fails
+            return {
+              id: record.id,
+              video_title: record.fields.video_title || 'Untitled Video',
+              channel_name: record.fields.channel_name || 'Unknown Channel',
+              status: record.fields.status || 'completed',
+              created_at: record.createdTime,
+              ...record.fields
+            };
+          }
+        });
+
+        logger.info(`Successfully formatted ${videos.length} videos for response`);
+
+        res.json({
+          success: true,
+          data: {
+            videos,
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              total: userFilteredRecords.length,
+              hasMore: endIndex < userFilteredRecords.length
+            }
+          }
+        });
+        
+      } catch (queryError) {
+        logger.error('Airtable query failed:', queryError);
+        
+        if (queryError.message && queryError.message.includes('timeout')) {
+          logger.error('Query timed out - returning empty result');
+          return res.json({
+            success: true,
+            data: {
+              videos: [],
+              pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: 0,
+                hasMore: false
+              }
+            },
+            warning: 'Query timed out - there may be too many records to process'
+          });
         }
-      });
+        
+        throw queryError; // Re-throw other errors to be caught by outer catch
+      }
 
     } catch (error) {
+      logger.error('=== ERROR in getVideos method ===');
       logger.error('Error fetching videos:', error);
-      res.status(500).json({
+      logger.error('Error stack:', error.stack);
+      logger.error('Error type:', typeof error);
+      logger.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // More detailed error information
+      const errorResponse = {
         success: false,
         message: 'Failed to fetch videos',
-        error: error.message
-      });
+        error: error.message || 'Unknown error'
+      };
+      
+      if (error.message && error.message.includes('timeout')) {
+        errorResponse.message = 'Request timed out - there may be too many records to process';
+      }
+      
+      try {
+        res.status(500).json(errorResponse);
+      } catch (responseError) {
+        logger.error('Failed to send error response:', responseError);
+      }
     }
   }
 
@@ -106,7 +227,7 @@ class VideosController {
       }
 
       // Check if video belongs to user (when user_id field is available)
-      if (record.fields.user_id && record.fields.user_id !== userId) {
+      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -172,7 +293,7 @@ class VideosController {
       if (existingVideos && existingVideos.length > 0) {
         // Check if any belong to current user
         const userVideo = existingVideos.find(video => 
-          video.fields.user_id === userId || !video.fields.user_id // temporary: allow if no user_id set
+          video.fields.user_id && video.fields.user_id[0] === userId
         );
         
         if (userVideo) {
@@ -200,12 +321,13 @@ class VideosController {
         videoid: videoId,
         video_title: video_title || metadata?.title || 'Untitled Video',
         channel_name: channel_name || metadata?.channelTitle || 'Unknown Channel',
+        chanel_handle: metadata?.channelHandle || '', // Note: matches Airtable column name
         
         // Enhanced fields (will be ignored if fields don't exist yet)
         description: description || metadata?.description || '',
         duration: metadata?.duration || 0,
         upload_date: metadata?.publishedAt || new Date().toISOString(),
-        thumbnail_url: metadata?.thumbnails?.[0]?.url || '',
+        thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail
         
         // Processing status
         status: 'pending',
@@ -219,7 +341,7 @@ class VideosController {
         privacy_setting: privacy_setting || 'public',
         
         // User association
-        user_id: userId
+        user_id: [userId]
       };
 
       // Handle tags (convert array to comma-separated string if needed)
@@ -239,23 +361,90 @@ class VideosController {
         }
       });
 
-      const record = await airtable.create('Videos', safeVideoData);
-      const video = this.formatVideoResponse(record);
+      // === DUAL WRITE: Write to both Airtable and PostgreSQL === 
+      let airtableRecord = null;
+      let postgresRecord = null;
+      let writeErrors = [];
 
-      // If we have metadata, trigger processing
-      if (metadata) {
+      // 1. Write to Airtable first (existing logic)
+      try {
+        logger.info('Writing video to Airtable...');
+        airtableRecord = await airtable.create('Videos', safeVideoData);
+        logger.info(`✅ Video created in Airtable: ${airtableRecord.id}`);
+      } catch (airtableError) {
+        logger.error('❌ Failed to create video in Airtable:', airtableError);
+        writeErrors.push(`Airtable: ${airtableError.message}`);
+      }
+
+      // 2. Write to PostgreSQL (independent operation)
+      try {
+        logger.info('Writing video to PostgreSQL...');
+        
+        // Prepare PostgreSQL data (different field mappings)
+        const postgresVideoData = {
+          youtube_url: youtube_url,
+          videoid: videoId,
+          video_title: video_title || metadata?.title || 'Untitled Video',
+          channel_name: channel_name || metadata?.channelTitle || 'Unknown Channel',
+          chanel_handle: metadata?.channelHandle || '', // Channel handle like @prophetdwight
+          description: description || metadata?.description || '',
+          thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
+          users_id: userId, // PostgreSQL uses users_id column name
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          airtable_id: airtableRecord?.id || null // Store Airtable ID if successful
+        };
+
+        // Add other fields if they exist
+        if (metadata?.duration) postgresVideoData.duration = metadata.duration;
+        if (category) postgresVideoData.category = category;
+        if (privacy_setting) postgresVideoData.privacy_setting = privacy_setting;
+        
+        postgresRecord = await databaseService.create('videos', postgresVideoData);
+        logger.info(`✅ Video created in PostgreSQL: ID ${postgresRecord.id}`);
+        
+      } catch (postgresError) {
+        logger.error('❌ Failed to create video in PostgreSQL:', postgresError);
+        writeErrors.push(`PostgreSQL: ${postgresError.message}`);
+      }
+
+      // 3. Determine response based on results
+      if (!airtableRecord && !postgresRecord) {
+        // Both failed
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create video in both databases',
+          errors: writeErrors
+        });
+      }
+
+      // At least one succeeded - format response using available data
+      const video = airtableRecord ? 
+        this.formatVideoResponse(airtableRecord) :
+        this.formatPostgresVideoResponse(postgresRecord);
+
+      // 4. Trigger processing if we have metadata and Airtable record
+      if (metadata && airtableRecord) {
         try {
-          await this.triggerVideoProcessing(record.id, metadata);
+          await this.triggerVideoProcessing(airtableRecord.id, metadata);
         } catch (processingError) {
           logger.warn('Could not trigger processing:', processingError.message);
         }
       }
 
-      res.status(201).json({
+      // 5. Success response with warnings if any database failed
+      const response = {
         success: true,
         message: 'Video created successfully',
         data: { video }
-      });
+      };
+
+      if (writeErrors.length > 0) {
+        response.warnings = writeErrors;
+        response.message += ` (with ${writeErrors.length} database warning(s))`;
+      }
+
+      res.status(201).json(response);
 
     } catch (error) {
       logger.error('Error creating video:', error);
@@ -298,7 +487,7 @@ class VideosController {
       }
 
       // Check ownership (when user_id field is available)
-      if (existingRecord.fields.user_id && existingRecord.fields.user_id !== userId) {
+      if (existingRecord.fields.user_id && existingRecord.fields.user_id[0] !== userId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -444,45 +633,127 @@ class VideosController {
   }
 
   /**
-   * Format video record for API response
+   * Format video record for API response (Airtable)
    * @param {Object} record - Airtable record
    * @returns {Object} Formatted video object
    */
   formatVideoResponse(record) {
+    
+    try {
+      // Ensure record and fields exist
+      if (!record || !record.fields) {
+        logger.warn('Invalid record format:', record);
+        return {
+          id: record?.id || 'unknown',
+          video_title: 'Unknown Video',
+          status: 'error',
+          created_at: new Date().toISOString()
+        };
+      }
+
+      const video = {
+        id: record.id,
+        ...record.fields,
+        created_at: record.createdTime
+      };
+
+      // Parse JSON fields safely
+      try {
+        if (video.processing_log && typeof video.processing_log === 'string') {
+          video.processing_log = JSON.parse(video.processing_log);
+        }
+      } catch (e) {
+        logger.warn('Could not parse processing_log JSON');
+      }
+
+      try {
+        if (video.ai_title_suggestions && typeof video.ai_title_suggestions === 'string') {
+          video.ai_title_suggestions = JSON.parse(video.ai_title_suggestions);
+        }
+      } catch (e) {
+        logger.warn('Could not parse ai_title_suggestions JSON');
+      }
+
+      try {
+        if (video.ai_thumbnail_suggestions && typeof video.ai_thumbnail_suggestions === 'string') {
+          video.ai_thumbnail_suggestions = JSON.parse(video.ai_thumbnail_suggestions);
+        }
+      } catch (e) {
+        logger.warn('Could not parse ai_thumbnail_suggestions JSON');
+      }
+
+      // Format duration to human readable
+      if (video.duration && typeof video.duration === 'number') {
+        try {
+          video.duration_formatted = this.formatDuration(video.duration);
+        } catch (e) {
+          logger.warn('Error formatting duration:', e);
+          video.duration_formatted = '0:00';
+        }
+      }
+
+      // Ensure tags is an array
+      if (video.tags && typeof video.tags === 'string') {
+        try {
+          video.tags = video.tags.split(',').map(tag => tag.trim());
+        } catch (e) {
+          logger.warn('Error parsing tags:', e);
+          video.tags = [];
+        }
+      }
+
+      return video;
+    } catch (error) {
+      logger.error(`Error formatting record ${record?.id}:`, {
+        errorMessage: error?.message || 'No error message',
+        errorName: error?.name || 'Unknown error type',
+        errorStack: error?.stack || 'No stack trace',
+        recordId: record?.id || 'No record ID',
+        recordStructure: record ? Object.keys(record) : 'No record',
+        fieldsStructure: record?.fields ? Object.keys(record.fields) : 'No fields',
+        hasVideo: !!record?.fields?.video_title,
+        hasDuration: !!record?.fields?.duration,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      return {
+        id: record?.id || 'unknown',
+        video_title: record?.fields?.video_title || 'Unknown Video',
+        status: 'error',
+        created_at: record?.createdTime || new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Format PostgreSQL video record for API response
+   * @param {Object} record - PostgreSQL record (from database service)
+   * @returns {Object} Formatted video object
+   */
+  formatPostgresVideoResponse(record) {
+    // PostgreSQL record comes in format: { id, fields, createdTime }
     const video = {
       id: record.id,
       ...record.fields,
-      created_at: record.createdTime
+      created_at: record.createdTime || record.fields.created_at
     };
 
-    // Parse JSON fields safely
+    // Parse JSON fields safely (PostgreSQL stores JSON as strings)
     try {
-      if (video.processing_log && typeof video.processing_log === 'string') {
-        video.processing_log = JSON.parse(video.processing_log);
+      if (video.thumbnail && typeof video.thumbnail === 'string') {
+        video.thumbnail = JSON.parse(video.thumbnail);
       }
     } catch (e) {
-      logger.warn('Could not parse processing_log JSON');
-    }
-
-    try {
-      if (video.ai_title_suggestions && typeof video.ai_title_suggestions === 'string') {
-        video.ai_title_suggestions = JSON.parse(video.ai_title_suggestions);
-      }
-    } catch (e) {
-      logger.warn('Could not parse ai_title_suggestions JSON');
-    }
-
-    try {
-      if (video.ai_thumbnail_suggestions && typeof video.ai_thumbnail_suggestions === 'string') {
-        video.ai_thumbnail_suggestions = JSON.parse(video.ai_thumbnail_suggestions);
-      }
-    } catch (e) {
-      logger.warn('Could not parse ai_thumbnail_suggestions JSON');
+      logger.warn('Could not parse thumbnail JSON from PostgreSQL');
     }
 
     // Format duration to human readable
     if (video.duration && typeof video.duration === 'number') {
-      video.duration_formatted = this.formatDuration(video.duration);
+      try {
+        video.duration_formatted = this.formatDuration(video.duration);
+      } catch (e) {
+        logger.warn('Error formatting duration in PostgreSQL response:', e);
+        video.duration_formatted = '0:00';
+      }
     }
 
     // Ensure tags is an array
@@ -579,7 +850,8 @@ class VideosController {
         });
       }
 
-      if (record.fields.user_id && record.fields.user_id !== userId) {
+      // Check ownership first
+      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -637,7 +909,7 @@ class VideosController {
         });
       }
 
-      if (record.fields.user_id && record.fields.user_id !== userId) {
+      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'

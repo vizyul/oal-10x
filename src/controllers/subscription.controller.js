@@ -106,11 +106,27 @@ const subscriptionController = {
     try {
       const user = req.user;
       const subscription = await stripeService.getUserSubscription(user.id);
+      const userTier = user.subscription_tier || 'free';
+      const tierConfig = stripeConfig.getTierConfig(userTier);
+      
+      // Get current usage
+      const subscriptionService = require('../services/subscription.service');
+      const currentUsage = await subscriptionService.getCurrentUsage(user.id);
+      
+      const videoLimit = tierConfig?.videoLimit || 0;
+      const remainingVideos = Math.max(0, videoLimit - currentUsage.videos);
 
       const response = {
         success: true,
+        data: {
+          tier: userTier,
+          videoLimit: videoLimit,
+          currentUsage: currentUsage.videos,
+          remainingVideos: remainingVideos,
+          isUnlimited: videoLimit === -1
+        },
         subscription: {
-          tier: user.subscription_tier || 'free',
+          tier: userTier,
           status: user.subscription_status || 'none',
           hasActiveSubscription: subscription !== null
         },
@@ -156,9 +172,9 @@ const subscriptionController = {
       const userTier = user.subscription_tier || 'free';
       const tierConfig = stripeConfig.getTierConfig(userTier);
 
-      // Get current usage from middleware helper
-      const { subscriptionMiddleware } = require('../middleware');
-      const currentUsage = await getCurrentUsageAll(user.id);
+      // Get current usage from subscription service
+      const subscriptionService = require('../services/subscription.service');
+      const currentUsage = await subscriptionService.getCurrentUsage(user.id);
 
       const limits = {
         videos: tierConfig?.videoLimit || 0,
@@ -334,44 +350,10 @@ const subscriptionController = {
   }
 };
 
-// Helper function to get usage (imported from middleware helper)
+// Helper function to get usage (uses subscription service)
 async function getCurrentUsageAll(userId) {
-  try {
-    const { airtable } = require('../services/airtable.service');
-    
-    // Get active subscription
-    const subscriptions = await airtable.findByField('User_Subscriptions', 'user_id', userId);
-    const subscription = subscriptions.find(sub => 
-      ['active', 'trialing', 'paused'].includes(sub.status)
-    );
-
-    if (!subscription) {
-      return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-    }
-
-    // Get current period usage
-    const now = new Date();
-    const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
-    const currentUsage = usageRecords.find(usage => {
-      const usagePeriodStart = new Date(usage.period_start);
-      const usagePeriodEnd = new Date(usage.period_end);
-      return usagePeriodStart <= now && usagePeriodEnd >= now;
-    });
-
-    if (!currentUsage) {
-      return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-    }
-
-    return {
-      videos: currentUsage.videos_processed || 0,
-      api_calls: currentUsage.api_calls_made || 0,
-      storage: currentUsage.storage_used_mb || 0,
-      ai_summaries: currentUsage.ai_summaries_generated || 0
-    };
-  } catch (error) {
-    logger.error('Error getting usage:', error);
-    return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-  }
+  const subscriptionService = require('../services/subscription.service');
+  return await subscriptionService.getCurrentUsage(userId);
 }
 
 module.exports = subscriptionController;

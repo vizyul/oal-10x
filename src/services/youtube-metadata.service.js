@@ -60,6 +60,14 @@ class YouTubeMetadataService {
         logger.warn(`Could not fetch transcript for ${videoId}:`, transcriptError.message);
       }
 
+      // Get channel information for handle
+      let channelInfo = null;
+      try {
+        channelInfo = await this.getChannelInfo(videoData.snippet.channelId);
+      } catch (channelError) {
+        logger.warn(`Could not fetch channel info for ${videoData.snippet.channelId}:`, channelError.message);
+      }
+
       const metadata = {
         videoId,
         url: videoUrl,
@@ -67,9 +75,11 @@ class YouTubeMetadataService {
         description: videoData.snippet.description,
         channelId: videoData.snippet.channelId,
         channelTitle: videoData.snippet.channelTitle,
+        channelHandle: channelInfo?.handle || null,
         publishedAt: videoData.snippet.publishedAt,
         duration: this.parseDuration(videoData.contentDetails.duration),
         thumbnails: this.formatThumbnails(videoData.snippet.thumbnails),
+        highResThumbnail: this.getHighResThumbnailUrl(videoId, videoData.snippet.thumbnails),
         tags: videoData.snippet.tags || [],
         categoryId: videoData.snippet.categoryId,
         defaultLanguage: videoData.snippet.defaultLanguage,
@@ -338,6 +348,7 @@ class YouTubeMetadataService {
         title: channel.snippet.title,
         description: channel.snippet.description,
         customUrl: channel.snippet.customUrl,
+        handle: this.extractChannelHandle(channel.snippet.customUrl),
         publishedAt: channel.snippet.publishedAt,
         thumbnails: this.formatThumbnails(channel.snippet.thumbnails),
         statistics: {
@@ -535,6 +546,56 @@ class YouTubeMetadataService {
     }
 
     return cleaned;
+  }
+
+  /**
+   * Extract channel handle from customUrl
+   * @param {string} customUrl - YouTube channel custom URL
+   * @returns {string|null} Channel handle (e.g., "@prophetdwight") or null
+   */
+  extractChannelHandle(customUrl) {
+    if (!customUrl) return null;
+
+    // Handle the new @handle format
+    if (customUrl.startsWith('@')) {
+      return customUrl;
+    }
+
+    // Handle legacy custom URLs (convert to @handle format)
+    if (customUrl.startsWith('c/') || customUrl.startsWith('user/')) {
+      const handlePart = customUrl.split('/').pop();
+      return `@${handlePart}`;
+    }
+
+    // If it's already a clean handle without @, add it
+    if (customUrl && !customUrl.includes('/')) {
+      return `@${customUrl}`;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get the highest resolution thumbnail URL available
+   * @param {string} videoId - YouTube video ID
+   * @param {Object} thumbnails - YouTube thumbnails object
+   * @returns {string} High resolution thumbnail URL
+   */
+  getHighResThumbnailUrl(videoId, thumbnails) {
+    // Priority order: maxresdefault > sddefault > hqdefault > mqdefault > default
+    const priorities = ['maxresdefault', 'standard', 'high', 'medium', 'default'];
+    
+    // First try to get from YouTube API thumbnails
+    if (thumbnails) {
+      for (const priority of priorities) {
+        if (thumbnails[priority]) {
+          return thumbnails[priority].url;
+        }
+      }
+    }
+
+    // Fallback to direct YouTube thumbnail URLs
+    return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
   }
 }
 

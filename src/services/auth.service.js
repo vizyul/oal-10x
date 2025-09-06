@@ -62,7 +62,7 @@ class AuthService {
    */
   async findUserByEmail(email) {
     try {
-      logger.info(`Finding user by email: ${email}`);
+      // Finding user by email
       
       if (!airtableService.base) {
         logger.warn('Airtable not configured - returning null for user lookup');

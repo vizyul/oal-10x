@@ -77,7 +77,7 @@ const videoValidation = {
  */
 router.get('/', 
   videoValidation.query,
-  videosController.getVideos
+  videosController.getVideos.bind(videosController)
 );
 
 /**
@@ -87,7 +87,7 @@ router.get('/',
  */
 router.get('/:id',
   videoValidation.params,
-  videosController.getVideo
+  videosController.getVideo.bind(videosController)
 );
 
 /**
@@ -99,7 +99,7 @@ router.post('/',
   subscriptionMiddleware.requireSubscription('basic'),
   subscriptionMiddleware.checkUsageLimit('videos'),
   videoValidation.create,
-  videosController.createVideo,
+  videosController.createVideo.bind(videosController),
   subscriptionMiddleware.incrementUsage
 );
 
@@ -111,7 +111,7 @@ router.post('/',
 router.put('/:id',
   videoValidation.params,
   videoValidation.update,
-  videosController.updateVideo
+  videosController.updateVideo.bind(videosController)
 );
 
 /**
@@ -121,7 +121,7 @@ router.put('/:id',
  */
 router.delete('/:id',
   videoValidation.params,
-  videosController.deleteVideo
+  videosController.deleteVideo.bind(videosController)
 );
 
 /**
@@ -131,7 +131,7 @@ router.delete('/:id',
  */
 router.get('/:id/status',
   videoValidation.params,
-  videosController.getVideoStatus
+  videosController.getVideoStatus.bind(videosController)
 );
 
 /**
@@ -142,7 +142,7 @@ router.get('/:id/status',
 router.post('/:id/process',
   subscriptionMiddleware.requireSubscription('basic'),
   videoValidation.params,
-  videosController.processVideo
+  videosController.processVideo.bind(videosController)
 );
 
 /**
@@ -152,7 +152,7 @@ router.post('/:id/process',
  */
 router.post('/:id/retry',
   videoValidation.params,
-  videosController.retryProcessing
+  videosController.retryProcessing.bind(videosController)
 );
 
 module.exports = router;

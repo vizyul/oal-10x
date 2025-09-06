@@ -80,6 +80,11 @@ app.use(oauthService.initialize());
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Serve Socket.IO client script
+app.get('/socket.io/socket.io.js', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'node_modules', 'socket.io', 'client-dist', 'socket.io.js'));
+});
+
 // Test endpoint for webhook accessibility
 app.get('/webhook/test', (req, res) => {
   console.log('🧪 Test webhook endpoint hit!');

@@ -28,6 +28,25 @@ router.get('/', (req, res) => {
 });
 
 /**
+ * @route   GET /videos/socket-token
+ * @desc    Get temporary token for Socket.IO connection
+ * @access  Private
+ */
+router.get('/socket-token', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Return the existing token from httpOnly cookie
+  const token = req.cookies?.auth_token;
+  if (!token) {
+    return res.status(401).json({ error: 'No auth token found' });
+  }
+  
+  res.json({ token });
+});
+
+/**
  * @route   GET /videos/upload
  * @desc    Video upload page
  * @access  Private - Requires Basic subscription
@@ -62,6 +81,7 @@ router.get('/library', (req, res) => {
     title: 'Video Library - Our AI Legacy',
     description: 'Browse and manage all your videos',
     user: req.user,
+    subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
     showNav: true,

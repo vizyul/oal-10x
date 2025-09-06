@@ -1,7 +1,7 @@
 const { google } = require('googleapis');
 const crypto = require('crypto');
 const { logger } = require('../utils');
-const airtable = require('./airtable.service');
+const database = require('./database.service');
 
 class YouTubeOAuthService {
   constructor() {
@@ -107,6 +107,12 @@ class YouTubeOAuthService {
       // Decode and validate state
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
       const { userId, timestamp } = stateData;
+      logger.info('Decoded OAuth state', { userId, userIdType: typeof userId, timestamp });
+      
+      // Validate user ID
+      if (!userId || userId === 'undefined' || userId === 'null') {
+        throw new Error('Invalid user ID in OAuth state');
+      }
 
       // Check if state is not older than 10 minutes
       if (Date.now() - timestamp > 10 * 60 * 1000) {
@@ -166,7 +172,8 @@ class YouTubeOAuthService {
         }
       };
     } catch (error) {
-      logger.error('Error handling OAuth callback:', error);
+      logger.error('Error handling OAuth callback:', error.message);
+      logger.error('Full error stack:', error.stack);
       throw new Error(`OAuth callback failed: ${error.message}`);
     }
   }
@@ -193,7 +200,19 @@ class YouTubeOAuthService {
         refresh_token: decryptedTokens.refresh_token
       });
 
-      const { tokens } = await this.oauth2Client.refreshAccessToken();
+      const refreshResult = await this.oauth2Client.refreshAccessToken();
+      // Only log OAuth refresh in debug mode
+      logger.debug('OAuth tokens refreshed successfully');
+      
+      // Google OAuth client returns credentials, not tokens
+      let tokens;
+      if (refreshResult?.tokens) {
+        tokens = refreshResult.tokens;
+      } else if (refreshResult?.credentials) {
+        tokens = refreshResult.credentials;
+      } else {
+        throw new Error('No tokens or credentials returned from refresh');
+      }
       
       // Update stored tokens
       const updatedTokens = {
@@ -204,15 +223,23 @@ class YouTubeOAuthService {
       const encryptedTokens = await this.encryptTokens(updatedTokens);
       await this.updateUserTokens(userId, encryptedTokens);
 
-      logger.info(`Tokens refreshed for user ${userId}`);
+      logger.debug(`Tokens refreshed for user ${userId}`);
 
+      // tokens.expiry_date might be undefined, use a fallback
+      const expiresAt = tokens.expiry_date || (Date.now() + 3600000); // Default to 1 hour from now
+      
       return {
         success: true,
-        expiresAt: tokens.expiry_date
+        expiresAt: expiresAt
       };
     } catch (error) {
-      logger.error('Error refreshing access token:', error);
-      throw new Error(`Token refresh failed: ${error.message}`);
+      logger.error('Error refreshing access token:', error.message || 'Unknown error');
+      logger.error('Full refresh error details:', { 
+        name: error.name, 
+        message: error.message, 
+        stack: error.stack?.substring(0, 500) 
+      });
+      throw new Error(`Token refresh failed: ${error.message || 'Unknown error'}`);
     }
   }
 
@@ -293,34 +320,71 @@ class YouTubeOAuthService {
    * Get videos from a playlist
    * @param {string} userId - User ID
    * @param {string} playlistId - Playlist ID
-   * @returns {Array} Array of video objects
+   * @param {string} pageToken - Optional pagination token for next page
+   * @returns {Object} Object with videos array and pagination info
    */
-  async getPlaylistVideos(userId, playlistId) {
+  async getPlaylistVideos(userId, playlistId, pageToken = null) {
     try {
       await this.setUserCredentials(userId);
 
-      const response = await this.youtube.playlistItems.list({
+      const requestParams = {
         part: ['snippet'],
         playlistId: playlistId,
         maxResults: 50
-      });
+      };
+
+      // Add pagination token if provided
+      if (pageToken) {
+        requestParams.pageToken = pageToken;
+      }
+
+      const response = await this.youtube.playlistItems.list(requestParams);
 
       if (!response.data.items) {
         return [];
       }
 
+      // Get video IDs for detailed info including duration
+      const videoIds = response.data.items
+        .filter(item => item.snippet.resourceId.kind === 'youtube#video')
+        .map(item => item.snippet.resourceId.videoId);
+
+      if (videoIds.length === 0) {
+        return [];
+      }
+
+      // Get detailed video information including duration
+      const videoDetailsResponse = await this.youtube.videos.list({
+        part: ['snippet', 'contentDetails', 'statistics'],
+        id: videoIds.join(',')
+      });
+
       const videos = response.data.items
         .filter(item => item.snippet.resourceId.kind === 'youtube#video')
-        .map(item => ({
-          videoId: item.snippet.resourceId.videoId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails?.default?.url,
-          publishedAt: item.snippet.publishedAt,
-          channelTitle: item.snippet.channelTitle
-        }));
+        .map(item => {
+          const videoId = item.snippet.resourceId.videoId;
+          const videoDetails = videoDetailsResponse.data.items?.find(v => v.id === videoId);
+          
+          return {
+            id: videoId,
+            videoId: videoId,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails?.default?.url || videoDetails?.snippet?.thumbnails?.default?.url,
+            publishedAt: item.snippet.publishedAt,
+            channelTitle: item.snippet.channelTitle,
+            duration: videoDetails ? this.parseDuration(videoDetails.contentDetails.duration) : null,
+            viewCount: videoDetails ? parseInt(videoDetails.statistics?.viewCount || 0) : 0
+          };
+        });
 
-      return videos;
+      // Return videos with pagination info
+      return {
+        videos: videos,
+        nextPageToken: response.data.nextPageToken || null,
+        totalResults: response.data.pageInfo?.totalResults || videos.length,
+        resultsPerPage: response.data.pageInfo?.resultsPerPage || 50
+      };
     } catch (error) {
       logger.error('Error getting playlist videos:', error);
       throw new Error(`Failed to get playlist videos: ${error.message}`);
@@ -328,12 +392,31 @@ class YouTubeOAuthService {
   }
 
   /**
+   * Parse YouTube duration format (PT4M13S) to seconds
+   * @param {string} duration - YouTube duration string
+   * @returns {number} Duration in seconds
+   */
+  parseDuration(duration) {
+    if (!duration) return null;
+    
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return null;
+    
+    const hours = parseInt(match[1] || 0);
+    const minutes = parseInt(match[2] || 0);
+    const seconds = parseInt(match[3] || 0);
+    
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  /**
    * Get uploaded videos for a channel
    * @param {string} userId - User ID
    * @param {string} channelId - Channel ID
-   * @returns {Array} Array of video objects
+   * @param {string} pageToken - Optional pagination token
+   * @returns {Object} Object with videos array, nextPageToken, and totalResults
    */
-  async getUserUploadedVideos(userId, channelId) {
+  async getUserUploadedVideos(userId, channelId, pageToken = null) {
     try {
       await this.setUserCredentials(userId);
 
@@ -350,11 +433,11 @@ class YouTubeOAuthService {
       const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads;
       
       if (!uploadsPlaylistId) {
-        return [];
+        return { videos: [], nextPageToken: null, totalResults: 0 };
       }
 
       // Get videos from uploads playlist
-      return await this.getPlaylistVideos(userId, uploadsPlaylistId);
+      return await this.getPlaylistVideos(userId, uploadsPlaylistId, pageToken);
     } catch (error) {
       logger.error('Error getting user uploaded videos:', error);
       throw new Error(`Failed to get uploaded videos: ${error.message}`);
@@ -426,6 +509,34 @@ class YouTubeOAuthService {
   // Helper methods
 
   /**
+   * Convert user ID to PostgreSQL integer ID
+   * @param {*} userId - User ID (can be Airtable record ID or integer)
+   * @returns {Promise<number>} PostgreSQL integer user ID
+   */
+  async resolveUserId(userId) {
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      throw new Error('Invalid user ID: user ID is null or undefined');
+    }
+    
+    // If it's already an integer, return it
+    const parsed = parseInt(userId);
+    if (!isNaN(parsed) && userId.toString() === parsed.toString()) {
+      return parsed;
+    }
+    
+    // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
+    if (userId.toString().startsWith('rec')) {
+      const records = await database.findByField('users', 'airtable_id', userId);
+      if (!records || records.length === 0) {
+        throw new Error(`No PostgreSQL user found for Airtable ID: ${userId}`);
+      }
+      return records[0].fields.id;
+    }
+    
+    throw new Error(`Invalid user ID format: ${userId}`);
+  }
+
+  /**
    * Set user credentials for API calls
    * @param {string} userId - User ID
    */
@@ -459,13 +570,12 @@ class YouTubeOAuthService {
       const algorithm = 'aes-256-cbc';
       const iv = crypto.randomBytes(16);
 
-      const cipher = crypto.createCipher(algorithm, key);
+      const cipher = crypto.createCipheriv(algorithm, Buffer.from(key, 'utf8'), iv);
       let encrypted = cipher.update(JSON.stringify(tokens), 'utf8', 'hex');
       encrypted += cipher.final('hex');
 
       return {
-        access_token: encrypted,
-        refresh_token: encrypted, // In production, encrypt separately
+        encrypted_tokens: encrypted,
         iv: iv.toString('hex'),
         algorithm
       };
@@ -477,21 +587,32 @@ class YouTubeOAuthService {
 
   /**
    * Decrypt tokens from storage
-   * @param {Object} encryptedTokens - Encrypted token object
+   * @param {Object} encryptedData - Encrypted token object
    * @returns {Object} Decrypted tokens
    */
-  async decryptTokens(encryptedTokens) {
+  async decryptTokens(encryptedData) {
     try {
       const key = process.env.TOKEN_ENCRYPTION_KEY;
       if (!key) {
         throw new Error('TOKEN_ENCRYPTION_KEY not configured');
       }
 
-      // For now, return mock decrypted tokens (implement proper decryption)
-      return {
-        access_token: 'decrypted_access_token',
-        refresh_token: 'decrypted_refresh_token'
-      };
+      // Handle both formats: direct database record and encryption object
+      const encryptedTokens = encryptedData.encrypted_tokens;
+      const ivHex = encryptedData.encryption_iv || encryptedData.iv;
+      const algorithm = encryptedData.encryption_algorithm || encryptedData.algorithm || 'aes-256-cbc';
+
+      if (!encryptedTokens || !ivHex) {
+        throw new Error('Invalid encrypted data format - missing encrypted_tokens or IV');
+      }
+
+      const iv = Buffer.from(ivHex, 'hex');
+
+      const decipher = crypto.createDecipheriv(algorithm, Buffer.from(key, 'utf8'), iv);
+      let decrypted = decipher.update(encryptedTokens, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+
+      return JSON.parse(decrypted);
     } catch (error) {
       logger.error('Error decrypting tokens:', error);
       throw new Error('Token decryption failed');
@@ -499,7 +620,7 @@ class YouTubeOAuthService {
   }
 
   /**
-   * Store user tokens in Airtable
+   * Store user tokens in PostgreSQL (upsert: update if exists, create if not)
    * @param {string} userId - User ID
    * @param {Object} encryptedTokens - Encrypted tokens
    * @param {Object} channelData - Channel information
@@ -507,10 +628,19 @@ class YouTubeOAuthService {
    */
   async storeUserTokens(userId, encryptedTokens, channelData, scope) {
     try {
+      const resolvedUserId = await this.resolveUserId(userId);
+      
+      // Check if tokens already exist for this user and channel
+      const existingRecords = await database.query(
+        'SELECT id FROM youtube_oauth_tokens WHERE user_id = $1 AND channel_id = $2',
+        [resolvedUserId, channelData.id]
+      );
+      
       const tokenData = {
-        user_id: [userId],
-        access_token: encryptedTokens.access_token,
-        refresh_token: encryptedTokens.refresh_token,
+        user_id: resolvedUserId,
+        encrypted_tokens: encryptedTokens.encrypted_tokens,
+        encryption_iv: encryptedTokens.iv,
+        encryption_algorithm: encryptedTokens.algorithm,
         token_expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         scope: scope || '',
         channel_id: channelData.id,
@@ -518,12 +648,23 @@ class YouTubeOAuthService {
         channel_thumbnail: channelData.thumbnail,
         is_active: true,
         last_refreshed: new Date().toISOString(),
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Note: This table needs to be created in Airtable
-      await airtable.create('YouTube OAuth Tokens', tokenData);
+      let result;
+      if (existingRecords.rows && existingRecords.rows.length > 0) {
+        // Update existing record
+        const existingId = existingRecords.rows[0].id;
+        result = await database.update('youtube_oauth_tokens', existingId, tokenData);
+        logger.debug(`Tokens updated in PostgreSQL for user ${userId}`);
+      } else {
+        // Create new record
+        tokenData.created_at = new Date().toISOString();
+        result = await database.create('youtube_oauth_tokens', tokenData);
+        logger.debug(`Tokens created in PostgreSQL for user ${userId}`);
+      }
+      
+      return result;
     } catch (error) {
       logger.error('Error storing user tokens:', error);
       throw new Error('Failed to store tokens');
@@ -537,8 +678,9 @@ class YouTubeOAuthService {
    */
   async storeUserChannel(userId, channelData) {
     try {
+      const resolvedUserId = await this.resolveUserId(userId);
       const channelRecord = {
-        user_id: [userId],
+        user_id: resolvedUserId,
         channel_id: channelData.id,
         channel_name: channelData.name,
         channel_description: channelData.description || '',
@@ -546,12 +688,13 @@ class YouTubeOAuthService {
         subscriber_count: channelData.subscriberCount || 0,
         video_count: channelData.videoCount || 0,
         is_primary: true,
-        last_synced: new Date().toISOString(),
-        created_at: new Date().toISOString()
+        last_synced: new Date().toISOString()
       };
 
-      // Note: This table needs to be created in Airtable
-      await airtable.create('User YouTube Channels', channelRecord);
+      // Store in PostgreSQL
+      const result = await database.create('user_youtube_channels', channelRecord);
+      logger.debug(`Channel stored in PostgreSQL for user ${userId}`);
+      return result;
     } catch (error) {
       logger.error('Error storing user channel:', error);
       throw new Error('Failed to store channel information');
@@ -565,7 +708,9 @@ class YouTubeOAuthService {
    */
   async getUserTokens(userId) {
     try {
-      const records = await airtable.findByField('YouTube OAuth Tokens', 'user_id', userId);
+      // Get tokens from PostgreSQL
+      const resolvedUserId = await this.resolveUserId(userId);
+      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
       
       if (!records || records.length === 0) {
         return null;
@@ -590,7 +735,8 @@ class YouTubeOAuthService {
    */
   async updateUserTokens(userId, encryptedTokens) {
     try {
-      const records = await airtable.findByField('YouTube OAuth Tokens', 'user_id', userId);
+      const resolvedUserId = await this.resolveUserId(userId);
+      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
       
       if (!records || records.length === 0) {
         throw new Error('No tokens found to update');
@@ -598,13 +744,13 @@ class YouTubeOAuthService {
 
       const record = records[0];
       const updateData = {
-        access_token: encryptedTokens.access_token,
-        refresh_token: encryptedTokens.refresh_token,
-        last_refreshed: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        encrypted_tokens: encryptedTokens.encrypted_tokens,
+        encryption_iv: encryptedTokens.iv,
+        encryption_algorithm: encryptedTokens.algorithm,
+        last_refreshed: new Date().toISOString()
       };
 
-      await airtable.update('YouTube OAuth Tokens', record.id, updateData);
+      await database.update('youtube_oauth_tokens', record.id, updateData);
     } catch (error) {
       logger.error('Error updating user tokens:', error);
       throw new Error('Failed to update tokens');
@@ -617,12 +763,12 @@ class YouTubeOAuthService {
    */
   async deactivateUserTokens(userId) {
     try {
-      const records = await airtable.findByField('YouTube OAuth Tokens', 'user_id', userId);
+      const resolvedUserId = await this.resolveUserId(userId);
+      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
       
       for (const record of records) {
-        await airtable.update('YouTube OAuth Tokens', record.id, {
-          is_active: false,
-          updated_at: new Date().toISOString()
+        await database.update('youtube_oauth_tokens', record.id, {
+          is_active: false
         });
       }
     } catch (error) {
