@@ -1,23 +1,23 @@
 const stripeConfig = {
   // Determine environment
   isProduction: process.env.NODE_ENV === 'production',
-  
+
   // Get appropriate keys based on environment
   getPublishableKey() {
-    return this.isProduction 
-      ? process.env.STRIPE_LIVE_PUBLISHABLE_KEY 
+    return this.isProduction
+      ? process.env.STRIPE_LIVE_PUBLISHABLE_KEY
       : process.env.STRIPE_PUBLISHABLE_KEY;
   },
 
   getSecretKey() {
-    return this.isProduction 
-      ? process.env.STRIPE_LIVE_SECRET_KEY 
+    return this.isProduction
+      ? process.env.STRIPE_LIVE_SECRET_KEY
       : process.env.STRIPE_SECRET_KEY;
   },
 
   getWebhookSecret() {
-    return this.isProduction 
-      ? process.env.STRIPE_LIVE_WEBHOOK_SECRET 
+    return this.isProduction
+      ? process.env.STRIPE_LIVE_WEBHOOK_SECRET
       : process.env.STRIPE_WEBHOOK_SECRET;
   },
 
@@ -37,7 +37,7 @@ const stripeConfig = {
     ].filter(Boolean);
 
     const missingKeys = [];
-    
+
     if (!this.getPublishableKey()) missingKeys.push('STRIPE_PUBLISHABLE_KEY');
     if (!this.getSecretKey()) missingKeys.push('STRIPE_SECRET_KEY');
     if (!this.getWebhookSecret()) missingKeys.push('STRIPE_WEBHOOK_SECRET');

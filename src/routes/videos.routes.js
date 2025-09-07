@@ -24,7 +24,7 @@ const videoValidation = {
       .isLength({ min: 1, max: 100 })
       .withMessage('Channel name must be between 1-100 characters')
   ],
-  
+
   update: [
     body('video_title')
       .optional()
@@ -75,7 +75,7 @@ const videoValidation = {
  * @desc    Get all videos for the authenticated user
  * @access  Private
  */
-router.get('/', 
+router.get('/',
   videoValidation.query,
   videosController.getVideos.bind(videosController)
 );

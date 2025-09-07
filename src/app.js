@@ -4,10 +4,10 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 
 // Import middleware
-const { 
-  securityMiddleware, 
+const {
+  securityMiddleware,
   errorMiddleware,
-  validationMiddleware 
+  validationMiddleware
 } = require('./middleware');
 
 // Import routes
@@ -88,8 +88,8 @@ app.get('/socket.io/socket.io.js', (req, res) => {
 // Test endpoint for webhook accessibility
 app.get('/webhook/test', (req, res) => {
   console.log('🧪 Test webhook endpoint hit!');
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Webhook endpoint is accessible!',
     timestamp: new Date().toISOString()
   });
@@ -111,7 +111,7 @@ app.get('/health', (req, res) => {
 // 404 handler
 app.use((req, res, next) => {
   logger.warn(`404 - ${req.method} ${req.url} - ${req.ip}`);
-  
+
   if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
     // API request
     return res.status(404).json({
@@ -120,7 +120,7 @@ app.use((req, res, next) => {
       error: 'NOT_FOUND'
     });
   }
-  
+
   // Web request
   res.status(404).render('errors/404', {
     title: 'Page Not Found',

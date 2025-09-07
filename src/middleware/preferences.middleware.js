@@ -16,7 +16,7 @@ class PreferencesMiddleware {
         try {
           // Get user preferences
           const preferences = await this.preferencesService.getUserPreferences(req.user.email);
-          
+
           if (preferences) {
             // Add theme preference to request context for templates
             req.userTheme = preferences.themeMode || 'light';

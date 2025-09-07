@@ -11,8 +11,8 @@ console.log('📦 Webhook routes module loading...');
  */
 router.get('/test', (req, res) => {
   console.log('🧪 Test webhook endpoint hit!');
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Webhook endpoint is accessible!',
     timestamp: new Date().toISOString()
   });

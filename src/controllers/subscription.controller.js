@@ -40,20 +40,20 @@ const subscriptionController = {
       const { priceId } = req.body;
       const user = req.user;
 
-      logger.info('Creating checkout session:', { 
-        userId: user.id, 
-        priceId, 
-        email: user.email 
+      logger.info('Creating checkout session:', {
+        userId: user.id,
+        priceId,
+        email: user.email
       });
 
       // Validate price ID exists in our configuration
       const allTiers = stripeConfig.getAllTiers();
       const validPriceId = allTiers.some(tier => {
         // Check both monthly and yearly price IDs for each tier
-        return (tier.monthly && tier.monthly.priceId === priceId) || 
+        return (tier.monthly && tier.monthly.priceId === priceId) ||
                (tier.yearly && tier.yearly.priceId === priceId);
       });
-      
+
       if (!validPriceId) {
         return res.status(400).json({
           success: false,
@@ -64,8 +64,8 @@ const subscriptionController = {
 
       // Create checkout session
       const session = await stripeService.createCheckoutSession(
-        user.id, 
-        priceId, 
+        user.id,
+        priceId,
         user.email
       );
 
@@ -136,11 +136,11 @@ const subscriptionController = {
       const subscription = await stripeService.getUserSubscription(user.id);
       const userTier = user.subscription_tier || 'free';
       const tierConfig = stripeConfig.getTierConfig(userTier);
-      
+
       // Get current usage
       const subscriptionService = require('../services/subscription.service');
       const currentUsage = await subscriptionService.getCurrentUsage(user.id);
-      
+
       const videoLimit = tierConfig?.videoLimit || 0;
       const remainingVideos = Math.max(0, videoLimit - currentUsage.videos);
 
@@ -244,7 +244,7 @@ const subscriptionController = {
    */
   async handleWebhook(req, res) {
     let event;
-    
+
     console.log('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
     logger.info('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
 
@@ -274,24 +274,24 @@ const subscriptionController = {
       const stripe = require('stripe')(stripeConfig.getSecretKey());
       event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
 
-      logger.info('Received webhook event:', { 
-        type: event.type, 
-        id: event.id 
+      logger.info('Received webhook event:', {
+        type: event.type,
+        id: event.id
       });
 
       // Process the event
       const result = await stripeService.handleWebhookEvent(event);
-      
-      logger.info('Webhook processed successfully:', { 
-        eventId: event.id, 
-        result 
+
+      logger.info('Webhook processed successfully:', {
+        eventId: event.id,
+        result
       });
 
       res.json({ received: true });
 
     } catch (error) {
       logger.error('Webhook error:', error);
-      
+
       if (error.type === 'StripeSignatureVerificationError') {
         return res.status(400).json({ error: 'Invalid signature' });
       }
@@ -326,7 +326,7 @@ const subscriptionController = {
         // Get the subscription from the session
         if (session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
-          
+
           // Manually trigger subscription sync as backup to webhooks
           await stripeService.handleSubscriptionCreated(subscription);
           
@@ -345,11 +345,11 @@ const subscriptionController = {
             }, null, 2),
             processed_successfully: true
           });
-          
-          logger.info('Manual subscription sync completed:', { 
-            sessionId: session_id, 
+
+          logger.info('Manual subscription sync completed:', {
+            sessionId: session_id,
             subscriptionId: subscription.id,
-            userId: user.id 
+            userId: user.id
           });
         }
 

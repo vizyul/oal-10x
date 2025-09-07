@@ -10,7 +10,7 @@ class Logger {
       info: 2,
       debug: 3
     };
-    
+
     // Create logs directory if it doesn't exist
     const logsDir = path.join(process.cwd(), 'logs');
     if (!fs.existsSync(logsDir)) {
@@ -20,7 +20,7 @@ class Logger {
         console.warn('Failed to create logs directory:', error.message);
       }
     }
-    
+
     this.logFile = path.join(logsDir, 'app.log');
     this.errorLogFile = path.join(logsDir, 'error.log');
   }
@@ -32,9 +32,9 @@ class Logger {
   formatMessage(level, message, data = null) {
     const timestamp = new Date().toISOString();
     const pid = process.pid;
-    
+
     let formattedMessage = `[${timestamp}] [${pid}] ${level.toUpperCase()}: ${message}`;
-    
+
     if (data) {
       if (typeof data === 'object') {
         try {
@@ -46,13 +46,13 @@ class Logger {
         formattedMessage += ` | Data: ${data}`;
       }
     }
-    
+
     return formattedMessage;
   }
 
   writeToFile(message, isError = false) {
     const logFile = isError ? this.errorLogFile : this.logFile;
-    
+
     try {
       fs.appendFileSync(logFile, message + '\n', 'utf8');
     } catch (error) {
@@ -78,10 +78,10 @@ class Logger {
         info: '\x1b[36m',  // Cyan
         debug: '\x1b[90m'  // Gray
       };
-      
+
       const reset = '\x1b[0m';
       const color = colors[level] || '';
-      
+
       console.log(`${color}${formattedMessage}${reset}`);
     } else {
       // Production - plain console output
@@ -119,7 +119,7 @@ class Logger {
     const { method, url, ip, headers } = req;
     const { statusCode } = res;
     const userAgent = headers['user-agent'] || 'Unknown';
-    
+
     const logData = {
       method,
       url,
@@ -137,7 +137,7 @@ class Logger {
   auth(action, email, success, reason = null) {
     const level = success ? 'info' : 'warn';
     const message = `Auth ${action}: ${email} - ${success ? 'Success' : 'Failed'}`;
-    
+
     const data = {
       action,
       email,
@@ -152,7 +152,7 @@ class Logger {
   database(operation, table, recordId = null, success = true, error = null) {
     const level = success ? 'debug' : 'error';
     const message = `DB ${operation} on ${table}${recordId ? ` (ID: ${recordId})` : ''} - ${success ? 'Success' : 'Failed'}`;
-    
+
     const data = {
       operation,
       table,
@@ -167,14 +167,14 @@ class Logger {
   // Security event logging
   security(event, details, severity = 'warn') {
     const message = `Security Event: ${event}`;
-    
+
     this.log(severity, message, details);
   }
 
   // Performance logging
   performance(operation, duration, metadata = null) {
     const message = `Performance: ${operation} completed in ${duration}ms`;
-    
+
     const data = {
       operation,
       duration,
@@ -188,17 +188,17 @@ class Logger {
   rotateLogs() {
     try {
       const logFiles = [this.logFile, this.errorLogFile];
-      
+
       logFiles.forEach(logFile => {
         if (fs.existsSync(logFile)) {
           const stats = fs.statSync(logFile);
           const fileSizeInMB = stats.size / (1024 * 1024);
-          
+
           // Rotate if file is larger than 10MB
           if (fileSizeInMB > 10) {
             const rotatedFile = `${logFile}.${Date.now()}`;
             fs.renameSync(logFile, rotatedFile);
-            
+
             // Keep only the last 5 rotated files
             const logDir = path.dirname(logFile);
             const baseName = path.basename(logFile);
@@ -206,7 +206,7 @@ class Logger {
               .filter(file => file.startsWith(baseName) && file !== baseName)
               .sort()
               .reverse();
-            
+
             if (rotatedFiles.length > 5) {
               rotatedFiles.slice(5).forEach(file => {
                 fs.unlinkSync(path.join(logDir, file));

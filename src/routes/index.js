@@ -50,7 +50,7 @@ router.get('/profile', require('../middleware').authMiddleware, async (req, res)
   try {
     const preferencesService = require('../services/preferences.service');
     let userPreferences = null;
-    
+
     try {
       userPreferences = await preferencesService.getUserPreferences(req.user.email);
     } catch (prefError) {
@@ -58,7 +58,7 @@ router.get('/profile', require('../middleware').authMiddleware, async (req, res)
       logger.info(`Creating default preferences for user ${req.user.email}`);
       userPreferences = await preferencesService.createDefaultPreferences(req.user.email);
     }
-    
+
     res.render('profile', {
       title: 'Profile',
       description: 'Manage your profile and preferences',
@@ -177,7 +177,7 @@ router.get('/demo', (req, res) => {
 router.post('/demo', async (req, res) => {
   try {
     const { name, email, organization, role, congregationSize, interest, timeline } = req.body;
-    
+
     // Validate required fields
     if (!name || !email || !organization) {
       return res.render('demo', {
@@ -192,7 +192,7 @@ router.post('/demo', async (req, res) => {
         formData: req.body
       });
     }
-    
+
     // Send demo request email to sales team
     const demoEmailContent = `
       <h2>New Demo Request</h2>
@@ -205,13 +205,13 @@ router.post('/demo', async (req, res) => {
       <p><strong>Interest/Notes:</strong></p>
       <p>${interest ? interest.replace(/\n/g, '<br>') : 'No additional notes provided'}</p>
     `;
-    
+
     const result = await emailService.sendEmail(
       'sales@ourailegacy.com',
       `Demo Request: ${organization}`,
       demoEmailContent
     );
-    
+
     if (result.success) {
       res.render('demo', {
         title: 'Request Demo',
@@ -226,7 +226,7 @@ router.post('/demo', async (req, res) => {
     } else {
       throw new Error('Failed to send demo request');
     }
-    
+
   } catch (error) {
     console.error('Demo form error:', error);
     res.render('demo', {
@@ -247,7 +247,7 @@ router.post('/demo', async (req, res) => {
 router.post('/contact', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
-    
+
     // Validate required fields
     if (!name || !email || !subject || !message) {
       return res.render('contact', {
@@ -263,7 +263,7 @@ router.post('/contact', async (req, res) => {
         formData: { name, email, subject, message }
       });
     }
-    
+
     // Send contact email to support
     const contactEmailContent = `
       <h2>New Contact Form Submission</h2>
@@ -273,13 +273,13 @@ router.post('/contact', async (req, res) => {
       <p><strong>Message:</strong></p>
       <p>${message.replace(/\n/g, '<br>')}</p>
     `;
-    
+
     const result = await emailService.sendEmail(
       'support@ourailegacy.com',
       `Contact Form: ${subject}`,
       contactEmailContent
     );
-    
+
     if (result.success) {
       res.render('contact', {
         title: 'Contact Us',
@@ -295,7 +295,7 @@ router.post('/contact', async (req, res) => {
     } else {
       throw new Error('Failed to send email');
     }
-    
+
   } catch (error) {
     console.error('Contact form error:', error);
     res.render('contact', {

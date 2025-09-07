@@ -192,7 +192,7 @@ class AuthController {
 
       const now = new Date();
       const expiryDate = new Date(user.emailVerificationExpires);
-      
+
       if (now > expiryDate) {
         return res.status(400).json({
           success: false,
@@ -268,7 +268,7 @@ class AuthController {
       // Check token expiry
       const now = new Date();
       const expiryDate = new Date(user.emailVerificationExpires);
-      
+
       if (now > expiryDate) {
         req.flash('error', 'Verification session has expired. Please start over.');
         return res.redirect('/auth/sign-up');
@@ -314,7 +314,7 @@ class AuthController {
       // Check token expiry
       const now = new Date();
       const expiryDate = new Date(user.emailVerificationExpires);
-      
+
       if (now > expiryDate) {
         return res.status(400).json({
           success: false,
@@ -349,13 +349,13 @@ class AuthController {
       // Send welcome email and mark as sent
       try {
         await emailService.sendWelcomeEmail(email, firstName);
-        
+
         // Mark that welcome email has been sent
         await authService.updateUser(user.id, {
           'Welcome Email Sent': true,
           'Welcome Email Sent At': new Date().toISOString()
         });
-        
+
         logger.info(`Welcome email sent to ${email}`);
       } catch (emailError) {
         logger.error('Failed to send welcome email:', emailError);
@@ -364,7 +364,7 @@ class AuthController {
 
       // Generate JWT token for immediate login
       const jwtToken = jwt.sign(
-        { 
+        {
           userId: user.id,
           email: email  // Use email from request
         },
@@ -560,7 +560,7 @@ class AuthController {
       // Generate JWT token with user data to reduce database calls
       const tokenExpiry = remember ? '30d' : process.env.JWT_EXPIRES_IN || '7d';
       const token = jwt.sign(
-        { 
+        {
           userId: user.id,
           email: user.email,
           firstName: user.firstName,
@@ -643,9 +643,9 @@ class AuthController {
         await sessionService.endUserSessions(req.user.id);
         logger.info(`Active sessions ended for user: ${req.user.id}`);
       }
-      
+
       res.clearCookie('auth_token');
-      
+
       if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
         return res.status(200).json({
           success: true,
@@ -657,7 +657,7 @@ class AuthController {
       if (req.flash) {
         req.flash('success', 'You have been logged out successfully.');
       }
-      
+
       res.redirect('/auth/sign-in');
     } catch (error) {
       logger.error('Logout error:', error);
@@ -743,7 +743,7 @@ class AuthController {
   async renderResetPassword(req, res) {
     try {
       const { token } = req.params;
-      
+
       res.render('auth/reset-password', {
         title: 'Reset Password',
         subtitle: 'Enter your new password',
