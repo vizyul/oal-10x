@@ -289,7 +289,7 @@ async function handleSignupSubmit(e) {
             }
         }
     } catch (error) {
-        console.error('Signup error:', error);
+        // Signup error handled by user notification
         showAlert('Network error. Please check your connection and try again.', 'error');
     } finally {
         // End loading state
@@ -356,7 +356,7 @@ async function handleSigninSubmit(e) {
             showAlert(result.message || 'Invalid credentials. Please try again.', 'error');
         }
     } catch (error) {
-        console.error('Signin error:', error);
+        // Signin error handled by user notification
         showAlert('Network error. Please check your connection and try again.', 'error');
     } finally {
         // End loading state
@@ -403,7 +403,7 @@ function showSuccessModal(message, email) {
                     showAlert(result.message || 'Failed to resend email', 'error');
                 }
             } catch (error) {
-                console.error('Resend email error:', error);
+                // Resend email error handled by user notification
                 showAlert('Failed to resend email. Please try again.', 'error');
             }
         });
@@ -487,7 +487,7 @@ async function handleSocialLogin(provider) {
         // Redirect to OAuth provider
         window.location.href = `/auth/${provider}`;
     } catch (error) {
-        console.error(`${provider} login error:`, error);
+        // Social login error handled by user notification
         showAlert(`Failed to sign in with ${provider}. Please try again.`, 'error');
     }
 }

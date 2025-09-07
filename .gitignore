@@ -140,6 +140,10 @@ update-oauth-ids.js
 youtube-oauth-postgres-schema.sql
 test-ui-fixes.md
 srcserver.js
+add-processed-at-field.js
+clear-youtube-tokens.js
+sync-subscription-usage.js
+
 
 # Style recommendation file
 style-recommendation.html

@@ -647,8 +647,7 @@ class YouTubeOAuthService {
         channel_name: channelData.name,
         channel_thumbnail: channelData.thumbnail,
         is_active: true,
-        last_refreshed: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        last_refreshed: new Date().toISOString()
       };
 
       let result;
@@ -679,6 +678,10 @@ class YouTubeOAuthService {
   async storeUserChannel(userId, channelData) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
+      
+      // Check if channel already exists
+      const existingChannels = await database.findByField('user_youtube_channels', 'channel_id', channelData.id);
+      
       const channelRecord = {
         user_id: resolvedUserId,
         channel_id: channelData.id,
@@ -691,9 +694,18 @@ class YouTubeOAuthService {
         last_synced: new Date().toISOString()
       };
 
-      // Store in PostgreSQL
-      const result = await database.create('user_youtube_channels', channelRecord);
-      logger.debug(`Channel stored in PostgreSQL for user ${userId}`);
+      let result;
+      if (existingChannels && existingChannels.length > 0) {
+        // Update existing channel
+        const existingChannel = existingChannels[0];
+        result = await database.update('user_youtube_channels', existingChannel.id, channelRecord);
+        logger.debug(`Channel updated in PostgreSQL for user ${userId}`);
+      } else {
+        // Create new channel
+        result = await database.create('user_youtube_channels', channelRecord);
+        logger.debug(`Channel created in PostgreSQL for user ${userId}`);
+      }
+      
       return result;
     } catch (error) {
       logger.error('Error storing user channel:', error);

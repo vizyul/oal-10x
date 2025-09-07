@@ -36,12 +36,16 @@ class SubscriptionService {
       const fieldName = this.getUsageFieldName(resource);
       
       if (currentUsage) {
-        // Update existing usage record
+        // Update existing usage record in Airtable
         const newValue = (currentUsage[fieldName] || 0) + increment;
         await airtable.update('Subscription_Usage', currentUsage.id, {
           [fieldName]: newValue
         });
-        logger.info(`Updated ${resource} usage for user ${userId}: ${currentUsage[fieldName] || 0} -> ${newValue}`);
+        logger.info(`Updated ${resource} usage for user ${userId} in Airtable: ${currentUsage[fieldName] || 0} -> ${newValue}`);
+
+        // Also update PostgreSQL subscription_usage table (dual database system)
+        await this.updatePostgreSQLUsage(userId, resource, increment);
+        logger.info(`Updated ${resource} usage for user ${userId} in PostgreSQL`);
       } else {
         // Create new usage record for current period
         const subscriptionRecords = await airtable.findByField('User_Subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
@@ -61,7 +65,11 @@ class SubscriptionService {
           };
           
           await airtable.create('Subscription_Usage', usageData);
-          logger.info(`Created new ${resource} usage record for user ${userId}: ${increment}`);
+          logger.info(`Created new ${resource} usage record for user ${userId} in Airtable: ${increment}`);
+
+          // Also create PostgreSQL subscription_usage record (dual database system)
+          await this.createPostgreSQLUsage(userId, subscription, resource, increment);
+          logger.info(`Created new ${resource} usage record for user ${userId} in PostgreSQL: ${increment}`);
         }
       }
     } catch (error) {
@@ -136,6 +144,74 @@ class SubscriptionService {
     };
     
     return fieldMap[resource] || 'videos_processed';
+  }
+
+  /**
+   * Update PostgreSQL subscription_usage record
+   * @param {string} userId - User ID
+   * @param {string} resource - Resource type  
+   * @param {number} increment - Amount to increment by
+   */
+  async updatePostgreSQLUsage(userId, resource, increment) {
+    try {
+      const database = require('./database.service');
+      const now = new Date();
+      
+      // Get user's integer ID for PostgreSQL (not email)
+      const pgUsers = await database.findByField('users', 'email', userId);
+      if (pgUsers.length === 0) return;
+      const pgUserId = pgUsers[0].id;
+
+      // Find current period usage record in PostgreSQL
+      const pgUsageQuery = await database.query(
+        'SELECT * FROM subscription_usage WHERE users_id = $1 AND period_start <= $2 AND period_end >= $2',
+        [pgUserId, now.toISOString()]
+      );
+
+      if (pgUsageQuery.rows.length > 0) {
+        const pgUsage = pgUsageQuery.rows[0];
+        const fieldName = this.getUsageFieldName(resource);
+        const newValue = (pgUsage[fieldName] || 0) + increment;
+        
+        await database.update('subscription_usage', pgUsage.id, {
+          [fieldName]: newValue
+        });
+      }
+    } catch (error) {
+      logger.error(`Error updating PostgreSQL usage: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create PostgreSQL subscription_usage record
+   * @param {string} userId - User ID
+   * @param {Object} subscription - Subscription object
+   * @param {string} resource - Resource type
+   * @param {number} increment - Initial value
+   */
+  async createPostgreSQLUsage(userId, subscription, resource, increment) {
+    try {
+      const database = require('./database.service');
+      
+      // Get user's integer ID for PostgreSQL (not email)
+      const pgUsers = await database.findByField('users', 'email', userId);
+      if (pgUsers.length === 0) return;
+      const pgUserId = pgUsers[0].id;
+
+      const pgUsageData = {
+        users_id: pgUserId,
+        period_start: new Date(subscription.current_period_start).toISOString(),
+        period_end: new Date(subscription.current_period_end).toISOString(),
+        videos_processed: resource === 'videos' ? increment : 0,
+        api_calls_made: resource === 'api_calls' ? increment : 0,
+        storage_used_mb: resource === 'storage' ? increment : 0,
+        ai_summaries_generated: resource === 'ai_summaries' ? increment : 0
+      };
+
+      await database.create('subscription_usage', pgUsageData);
+    } catch (error) {
+      logger.error(`Error creating PostgreSQL usage: ${error.message}`);
+    }
   }
 }
 

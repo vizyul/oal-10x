@@ -123,12 +123,10 @@
   script.src = '/socket.io/socket.io.js';
   
   script.onload = function() {
-    console.log('Socket.IO client loaded successfully');
     initializeProcessingManager();
   };
   
   script.onerror = function() {
-    console.warn('Could not load Socket.IO from server, status dashboard will not work');
     // Initialize without Socket.IO (degraded mode)
     initializeProcessingManager();
   };
@@ -163,7 +161,6 @@ class ProcessingStatusManager {
   async initSocket() {
     // Check if io is available
     if (typeof io === 'undefined') {
-      console.warn('Socket.IO not loaded, status dashboard will work in degraded mode');
       return;
     }
     
@@ -171,31 +168,26 @@ class ProcessingStatusManager {
     const token = await this.getAuthToken();
     
     if (!token) {
-      console.warn('No auth token found, cannot connect to status updates');
       return;
     }
 
     try {
       // Use same origin as the current page
-      console.log('🔌 Connecting to Socket.IO server on same origin');
       
       this.socket = io({
         auth: { token: token },
         transports: ['websocket', 'polling'] // Try websocket first, fallback to polling
       });
     } catch (error) {
-      console.error('Failed to create Socket.IO connection:', error);
       return;
     }
 
     this.socket.on('connect', () => {
-      console.log('✅ Connected to processing status updates');
-      console.log('🔄 Requesting current status...');
       this.socket.emit('request-status');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('❌ Disconnected from processing status updates');
+      // Handle disconnect silently
     });
 
     this.socket.on('processing-status-update', (data) => {
@@ -207,25 +199,21 @@ class ProcessingStatusManager {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      // Handle connection errors silently
     });
   }
 
   async getAuthToken() {
     try {
-      console.log('🔑 Requesting auth token from secure endpoint');
       const response = await fetch('/videos/socket-token');
       
       if (response.ok) {
         const data = await response.json();
-        console.log('🔑 Received auth token from secure endpoint');
         return data.token;
       } else {
-        console.error('🔑 Failed to get auth token:', response.status);
         return null;
       }
     } catch (error) {
-      console.error('🔑 Error getting auth token:', error);
       return null;
     }
   }
@@ -279,7 +267,6 @@ class ProcessingStatusManager {
   }
 
   handleStatusUpdate(data) {
-    console.log('📡 Received status update:', data);
     const { videoId, status } = data;
     this.processingVideos.set(videoId, status);
     this.updateStatusTable();
@@ -287,17 +274,13 @@ class ProcessingStatusManager {
   }
 
   handleStatusBatch(videos) {
-    console.log('📦 Received status batch:', videos.length, 'videos');
     videos.forEach(status => {
-      console.log('📹 Video status:', status.videoId, status);
       this.processingVideos.set(status.videoId, status);
     });
     
     if (videos.length > 0) {
       this.updateStatusTable();
       this.showProcessingDashboard();
-    } else {
-      console.log('⚠️ No videos in batch to display');
     }
     
     // Refresh completed videos to remove any that are now processing
@@ -321,10 +304,8 @@ class ProcessingStatusManager {
   }
 
   updateStatusTable() {
-    console.log('📊 Updating status table...');
     const tbody = document.getElementById('status-table-body');
     if (!tbody) {
-      console.error('❌ Status table body not found');
       return;
     }
 
@@ -332,20 +313,18 @@ class ProcessingStatusManager {
     const videos = Array.from(this.processingVideos.values())
       .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
-    console.log('📹 Videos to display:', videos.length);
-    videos.forEach(video => {
-      console.log(`  - ${video.videoTitle} (${video.videoId}): transcript=${video.transcript?.status}, content processing...`);
-    });
 
     if (videos.length === 0) {
-      console.log('⚠️ No videos to show, hiding dashboard');
       this.hideProcessingDashboard();
       return;
     }
 
     tbody.innerHTML = videos.map(video => this.createVideoRow(video)).join('');
 
-    // Auto-hide if all videos are completed
+    // Keep the processing dashboard visible even when completed
+    // Users can manually collapse it using the collapse button if desired
+    
+    // Refresh completed videos to show newly completed ones
     const hasActiveProcessing = videos.some(video => 
       !video.completed && (
         video.transcript.status === 'pending' ||
@@ -353,14 +332,8 @@ class ProcessingStatusManager {
       )
     );
 
-    if (!hasActiveProcessing) {
-      setTimeout(() => {
-        this.hideProcessingDashboard();
-        // Refresh completed videos to show newly completed ones
-        if (typeof refreshCompletedVideos === 'function') {
-          refreshCompletedVideos();
-        }
-      }, 3000); // Hide after 3 seconds and refresh completed videos
+    if (!hasActiveProcessing && typeof refreshCompletedVideos === 'function') {
+      refreshCompletedVideos();
     }
   }
 
@@ -429,28 +402,16 @@ setTimeout(() => {
 
 async function loadCompletedVideos() {
   try {
-    console.log('🔄 Loading completed videos...');
     const videosResponse = await fetch('/api/videos?limit=6');
-    
-    console.log('📡 Response status:', videosResponse.status);
-    console.log('📡 Response ok:', videosResponse.ok);
     
     if (!videosResponse.ok) {
       throw new Error(`HTTP ${videosResponse.status}: ${videosResponse.statusText}`);
     }
     
     const videosData = await videosResponse.json();
-    console.log('📹 Videos API Response:', videosData);
-    console.log('📹 Response structure:', {
-      success: videosData.success,
-      dataExists: !!videosData.data,
-      videosExists: !!videosData.data?.videos,
-      videosLength: videosData.data?.videos?.length || 0
-    });
     
     const gridElement = document.getElementById('recent-videos-grid');
     if (!gridElement) {
-      console.warn('Video grid element not found');
       return;
     }
     
@@ -458,12 +419,9 @@ async function loadCompletedVideos() {
       // Filter videos by status: COMPLETED videos show in cards, PENDING videos show in processing table
       let completedVideos = videosData.data.videos.filter(video => {
         // Show only completed videos in cards
-        const isCompleted = video.status === 'completed' || video.status === 'processed' || !video.status;
-        console.log(`Video ${video.video_title} (${video.videoid}): status=${video.status}, showInCards=${isCompleted}`);
-        return isCompleted;
+        return video.status === 'completed' || video.status === 'processed' || !video.status;
       });
       
-      console.log(`📊 Showing ${completedVideos.length} completed videos in cards from ${videosData.data.videos.length} total`);
       
       if (completedVideos.length > 0) {
         gridElement.innerHTML = completedVideos.map(video => `
@@ -479,23 +437,15 @@ async function loadCompletedVideos() {
         showEmptyState(gridElement);
       }
     } else {
-      console.log('📹 No videos to display or API error');
       if (!videosData.success) {
-        console.error('API returned error:', videosData.message || 'Unknown error');
         gridElement.innerHTML = `<div class="error-state">
           API Error: ${videosData.message || 'Failed to load videos'}
         </div>`;
       } else {
-        console.log('📹 Showing empty state (no videos found)');
         showEmptyState(gridElement);
       }
     }
   } catch (error) {
-    console.error('Error loading videos:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack
-    });
     
     const gridElement = document.getElementById('recent-videos-grid');
     if (gridElement) {
@@ -530,7 +480,6 @@ function refreshCompletedVideos() {
 // Populate processing table with pending videos from API
 async function populateProcessingTable() {
   try {
-    console.log('🔄 Loading pending videos for processing table...');
     const videosResponse = await fetch('/api/videos?limit=20'); // Get more videos to find pending ones
     
     if (!videosResponse.ok) {
@@ -542,12 +491,9 @@ async function populateProcessingTable() {
     if (videosData.success && videosData.data?.videos?.length > 0) {
       // Find videos that are pending/processing
       const pendingVideos = videosData.data.videos.filter(video => {
-        const isPending = video.status === 'pending' || video.status === 'processing' || video.status === 'importing';
-        console.log(`Video ${video.video_title} (${video.videoid}): status=${video.status}, isPending=${isPending}`);
-        return isPending;
+        return video.status === 'pending' || video.status === 'processing' || video.status === 'importing';
       });
       
-      console.log(`📊 Found ${pendingVideos.length} pending videos for processing table`);
       
       if (pendingVideos.length > 0 && statusManager) {
         // Add pending videos to processing status manager
@@ -584,7 +530,7 @@ async function populateProcessingTable() {
       }
     }
   } catch (error) {
-    console.error('Error loading pending videos:', error);
+    // Handle error silently
   }
 }
 

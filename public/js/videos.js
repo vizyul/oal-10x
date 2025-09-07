@@ -1,7 +1,5 @@
 // Videos JavaScript functionality
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('Videos JS loaded');
-
   // Initialize video-related functionality
   initializeVideoActions();
   initializeFiltering();
@@ -43,7 +41,6 @@ function initializeVideoActions() {
             throw new Error(result.message || 'Failed to delete video');
           }
         } catch (error) {
-          console.error('Error deleting video:', error);
           showNotification(error.message || 'Failed to delete video', 'error');
         }
       }
@@ -80,7 +77,6 @@ function initializeVideoActions() {
           throw new Error(result.message || 'Failed to start processing');
         }
       } catch (error) {
-        console.error('Error processing video:', error);
         showNotification(error.message || 'Failed to start processing', 'error');
         btn.disabled = false;
         btn.textContent = 'Process';
@@ -118,7 +114,6 @@ function initializeVideoActions() {
           throw new Error(result.message || 'Failed to retry processing');
         }
       } catch (error) {
-        console.error('Error retrying video:', error);
         showNotification(error.message || 'Failed to retry processing', 'error');
         btn.disabled = false;
         btn.textContent = 'Retry';
@@ -278,7 +273,6 @@ async function copyToClipboard(text) {
     await navigator.clipboard.writeText(text);
     showNotification('Copied to clipboard', 'success');
   } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
     showNotification('Failed to copy to clipboard', 'error');
   }
 }
