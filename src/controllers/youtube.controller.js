@@ -1,8 +1,7 @@
 const { logger } = require('../utils');
 const youtubeOAuth = require('../services/youtube-oauth.service');
 const { validationResult } = require('express-validator');
-const airtable = require('../services/airtable.service');
-const databaseService = require('../services/database.service');
+const database = require('../services/database.service');
 
 class YouTubeController {
   /**
@@ -288,27 +287,36 @@ class YouTubeController {
         });
       }
 
-      const airtableUserId = req.user.id; // This is the Airtable record ID
+      const userId = req.user.id;
       const { videoIds } = req.body;
 
-      logger.info(`Importing ${videoIds.length} videos for user ${airtableUserId}`);
+      logger.info(`Importing ${videoIds.length} videos for user ${userId}`);
 
-      // Get the PostgreSQL user ID for this Airtable user
-      let postgresUserId = null;
-      try {
-        const userResult = await databaseService.findByField('users', 'airtable_id', airtableUserId);
-        if (userResult && userResult.length > 0) {
-          postgresUserId = userResult[0].fields.id;
-          logger.info(`Found PostgreSQL user ID ${postgresUserId} for Airtable user ${airtableUserId}`);
-        } else {
-          logger.warn(`No PostgreSQL user found for Airtable user ${airtableUserId}`);
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+            // Continue with original ID, might be a direct PostgreSQL ID
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', {
+            error: userLookupError.message,
+            stack: userLookupError.stack,
+            userId
+          });
+          // Continue with original ID
         }
-      } catch (userLookupError) {
-        logger.error('Error looking up PostgreSQL user:', {
-          error: userLookupError.message,
-          stack: userLookupError.stack,
-          airtableUserId
-        });
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
       }
 
       // Import video details directly using database services
@@ -319,17 +327,18 @@ class YouTubeController {
         try {
           const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
           
-          logger.info(`Importing video ${videoId} for user ${airtableUserId}`);
+          logger.info(`Importing video ${videoId} for user ${actualUserId}`);
 
-          // Check if video already exists in Airtable for this user
-          const existingVideos = await airtable.findByField('Videos', 'videoid', videoId);
+          // Check if video already exists for this user
+          const existingVideos = await database.findByField('videos', 'videoid', videoId);
           if (existingVideos && existingVideos.length > 0) {
-            const userVideo = existingVideos.find(video => 
-              video.fields.user_id && video.fields.user_id[0] === airtableUserId
-            );
+            const userVideo = existingVideos.find(video => {
+              const videoData = video.fields || video;
+              return videoData.users_id === actualUserId;
+            });
             
             if (userVideo) {
-              logger.warn(`Video ${videoId} already exists for user ${airtableUserId}`);
+              logger.warn(`Video ${videoId} already exists for user ${actualUserId}`);
               continue; // Skip this video
             }
           }
@@ -343,97 +352,55 @@ class YouTubeController {
             logger.warn(`Could not extract metadata for ${videoId}:`, metadataError.message);
           }
 
-          // Prepare video data for Airtable (capture maximum data available)
+          // Prepare video data for PostgreSQL
           const videoData = {
             // Basic video information
             youtube_url: youtubeUrl,
             videoid: videoId,
             video_title: metadata?.title || `Imported Video ${videoId}`,
             channel_name: metadata?.channelTitle || 'YouTube Channel',
-            chanel_handle: metadata?.channelHandle || '',
+            channel_handle: metadata?.channelHandle || '',
             
             // Content and media
             description: metadata?.description || '',
             duration: metadata?.duration || 0,
-            upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-            thumbnail: [{
-              url: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // 1280x720 resolution
-              filename: `${videoId}_thumbnail_1280x720.jpg`
-            }], // Airtable attachment format
+            upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // Direct URL for PostgreSQL
             
             // Processing and categorization
             status: 'pending',
             category: 'Education',
             privacy_setting: 'public',
             
-            // User association
-            user_id: [airtableUserId] // Airtable link format
+            // User association and timestamps
+            users_id: actualUserId, // PostgreSQL integer foreign key
+            created_at: new Date().toISOString()
           };
 
-          // === DUAL WRITE: Write to both databases ===
-          let airtableRecord = null;
+          // Write to PostgreSQL database
           let postgresRecord = null;
           let writeErrors = [];
 
-          // 1. Write to Airtable
           try {
-            logger.info(`Writing video ${videoId} to Airtable...`);
-            airtableRecord = await airtable.create('Videos', videoData);
-            logger.info(`✅ Video ${videoId} created in Airtable: ${airtableRecord.id}`);
-          } catch (airtableError) {
-            logger.error(`❌ Failed to create video ${videoId} in Airtable:`, airtableError);
-            writeErrors.push(`Airtable: ${airtableError.message}`);
-          }
-
-          // 2. Write to PostgreSQL (only if we have a PostgreSQL user ID)
-          if (postgresUserId) {
-            try {
-              logger.info(`Writing video ${videoId} to PostgreSQL...`);
-              
-              // Prepare PostgreSQL data (different field mappings)
-              const postgresVideoData = {
-                youtube_url: youtubeUrl,
-                videoid: videoId,
-                video_title: metadata?.title || `Imported Video ${videoId}`,
-                channel_name: metadata?.channelTitle || 'YouTube Channel',
-                chanel_handle: metadata?.channelHandle || '',
-                description: metadata?.description || '',
-                thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // 1280x720 resolution
-                users_id: postgresUserId, // PostgreSQL integer user ID
-                status: 'pending',
-                created_at: new Date().toISOString(),
-                airtable_id: airtableRecord?.id || null
-              };
-
-            // Add optional fields (these exist in PostgreSQL schema)
-            if (metadata?.duration) postgresVideoData.duration = metadata.duration;
-            if (metadata?.publishedAt) postgresVideoData.published_at = new Date(metadata.publishedAt).toISOString();
-            postgresVideoData.category = 'Education'; // Default category
-            postgresVideoData.privacy_setting = 'public'; // Default privacy setting
-            
-            postgresRecord = await databaseService.create('videos', postgresVideoData);
+            logger.info(`Writing video ${videoId} to PostgreSQL...`);
+            postgresRecord = await database.create('videos', videoData);
             logger.info(`✅ Video ${videoId} created in PostgreSQL: ID ${postgresRecord.id}`);
-            
-            } catch (postgresError) {
-              logger.error(`❌ Failed to create video ${videoId} in PostgreSQL:`, {
-                error: postgresError.message,
-                postgresUserId,
-                videoData: Object.keys(postgresVideoData)
-              });
-              writeErrors.push(`PostgreSQL: ${postgresError.message}`);
-            }
-          } else {
-            logger.warn(`Skipping PostgreSQL write for video ${videoId} - no PostgreSQL user ID found (airtableUserId: ${airtableUserId})`);
-            writeErrors.push(`PostgreSQL: No user mapping found`);
+          } catch (postgresError) {
+            logger.error(`❌ Failed to create video ${videoId} in PostgreSQL:`, {
+              error: postgresError.message,
+              actualUserId,
+              videoData: Object.keys(videoData)
+            });
+            writeErrors.push(`PostgreSQL: ${postgresError.message}`);
           }
 
-          // 3. Initialize processing status and extract transcript
-          if (airtableRecord || postgresRecord) {
+          // Initialize processing status and extract transcript
+          if (postgresRecord) {
             try {
               const transcriptService = require('../services/transcript.service');
               const processingStatusService = require('../services/processing-status.service');
-              const recordId = airtableRecord?.id;
-              const userId = req.user.id;
+              const recordId = postgresRecord.id;
               
               if (recordId) {
                 // Initialize processing status
@@ -442,14 +409,14 @@ class YouTubeController {
                   videoId, 
                   recordId, 
                   metadata?.title || 'Untitled Video',
-                  userId,
+                  actualUserId,
                   contentTypes
                 );
                 
                 logger.info(`Starting transcript extraction for video ${videoId}`);
                 
                 // Process transcript asynchronously - don't wait for completion
-                transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, userId)
+                transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId)
                   .then(result => {
                     if (result.success) {
                       logger.info(`✅ Transcript successfully processed for video ${videoId}`);
@@ -466,19 +433,17 @@ class YouTubeController {
             }
           }
 
-          // 4. Record results
-          if (airtableRecord || postgresRecord) {
-            // At least one database succeeded
-            const video = airtableRecord ? 
-              this.formatVideoResponse(airtableRecord) :
-              this.formatPostgresVideoResponse(postgresRecord);
+          // Record results
+          if (postgresRecord) {
+            // Database write succeeded
+            const video = this.formatPostgresVideoResponse(postgresRecord);
             
             importedVideos.push({
               ...video,
               warnings: writeErrors.length > 0 ? writeErrors : undefined
             });
           } else {
-            // Both databases failed
+            // Database write failed
             failedVideos.push({
               videoId,
               errors: writeErrors
@@ -528,10 +493,12 @@ class YouTubeController {
    * @returns {Object} Formatted video object
    */
   formatPostgresVideoResponse(record) {
+    // Handle both database service formatted records and direct PostgreSQL rows
+    const recordData = record.fields || record;
     const video = {
-      id: record.id,
-      ...record.fields,
-      created_at: record.createdTime || record.fields.created_at
+      id: recordData.id,
+      ...recordData,
+      created_at: record.createdTime || recordData.created_at
     };
 
     // Format duration to human readable
@@ -543,13 +510,15 @@ class YouTubeController {
   }
 
   /**
-   * Format video response (matching videos controller)
-   * @param {Object} record - Airtable record
+   * Format video response for PostgreSQL records
+   * @param {Object} record - PostgreSQL record from database service
    * @returns {Object} Formatted video object
    */
   formatVideoResponse(record) {
     try {
-      if (!record || !record.fields) {
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const recordData = record.fields || record;
+      if (!recordData) {
         return {
           id: record?.id || 'unknown',
           video_title: 'Unknown Video',
@@ -559,9 +528,9 @@ class YouTubeController {
       }
 
       const video = {
-        id: record.id,
-        ...record.fields,
-        created_at: record.createdTime
+        id: recordData.id,
+        ...recordData,
+        created_at: record.createdTime || recordData.created_at
       };
 
       // Format duration to human readable
@@ -572,11 +541,12 @@ class YouTubeController {
       return video;
     } catch (error) {
       logger.error('Error in formatVideoResponse:', error);
+      const recordData = record?.fields || record;
       return {
-        id: record?.id || 'unknown',
-        video_title: record?.fields?.video_title || 'Unknown Video',
+        id: recordData?.id || 'unknown',
+        video_title: recordData?.video_title || 'Unknown Video',
         status: 'error',
-        created_at: record?.createdTime || new Date().toISOString()
+        created_at: record?.createdTime || recordData?.created_at || new Date().toISOString()
       };
     }
   }

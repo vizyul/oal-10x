@@ -121,6 +121,18 @@ router.get('/privacy', (req, res) => {
   });
 });
 
+router.get('/youtube-data-usage', (req, res) => {
+  res.render('legal/youtube-data-usage', {
+    title: 'YouTube Data Usage',
+    description: 'YouTube Data Usage and Privacy Information',
+    user: req.user,
+    subscription: req.subscriptionInfo,
+    showHeader: true,
+    showFooter: true,
+    showNav: true
+  });
+});
+
 // About page
 router.get('/about', (req, res) => {
   res.render('about', {

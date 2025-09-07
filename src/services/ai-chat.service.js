@@ -254,14 +254,14 @@ class AIChatService {
   async generateContent(provider, options) {
     try {
       switch (provider.toLowerCase()) {
-        case 'gemini':
-          return await this.generateWithGemini(options);
-        case 'chatgpt':
-          return await this.generateWithChatGPT(options);
-        case 'claude':
-          return await this.generateWithClaude(options);
-        default:
-          throw new Error(`Unsupported AI provider: ${provider}`);
+      case 'gemini':
+        return await this.generateWithGemini(options);
+      case 'chatgpt':
+        return await this.generateWithChatGPT(options);
+      case 'claude':
+        return await this.generateWithClaude(options);
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
       }
     } catch (error) {
       logger.error(`AI content generation failed for provider ${provider}:`, error.message);
@@ -341,14 +341,14 @@ class AIChatService {
    */
   isProviderAvailable(provider) {
     switch (provider.toLowerCase()) {
-      case 'gemini':
-        return !!this.gemini;
-      case 'chatgpt':
-        return !!this.openai;
-      case 'claude':
-        return !!this.anthropic;
-      default:
-        return false;
+    case 'gemini':
+      return !!this.gemini;
+    case 'chatgpt':
+      return !!this.openai;
+    case 'claude':
+      return !!this.anthropic;
+    default:
+      return false;
     }
   }
 

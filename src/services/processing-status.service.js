@@ -11,7 +11,7 @@ class ProcessingStatusService extends EventEmitter {
   /**
    * Initialize processing status for a video
    * @param {string} videoId - YouTube video ID
-   * @param {string} videoRecordId - Airtable record ID
+   * @param {string} videoRecordId - PostgreSQL video record ID
    * @param {string} videoTitle - Video title
    * @param {string} userId - User ID
    * @param {Array} contentTypes - Content types to generate
@@ -128,7 +128,7 @@ class ProcessingStatusService extends EventEmitter {
       logger.info(`All processing completed for video ${videoId}`);
       this.completeVideoProcessing(videoId);
       
-      // Update video status in database and deduct from subscription
+      // Update video status in PostgreSQL database and deduct from subscription
       this.finalizeVideoProcessing(videoStatus);
     }
   }
@@ -261,7 +261,7 @@ class ProcessingStatusService extends EventEmitter {
           logger.debug(`Emitted status update for ${videoId} to user ${userId}`);
         }
       } catch (error) {
-        logger.warn(`Failed to emit status update to session:`, error.message);
+        logger.warn('Failed to emit status update to session:', error.message);
         this.unregisterUserSession(userId, session);
       }
     });
@@ -333,8 +333,7 @@ class ProcessingStatusService extends EventEmitter {
     try {
       const { videoId, videoRecordId, userId } = videoStatus;
       
-      // Update video status to completed in both databases
-      const airtable = require('./airtable.service');
+      // Update video status to completed in PostgreSQL database
       const databaseService = require('./database.service');
       
       const updates = {
@@ -342,21 +341,10 @@ class ProcessingStatusService extends EventEmitter {
         processed_at: new Date().toISOString()
       };
       
-      // Update Airtable
-      try {
-        await airtable.update('Videos', videoRecordId, updates);
-        logger.info(`Video ${videoId} marked as completed in Airtable`);
-      } catch (error) {
-        logger.error(`Failed to update video status in Airtable: ${error.message}`);
-      }
-      
       // Update PostgreSQL
       try {
-        const postgresRecords = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-        if (postgresRecords.length > 0) {
-          await databaseService.update('videos', postgresRecords[0].fields.id, updates);
-          logger.info(`Video ${videoId} marked as completed in PostgreSQL`);
-        }
+        await databaseService.update('videos', videoRecordId, updates);
+        logger.info(`Video ${videoId} marked as completed in PostgreSQL`);
       } catch (error) {
         logger.error(`Failed to update video status in PostgreSQL: ${error.message}`);
       }

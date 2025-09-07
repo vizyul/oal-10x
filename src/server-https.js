@@ -24,8 +24,8 @@ const server = https.createServer(httpsOptions, app);
 // Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "https://dev.ourailegacy.com",
-    methods: ["GET", "POST"]
+    origin: process.env.CORS_ORIGIN || 'https://dev.ourailegacy.com',
+    methods: ['GET', 'POST']
   }
 });
 
@@ -35,7 +35,7 @@ io.use((socket, next) => {
   logger.info(`🔐 Socket.IO auth attempt: token = ${token ? 'present' : 'missing'}`);
   
   if (!token) {
-    logger.warn(`🔐 Socket.IO auth failed: no token provided`);
+    logger.warn('🔐 Socket.IO auth failed: no token provided');
     return next(new Error('Authentication required'));
   }
   
@@ -83,7 +83,7 @@ const startServer = () => {
     logger.info(`📍 Server binding to ${HOST}:${PORT} (accessible via dev.ourailegacy.com)`);
     logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`📊 Process ID: ${process.pid}`);
-    logger.info(`🔒 HTTPS enabled for Apple OAuth development`);
+    logger.info('🔒 HTTPS enabled for Apple OAuth development');
   });
 };
 

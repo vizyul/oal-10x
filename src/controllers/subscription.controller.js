@@ -1,7 +1,35 @@
 const stripeService = require('../services/stripe.service');
 const stripeConfig = require('../config/stripe.config');
-const airtable = require('../services/airtable.service');
+const database = require('../services/database.service');
 const { logger } = require('../utils');
+
+/**
+ * Resolve user ID - handle both PostgreSQL integer IDs and Airtable record IDs
+ * @param {*} userId - User ID (can be Airtable record ID or integer)
+ * @returns {Promise<number>} PostgreSQL integer user ID
+ */
+async function resolveUserId(userId) {
+  if (!userId || userId === 'undefined' || userId === 'null') {
+    throw new Error('Invalid user ID: user ID is null or undefined');
+  }
+  
+  // If it's already an integer, return it
+  const parsed = parseInt(userId);
+  if (!isNaN(parsed) && userId.toString() === parsed.toString()) {
+    return parsed;
+  }
+  
+  // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
+  if (userId.toString().startsWith('rec')) {
+    const records = await database.findByField('users', 'airtable_id', userId);
+    if (!records || records.length === 0) {
+      throw new Error(`No PostgreSQL user found for Airtable ID: ${userId}`);
+    }
+    return records[0].fields.id;
+  }
+  
+  throw new Error(`Invalid user ID format: ${userId}`);
+}
 
 const subscriptionController = {
   /**
@@ -302,10 +330,11 @@ const subscriptionController = {
           // Manually trigger subscription sync as backup to webhooks
           await stripeService.handleSubscriptionCreated(subscription);
           
-          // Log the manual sync event to Subscription_Events table
-          await airtable.create('Subscription_Events', {
+          // Log the manual sync event to subscription_events table
+          const resolvedUserId = await resolveUserId(user.id);
+          await database.create('subscription_events', {
             stripe_event_id: `manual_sync_${session_id}`,
-            user_id: [user.id],
+            user_id: resolvedUserId,
             event_type: 'manual.subscription.sync',
             stripe_subscription_id: subscription.id,
             event_data: JSON.stringify({
@@ -326,7 +355,8 @@ const subscriptionController = {
 
         // Update user's Stripe customer ID if not already set
         if (!user.stripe_customer_id) {
-          await airtable.update('Users', user.id, {
+          const resolvedUserId = await resolveUserId(user.id);
+          await database.update('users', resolvedUserId, {
             stripe_customer_id: session.customer
           });
         }

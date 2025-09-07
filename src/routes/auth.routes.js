@@ -302,7 +302,7 @@ router.post('/apple/callback', async (req, res, next) => {
     
     if (req.user) {
       // Debug log the user object before token generation
-      logger.info(`Apple OAuth callback - user object for token generation:`, {
+      logger.info('Apple OAuth callback - user object for token generation:', {
         id: req.user.id,
         email: req.user.email,
         emailVerified: req.user.emailVerified,

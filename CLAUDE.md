@@ -29,7 +29,7 @@ Both databases should receive the same data when records are created/updated.
 - `blog` (Button)
 - `blog_text` (Long text)
 - `blog_url` (URL)
-- `chanel_handle` (Single line text) - Note: typo in field name
+- `channel_handle` (Single line text) - YouTube channel handle
 - `Channel` (Button)
 - `channel_name` (Single line text)
 - `chapter` (Button)
@@ -65,7 +65,7 @@ Both databases should receive the same data when records are created/updated.
 - `youtube_url` (Single line text)
 
 **Key Import Fields Available:**
-- Basic video info: `youtube_url`, `videoid`, `video_title`, `channel_name`, `chanel_handle`
+- Basic video info: `youtube_url`, `videoid`, `video_title`, `channel_name`, `channel_handle`
 - Media: `thumbnail` (Attachment format), `duration` (Number)
 - Content: `description` (Long text), `upload_date` (Date)
 - Processing: `status`, `category`, `privacy_setting` (newly added fields)
@@ -80,7 +80,9 @@ Both databases should receive the same data when records are created/updated.
 - **Start development**: `npm run dev` - Uses nodemon to watch for changes
 - **Start production**: `npm start` - Runs the server directly
 - **Run tests**: `npm test` - Executes Jest test suite
-- **Code validation**: Use `node -c <filename>` for syntax checking (lint is not configured on this system)
+- **Code linting**: `npm run lint` - Check code quality with ESLint v9
+- **Auto-fix lint issues**: `npm run lint:fix` - Automatically fix fixable ESLint issues
+- **Code validation**: Use `node -c <filename>` for syntax checking
 
 ### Port Management (Windows)
 
@@ -359,3 +361,5 @@ Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+- Please stop trying to use the rm (remove) comand. This is a windows computer
+- Create a folder for all debugging and test scripts call adhoc and exclude this folder from source control. Then move all non project related files from the root of the project into that folder

@@ -40,7 +40,7 @@ class Logger {
         try {
           formattedMessage += ` | Data: ${JSON.stringify(data, null, 2)}`;
         } catch (error) {
-          formattedMessage += ` | Data: [Circular or non-serializable object]`;
+          formattedMessage += ' | Data: [Circular or non-serializable object]';
         }
       } else {
         formattedMessage += ` | Data: ${data}`;

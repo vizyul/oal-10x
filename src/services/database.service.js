@@ -205,9 +205,15 @@ class DatabaseService {
       const values = Object.values(fields);
       const setClauses = fieldNames.map((field, index) => `${field} = $${index + 1}`);
       
+      // Only add updated_at if it's not already in the fields
+      const hasUpdatedAt = fieldNames.some(field => field.toLowerCase() === 'updated_at');
+      const setClause = hasUpdatedAt 
+        ? setClauses.join(', ')
+        : `${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP`;
+      
       const query = `
         UPDATE ${tableName.toLowerCase()} 
-        SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP
+        SET ${setClause}
         WHERE id = $${values.length + 1} 
         RETURNING *
       `;

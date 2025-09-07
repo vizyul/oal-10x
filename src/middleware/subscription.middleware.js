@@ -1,4 +1,4 @@
-const airtable = require('../services/airtable.service');
+const database = require('../services/database.service');
 const stripeConfig = require('../config/stripe.config');
 const { logger } = require('../utils');
 
@@ -161,7 +161,7 @@ const subscriptionMiddleware = {
         const hasAccess = checkFeatureAccess(tierConfig, feature);
         
         if (!hasAccess) {
-          return handleSubscriptionError(req, res, `Feature requires upgrade`, 403, {
+          return handleSubscriptionError(req, res, 'Feature requires upgrade', 403, {
             feature,
             current_tier: userTier,
             upgrade_url: '/subscription/upgrade'
@@ -256,14 +256,14 @@ function getResourceLimit(tierConfig, resource) {
   if (!tierConfig) return 0;
   
   switch (resource) {
-    case 'videos':
-      return tierConfig.videoLimit || 0;
-    case 'api_calls':
-      return tierConfig.apiLimit || 0;
-    case 'storage':
-      return tierConfig.storageLimit || 0;
-    default:
-      return 0;
+  case 'videos':
+    return tierConfig.videoLimit || 0;
+  case 'api_calls':
+    return tierConfig.apiLimit || 0;
+  case 'storage':
+    return tierConfig.storageLimit || 0;
+  default:
+    return 0;
   }
 }
 
@@ -274,16 +274,16 @@ function checkFeatureAccess(tierConfig, feature) {
   if (!tierConfig) return false;
   
   switch (feature) {
-    case 'analytics':
-      return tierConfig.analyticsAccess === true;
-    case 'api':
-      return tierConfig.apiAccess === true;
-    case 'unlimited_videos':
-      return tierConfig.videoLimit === -1;
-    case 'priority_support':
-      return tierConfig.prioritySupport === true;
-    default:
-      return false;
+  case 'analytics':
+    return tierConfig.analyticsAccess === true;
+  case 'api':
+    return tierConfig.apiAccess === true;
+  case 'unlimited_videos':
+    return tierConfig.videoLimit === -1;
+  case 'priority_support':
+    return tierConfig.prioritySupport === true;
+  default:
+    return false;
   }
 }
 
@@ -292,8 +292,21 @@ function checkFeatureAccess(tierConfig, feature) {
  */
 async function getCurrentUsage(userId, resource) {
   try {
+    // Resolve user ID if it's an Airtable record ID
+    let resolvedUserId = userId;
+    if (typeof userId === 'string' && userId.startsWith('rec')) {
+      // This is an Airtable record ID, need to resolve to PostgreSQL user ID
+      const userRecord = await database.findByField('users', 'airtable_id', userId);
+      if (userRecord.length === 0) {
+        logger.warn(`No PostgreSQL user found for Airtable ID: ${userId}`);
+        return 0;
+      }
+      const userData = userRecord[0].fields || userRecord[0];
+      resolvedUserId = userData.id;
+    }
+
     // Get current subscription to find billing period
-    const subscription = await getUserActiveSubscription(userId);
+    const subscription = await getUserActiveSubscription(resolvedUserId);
     if (!subscription) {
       // No active subscription, return 0 usage
       return 0;
@@ -304,12 +317,16 @@ async function getCurrentUsage(userId, resource) {
     const now = new Date();
 
     // Find usage record for current period
-    const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
-    const currentUsage = usageRecords.find(usage => {
-      const usagePeriodStart = new Date(usage.period_start);
-      const usagePeriodEnd = new Date(usage.period_end);
-      return usagePeriodStart <= now && usagePeriodEnd >= now;
-    });
+    const query = `
+      SELECT * FROM subscription_usage 
+      WHERE users_id = $1 
+        AND period_start <= $2 
+        AND period_end >= $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const usageResult = await database.query(query, [resolvedUserId, now]);
+    const currentUsage = usageResult.rows[0];
 
     if (!currentUsage) {
       return 0;
@@ -328,13 +345,36 @@ async function getCurrentUsage(userId, resource) {
  */
 async function getCurrentUsageAll(userId) {
   try {
+    // Resolve user ID if it's an Airtable record ID
+    let resolvedUserId = userId;
+    if (typeof userId === 'string' && userId.startsWith('rec')) {
+      // This is an Airtable record ID, need to resolve to PostgreSQL user ID
+      const userRecord = await database.findByField('users', 'airtable_id', userId);
+      if (userRecord.length === 0) {
+        logger.warn(`No PostgreSQL user found for Airtable ID: ${userId}`);
+        return {
+          videos_processed: 0,
+          api_calls_made: 0,
+          storage_used_mb: 0,
+          ai_summaries_generated: 0,
+          analytics_views: 0
+        };
+      }
+      const userData = userRecord[0].fields || userRecord[0];
+      resolvedUserId = userData.id;
+    }
+
     const now = new Date();
-    const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
-    const currentUsage = usageRecords.find(usage => {
-      const usagePeriodStart = new Date(usage.period_start);
-      const usagePeriodEnd = new Date(usage.period_end);
-      return usagePeriodStart <= now && usagePeriodEnd >= now;
-    });
+    const query = `
+      SELECT * FROM subscription_usage 
+      WHERE users_id = $1 
+        AND period_start <= $2 
+        AND period_end >= $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const usageResult = await database.query(query, [resolvedUserId, now]);
+    const currentUsage = usageResult.rows[0];
 
     if (!currentUsage) {
       return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
@@ -357,46 +397,77 @@ async function getCurrentUsageAll(userId) {
  */
 async function incrementUserUsage(userId, resource, increment = 1) {
   try {
-    const subscription = await getUserActiveSubscription(userId);
+    // Resolve user ID if it's an Airtable record ID
+    let resolvedUserId = userId;
+    if (typeof userId === 'string' && userId.startsWith('rec')) {
+      // This is an Airtable record ID, need to resolve to PostgreSQL user ID
+      const userRecord = await database.findByField('users', 'airtable_id', userId);
+      if (userRecord.length === 0) {
+        logger.warn(`No PostgreSQL user found for Airtable ID: ${userId}`);
+        return;
+      }
+      const userData = userRecord[0].fields || userRecord[0];
+      resolvedUserId = userData.id;
+    }
+
+    const subscription = await getUserActiveSubscription(resolvedUserId);
     if (!subscription) {
       // No active subscription, don't track usage
       return;
     }
 
     const now = new Date();
-    const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
-    let currentUsage = usageRecords.find(usage => {
-      const usagePeriodStart = new Date(usage.period_start);
-      const usagePeriodEnd = new Date(usage.period_end);
-      return usagePeriodStart <= now && usagePeriodEnd >= now;
-    });
+    const usageQuery = `
+      SELECT * FROM subscription_usage 
+      WHERE users_id = $1 
+        AND period_start <= $2 
+        AND period_end >= $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const usageResult = await database.query(usageQuery, [resolvedUserId, now]);
+    let currentUsage = usageResult.rows[0];
 
     const fieldName = getUsageFieldName(resource);
     
     if (currentUsage) {
       // Update existing usage record
       const newValue = (currentUsage[fieldName] || 0) + increment;
-      await airtable.update('Subscription_Usage', currentUsage.id, {
-        [fieldName]: newValue
-      });
+      const updateQuery = `
+        UPDATE subscription_usage 
+        SET ${fieldName} = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `;
+      await database.query(updateQuery, [newValue, currentUsage.id]);
     } else {
       // Create new usage record for current period
-      const subscriptionRecords = await airtable.findByField('User_Subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
-      const subscriptionRecord = subscriptionRecords[0];
+      const subscriptionQuery = `
+        SELECT id FROM user_subscriptions 
+        WHERE stripe_subscription_id = $1
+        LIMIT 1
+      `;
+      const subscriptionResult = await database.query(subscriptionQuery, [subscription.stripe_subscription_id]);
+      const subscriptionRecord = subscriptionResult.rows[0];
       
       if (subscriptionRecord) {
-        await airtable.create('Subscription_Usage', {
-          user_id: [userId],
-          subscription_id: [subscriptionRecord.id],
-          period_start: new Date(subscription.current_period_start).toISOString().split('T')[0],
-          period_end: new Date(subscription.current_period_end).toISOString().split('T')[0],
-          [fieldName]: increment,
-          videos_processed: resource === 'videos' ? increment : 0,
-          api_calls_made: resource === 'api_calls' ? increment : 0,
-          storage_used_mb: resource === 'storage' ? increment : 0,
-          ai_summaries_generated: resource === 'ai_summaries' ? increment : 0,
-          analytics_views: resource === 'analytics' ? increment : 0
-        });
+        const insertQuery = `
+          INSERT INTO subscription_usage (
+            users_id, subscription_id, period_start, period_end,
+            videos_processed, api_calls_made, storage_used_mb, 
+            ai_summaries_generated, analytics_views
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `;
+        await database.query(insertQuery, [
+          resolvedUserId,
+          subscriptionRecord.id,
+          new Date(subscription.current_period_start).toISOString().split('T')[0],
+          new Date(subscription.current_period_end).toISOString().split('T')[0],
+          resource === 'videos' ? increment : 0,
+          resource === 'api_calls' ? increment : 0,
+          resource === 'storage' ? increment : 0,
+          resource === 'ai_summaries' ? increment : 0,
+          resource === 'analytics' ? increment : 0
+        ]);
       }
     }
   } catch (error) {
@@ -409,10 +480,15 @@ async function incrementUserUsage(userId, resource, increment = 1) {
  */
 async function getUserActiveSubscription(userId) {
   try {
-    const subscriptions = await airtable.findByField('User_Subscriptions', 'user_id', userId);
-    return subscriptions.find(sub => 
-      ['active', 'trialing', 'paused'].includes(sub.status)
-    );
+    const query = `
+      SELECT * FROM user_subscriptions 
+      WHERE users_id = $1 
+        AND status IN ('active', 'trialing', 'paused')
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const result = await database.query(query, [userId]);
+    return result.rows[0] || null;
   } catch (error) {
     logger.error('Error getting user subscription:', error);
     return null;
@@ -420,7 +496,7 @@ async function getUserActiveSubscription(userId) {
 }
 
 /**
- * Map resource name to Airtable field name
+ * Map resource name to database field name
  */
 function getUsageFieldName(resource) {
   const fieldMap = {

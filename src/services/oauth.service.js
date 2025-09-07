@@ -325,7 +325,7 @@ class OAuthService {
             logger.info(`Skipping welcome email for ${userData.email} - already sent`);
           }
           
-          logger.info(`Returning existing user for token generation:`, {
+          logger.info('Returning existing user for token generation:', {
             id: existingUser.id,
             email: existingUser.email,
             emailVerified: existingUser.emailVerified,
@@ -473,26 +473,26 @@ class OAuthService {
     };
 
     switch (provider) {
-      case 'google':
-        userData.email = profile.emails?.[0]?.value;
-        userData.firstName = profile.name?.givenName;
-        userData.lastName = profile.name?.familyName;
-        userData.profilePicture = profile.photos?.[0]?.value;
-        break;
+    case 'google':
+      userData.email = profile.emails?.[0]?.value;
+      userData.firstName = profile.name?.givenName;
+      userData.lastName = profile.name?.familyName;
+      userData.profilePicture = profile.photos?.[0]?.value;
+      break;
       
-      case 'microsoft':
-        userData.email = profile.emails?.[0]?.value;
-        userData.firstName = profile.name?.givenName;
-        userData.lastName = profile.name?.familyName;
-        userData.profilePicture = profile.photos?.[0]?.value;
-        break;
+    case 'microsoft':
+      userData.email = profile.emails?.[0]?.value;
+      userData.firstName = profile.name?.givenName;
+      userData.lastName = profile.name?.familyName;
+      userData.profilePicture = profile.photos?.[0]?.value;
+      break;
       
-      case 'apple':
-        userData.email = profile.email;
-        userData.firstName = profile.name?.firstName;
-        userData.lastName = profile.name?.lastName;
-        userData.isApplePrivateEmail = this.isApplePrivateEmail(profile.email);
-        break;
+    case 'apple':
+      userData.email = profile.email;
+      userData.firstName = profile.name?.firstName;
+      userData.lastName = profile.name?.lastName;
+      userData.isApplePrivateEmail = this.isApplePrivateEmail(profile.email);
+      break;
     }
 
     return userData;

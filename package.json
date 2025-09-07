@@ -16,7 +16,7 @@
     "nodejs",
     "express",
     "handlebars",
-    "airtable",
+    "postgresql",
     "authentication"
   ],
   "author": "Your Name",
@@ -27,7 +27,6 @@
     "@azure/msal-node": "^3.7.3",
     "@google/generative-ai": "^0.24.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "airtable": "^0.12.2",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.5",

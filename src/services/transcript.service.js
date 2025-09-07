@@ -96,7 +96,7 @@ class TranscriptService {
             }).join(' ');
           } else {
             logger.warn(`Unexpected object structure for video ${videoId}:`, Object.keys(response.data));
-            logger.debug(`Object structure details logged in debug mode`);
+            logger.debug('Object structure details logged in debug mode');
             
             // Try to extract any string values from the object
             const stringValues = Object.values(response.data)
@@ -128,12 +128,12 @@ class TranscriptService {
           if (typeof transcript === 'string' && transcript.trim().length > 0) {
             const trimmedTranscript = transcript.trim();
             
-            // Airtable has a field size limit, so truncate very large transcripts
-            const AIRTABLE_MAX_FIELD_SIZE = 100000; // 100KB limit for Airtable
+            // PostgreSQL can handle large text fields, but still apply reasonable limits
+            const POSTGRES_MAX_FIELD_SIZE = 500000; // 500KB reasonable limit for PostgreSQL
             let finalTranscript = trimmedTranscript;
             
-            if (trimmedTranscript.length > AIRTABLE_MAX_FIELD_SIZE) {
-              finalTranscript = trimmedTranscript.substring(0, AIRTABLE_MAX_FIELD_SIZE - 100) + '\n\n[Transcript truncated due to size limit]';
+            if (trimmedTranscript.length > POSTGRES_MAX_FIELD_SIZE) {
+              finalTranscript = trimmedTranscript.substring(0, POSTGRES_MAX_FIELD_SIZE - 100) + '\n\n[Transcript truncated due to size limit]';
               logger.warn(`Transcript truncated for ${videoId}: ${trimmedTranscript.length} -> ${finalTranscript.length} characters`);
             }
             
@@ -166,50 +166,29 @@ class TranscriptService {
   }
 
   /**
-   * Update video transcript in both Airtable and PostgreSQL
-   * @param {string} videoRecordId - Airtable record ID
+   * Update video transcript in PostgreSQL
+   * @param {string} videoRecordId - Video record ID
    * @param {string} transcript - Video transcript text
    * @returns {Promise<Object>} Update results
    */
   async updateVideoTranscript(videoRecordId, transcript) {
     try {
-      const airtable = require('./airtable.service');
       const databaseService = require('./database.service');
 
       const results = {
-        airtable: { success: false, error: null },
-        postgres: { success: false, error: null }
+        success: false,
+        error: null
       };
 
-      // Update Airtable
+      // Update PostgreSQL
       try {
-        await airtable.update('Videos', videoRecordId, {
+        await databaseService.update('videos', videoRecordId, {
           transcript_text: transcript
         });
-        results.airtable.success = true;
-        logger.debug(`Updated Airtable transcript for record ${videoRecordId}`);
-      } catch (airtableError) {
-        results.airtable.error = airtableError.message;
-        logger.error(`Failed to update Airtable transcript for ${videoRecordId}:`, airtableError.message);
-      }
-
-      // Update PostgreSQL - find record by Airtable ID
-      try {
-        const postgresRecords = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-        
-        if (postgresRecords.length > 0) {
-          const postgresRecord = postgresRecords[0];
-          await databaseService.update('videos', postgresRecord.fields.id, {
-            transcript_text: transcript
-          });
-          results.postgres.success = true;
-          logger.debug(`Updated PostgreSQL transcript for record ${postgresRecord.fields.id}`);
-        } else {
-          results.postgres.error = 'PostgreSQL record not found';
-          logger.warn(`PostgreSQL record not found for Airtable ID ${videoRecordId}`);
-        }
+        results.success = true;
+        logger.debug(`Updated PostgreSQL transcript for record ${videoRecordId}`);
       } catch (postgresError) {
-        results.postgres.error = postgresError.message;
+        results.error = postgresError.message;
         logger.error(`Failed to update PostgreSQL transcript for ${videoRecordId}:`, postgresError.message);
       }
 
@@ -222,10 +201,10 @@ class TranscriptService {
   }
 
   /**
-   * Process transcript for a video (extract and update databases)
+   * Process transcript for a video (extract and update database)
    * @param {string} videoId - YouTube video ID
    * @param {string} videoUrl - Full YouTube video URL
-   * @param {string} videoRecordId - Airtable record ID
+   * @param {string} videoRecordId - Video record ID
    * @returns {Promise<Object>} Processing results
    */
   async processVideoTranscript(videoId, videoUrl, videoRecordId, userId = null) {
@@ -254,10 +233,10 @@ class TranscriptService {
         };
       }
 
-      // Update databases
+      // Update database
       const updateResults = await this.updateVideoTranscript(videoRecordId, transcript);
 
-      const success = updateResults.airtable.success || updateResults.postgres.success;
+      const success = updateResults.success;
       
       // Update transcript status
       if (success) {
@@ -268,8 +247,7 @@ class TranscriptService {
 
       logger.info(`Transcript processing completed for video ${videoId}`, {
         transcriptLength: transcript.length,
-        airtableSuccess: updateResults.airtable.success,
-        postgresSuccess: updateResults.postgres.success
+        success: updateResults.success
       });
 
       // Trigger content generation if transcript was successfully stored
@@ -284,12 +262,12 @@ class TranscriptService {
             contentTypes: ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'], // Generate all content types
             userId: userId
           }).then(result => {
-            logger.info(`✅ Content generation completed for video ${videoId}`, {
+            logger.info(`Content generation completed for video ${videoId}`, {
               successful: result.summary?.successful || 0,
               failed: result.summary?.failed || 0
             });
           }).catch(error => {
-            logger.warn(`⚠️  Content generation failed for video ${videoId}:`, error.message);
+            logger.warn(`Content generation failed for video ${videoId}:`, error.message);
           });
           
         } catch (contentError) {

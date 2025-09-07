@@ -16,7 +16,7 @@ class SubscriptionService {
       // This function is not exported, so we need to access it through the middleware internals
       // For now, let's recreate the logic here or import it differently
       
-      const airtable = require('./airtable.service');
+      const database = require('./database.service');
       
       // Get user's active subscription
       const subscription = await this.getUserActiveSubscription(userId);
@@ -26,35 +26,56 @@ class SubscriptionService {
       }
 
       const now = new Date();
-      const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
+      
+      // Get user's integer ID for PostgreSQL
+      let pgUserId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID
+        const pgUsers = await database.findByField('users', 'airtable_id', userId);
+        if (pgUsers.length === 0) {
+          logger.debug(`No user found with airtable_id ${userId}, skipping usage increment`);
+          return;
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      } else {
+        // This is likely an email address
+        const pgUsers = await database.findByField('users', 'email', userId);
+        if (pgUsers.length === 0) {
+          logger.debug(`No user found with email ${userId}, skipping usage increment`);
+          return;
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      }
+
+      const usageRecords = await database.findByField('subscription_usage', 'users_id', pgUserId);
       let currentUsage = usageRecords.find(usage => {
-        const usagePeriodStart = new Date(usage.period_start);
-        const usagePeriodEnd = new Date(usage.period_end);
+        const usageData = usage.fields || usage;
+        const usagePeriodStart = new Date(usageData.period_start);
+        const usagePeriodEnd = new Date(usageData.period_end);
         return usagePeriodStart <= now && usagePeriodEnd >= now;
       });
 
       const fieldName = this.getUsageFieldName(resource);
       
       if (currentUsage) {
-        // Update existing usage record in Airtable
-        const newValue = (currentUsage[fieldName] || 0) + increment;
-        await airtable.update('Subscription_Usage', currentUsage.id, {
+        // Update existing usage record in PostgreSQL
+        const usageData = currentUsage.fields || currentUsage;
+        const newValue = (usageData[fieldName] || 0) + increment;
+        const usageId = currentUsage.id || currentUsage.fields.id;
+        await database.update('subscription_usage', usageId, {
           [fieldName]: newValue
         });
-        logger.info(`Updated ${resource} usage for user ${userId} in Airtable: ${currentUsage[fieldName] || 0} -> ${newValue}`);
-
-        // Also update PostgreSQL subscription_usage table (dual database system)
-        await this.updatePostgreSQLUsage(userId, resource, increment);
-        logger.info(`Updated ${resource} usage for user ${userId} in PostgreSQL`);
+        logger.info(`Updated ${resource} usage for user ${userId} in PostgreSQL: ${usageData[fieldName] || 0} -> ${newValue}`);
       } else {
         // Create new usage record for current period
-        const subscriptionRecords = await airtable.findByField('User_Subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
+        const subscriptionRecords = await database.findByField('user_subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
         const subscriptionRecord = subscriptionRecords[0];
         
         if (subscriptionRecord) {
+          const subscriptionData = subscriptionRecord.fields || subscriptionRecord;
           const usageData = {
-            user_id: [userId],
-            subscription_id: [subscriptionRecord.id],
+            users_id: pgUserId,
+            subscription_id: parseInt(subscriptionData.id),
             period_start: new Date(subscription.current_period_start).toISOString().split('T')[0],
             period_end: new Date(subscription.current_period_end).toISOString().split('T')[0],
             videos_processed: resource === 'videos' ? increment : 0,
@@ -64,11 +85,7 @@ class SubscriptionService {
             analytics_views: resource === 'analytics' ? increment : 0
           };
           
-          await airtable.create('Subscription_Usage', usageData);
-          logger.info(`Created new ${resource} usage record for user ${userId} in Airtable: ${increment}`);
-
-          // Also create PostgreSQL subscription_usage record (dual database system)
-          await this.createPostgreSQLUsage(userId, subscription, resource, increment);
+          await database.create('subscription_usage', usageData);
           logger.info(`Created new ${resource} usage record for user ${userId} in PostgreSQL: ${increment}`);
         }
       }
@@ -85,26 +102,62 @@ class SubscriptionService {
    */
   async getCurrentUsage(userId) {
     try {
-      const airtable = require('./airtable.service');
+      const database = require('./database.service');
       const now = new Date();
-      const usageRecords = await airtable.findByField('Subscription_Usage', 'user_id', userId);
       
+      // Get user's integer ID for PostgreSQL
+      let pgUserId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID
+        const pgUsers = await database.findByField('users', 'airtable_id', userId);
+        if (pgUsers.length === 0) {
+          return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      } else if (typeof userId === 'string' && userId.includes('@')) {
+        // This is likely an email address
+        const pgUsers = await database.findByField('users', 'email', userId);
+        if (pgUsers.length === 0) {
+          return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      } else {
+        // This is likely already a PostgreSQL user ID
+        pgUserId = parseInt(userId);
+      }
+      
+      logger.info(`Getting current usage for user ${userId} (pgUserId: ${pgUserId})`);
+      
+      // Get usage records for this user
+      const usageRecords = await database.findByField('subscription_usage', 'users_id', pgUserId);
+      logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
+      
+      // Find the current billing period usage record
       const currentUsage = usageRecords.find(usage => {
-        const usagePeriodStart = new Date(usage.period_start);
-        const usagePeriodEnd = new Date(usage.period_end);
-        return usagePeriodStart <= now && usagePeriodEnd >= now;
+        const usageData = usage.fields || usage;
+        const usagePeriodStart = new Date(usageData.period_start);
+        const usagePeriodEnd = new Date(usageData.period_end);
+        const isCurrentPeriod = usagePeriodStart <= now && usagePeriodEnd >= now;
+        
+        logger.info(`Checking usage record: start=${usagePeriodStart.toISOString()}, end=${usagePeriodEnd.toISOString()}, current=${isCurrentPeriod}`);
+        return isCurrentPeriod;
       });
 
       if (!currentUsage) {
+        logger.info(`No current billing period usage record found for user ${pgUserId}`);
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
-      return {
-        videos: currentUsage.videos_processed || 0,
-        api_calls: currentUsage.api_calls_made || 0,
-        storage: currentUsage.storage_used_mb || 0,
-        ai_summaries: currentUsage.ai_summaries_generated || 0
+      const usageData = currentUsage.fields || currentUsage;
+      const result = {
+        videos: usageData.videos_processed || 0,
+        api_calls: usageData.api_calls_made || 0,
+        storage: usageData.storage_used_mb || 0,
+        ai_summaries: usageData.ai_summaries_generated || 0
       };
+      
+      logger.info(`Current usage for user ${pgUserId}:`, result);
+      return result;
     } catch (error) {
       logger.error('Error getting current usage:', error);
       return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
@@ -118,11 +171,33 @@ class SubscriptionService {
    */
   async getUserActiveSubscription(userId) {
     try {
-      const airtable = require('./airtable.service');
-      const subscriptions = await airtable.findByField('User_Subscriptions', 'user_id', userId);
-      return subscriptions.find(sub => 
-        ['active', 'trialing', 'paused'].includes(sub.status)
-      ) || null;
+      const database = require('./database.service');
+      
+      // Get user's integer ID for PostgreSQL
+      let pgUserId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID
+        const pgUsers = await database.findByField('users', 'airtable_id', userId);
+        if (pgUsers.length === 0) {
+          return null;
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      } else {
+        // This is likely an email address
+        const pgUsers = await database.findByField('users', 'email', userId);
+        if (pgUsers.length === 0) {
+          return null;
+        }
+        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+      }
+      
+      const subscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
+      const activeSubscription = subscriptions.find(sub => {
+        const subData = sub.fields || sub;
+        return ['active', 'trialing', 'paused'].includes(subData.status);
+      });
+      
+      return activeSubscription ? (activeSubscription.fields || activeSubscription) : null;
     } catch (error) {
       logger.error('Error getting user subscription:', error);
       return null;
@@ -130,7 +205,7 @@ class SubscriptionService {
   }
 
   /**
-   * Map resource name to Airtable field name
+   * Map resource name to PostgreSQL field name
    * @param {string} resource - Resource type
    * @returns {string} Field name
    */
@@ -146,73 +221,6 @@ class SubscriptionService {
     return fieldMap[resource] || 'videos_processed';
   }
 
-  /**
-   * Update PostgreSQL subscription_usage record
-   * @param {string} userId - User ID
-   * @param {string} resource - Resource type  
-   * @param {number} increment - Amount to increment by
-   */
-  async updatePostgreSQLUsage(userId, resource, increment) {
-    try {
-      const database = require('./database.service');
-      const now = new Date();
-      
-      // Get user's integer ID for PostgreSQL (not email)
-      const pgUsers = await database.findByField('users', 'email', userId);
-      if (pgUsers.length === 0) return;
-      const pgUserId = pgUsers[0].id;
-
-      // Find current period usage record in PostgreSQL
-      const pgUsageQuery = await database.query(
-        'SELECT * FROM subscription_usage WHERE users_id = $1 AND period_start <= $2 AND period_end >= $2',
-        [pgUserId, now.toISOString()]
-      );
-
-      if (pgUsageQuery.rows.length > 0) {
-        const pgUsage = pgUsageQuery.rows[0];
-        const fieldName = this.getUsageFieldName(resource);
-        const newValue = (pgUsage[fieldName] || 0) + increment;
-        
-        await database.update('subscription_usage', pgUsage.id, {
-          [fieldName]: newValue
-        });
-      }
-    } catch (error) {
-      logger.error(`Error updating PostgreSQL usage: ${error.message}`);
-    }
-  }
-
-  /**
-   * Create PostgreSQL subscription_usage record
-   * @param {string} userId - User ID
-   * @param {Object} subscription - Subscription object
-   * @param {string} resource - Resource type
-   * @param {number} increment - Initial value
-   */
-  async createPostgreSQLUsage(userId, subscription, resource, increment) {
-    try {
-      const database = require('./database.service');
-      
-      // Get user's integer ID for PostgreSQL (not email)
-      const pgUsers = await database.findByField('users', 'email', userId);
-      if (pgUsers.length === 0) return;
-      const pgUserId = pgUsers[0].id;
-
-      const pgUsageData = {
-        users_id: pgUserId,
-        period_start: new Date(subscription.current_period_start).toISOString(),
-        period_end: new Date(subscription.current_period_end).toISOString(),
-        videos_processed: resource === 'videos' ? increment : 0,
-        api_calls_made: resource === 'api_calls' ? increment : 0,
-        storage_used_mb: resource === 'storage' ? increment : 0,
-        ai_summaries_generated: resource === 'ai_summaries' ? increment : 0
-      };
-
-      await database.create('subscription_usage', pgUsageData);
-    } catch (error) {
-      logger.error(`Error creating PostgreSQL usage: ${error.message}`);
-    }
-  }
 }
 
 module.exports = new SubscriptionService();

@@ -1,10 +1,10 @@
-const airtableService = require('./airtable.service');
+const database = require('./database.service');
 const { logger } = require('../utils');
 const crypto = require('crypto');
 
 class SessionService {
   constructor() {
-    this.tableName = 'Sessions';
+    this.tableName = 'sessions'; // PostgreSQL table name
   }
 
   /**
@@ -16,7 +16,7 @@ class SessionService {
   }
 
   /**
-   * Normalize login method to ensure Airtable compatibility
+   * Normalize login method to ensure PostgreSQL compatibility
    * @param {string} method - Original login method
    * @returns {string} Normalized login method
    */
@@ -34,7 +34,7 @@ class SessionService {
   }
 
   /**
-   * Normalize device type to ensure Airtable compatibility
+   * Normalize device type to ensure PostgreSQL compatibility
    * @param {string} deviceType - Original device type
    * @returns {string} Normalized device type
    */
@@ -50,7 +50,7 @@ class SessionService {
   }
 
   /**
-   * Normalize status to ensure Airtable compatibility
+   * Normalize status to ensure PostgreSQL compatibility
    * @param {string} status - Original status
    * @returns {string} Normalized status
    */
@@ -113,65 +113,48 @@ class SessionService {
    */
   async createSession(sessionData) {
     try {
-      logger.info('Creating new session record');
+      logger.info('Creating new session record in PostgreSQL');
 
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - cannot create session');
+      if (!database.pool) {
+        logger.warn('PostgreSQL not configured - cannot create session');
         return null;
       }
 
-      // Map session data to Airtable fields with normalization
+      // Resolve user ID if needed
+      let userId = sessionData.userId;
+      if (!userId && sessionData.userEmail) {
+        const authService = require('./auth.service');
+        const user = await authService.findUserByEmail(sessionData.userEmail);
+        if (user) {
+          userId = user.id;
+        }
+      }
+
+      // Map session data to PostgreSQL fields
       const fields = {
-        'Session ID': sessionData.sessionId,
-        'User ID': sessionData.userId,
-        'User Email': sessionData.userEmail,
-        'Login Method': this.normalizeLoginMethod(sessionData.loginMethod),
-        'IP Address': sessionData.ipAddress,
-        'User Agent': sessionData.userAgent,
-        'Device Type': this.normalizeDeviceType(sessionData.deviceType),
-        'Browser': sessionData.browser,
-        'OS': sessionData.os,
-        'Started At': sessionData.startedAt,
-        'Last Activity At': sessionData.lastActivityAt || sessionData.startedAt,
-        'Status': this.normalizeStatus(sessionData.status || 'active'),
-        'Location': sessionData.location || '',
-        'Timezone': sessionData.timezone || '',
-        'Duration': 0 // Initialize Duration field as 0 for active sessions
+        session_id: sessionData.sessionId,
+        user_id: userId,
+        user_email: sessionData.userEmail,
+        login_method: this.normalizeLoginMethod(sessionData.loginMethod),
+        ip_address: sessionData.ipAddress,
+        user_agent: sessionData.userAgent,
+        device_type: this.normalizeDeviceType(sessionData.deviceType),
+        browser: sessionData.browser,
+        os: sessionData.os,
+        started_at: sessionData.startedAt,
+        last_activity_at: sessionData.lastActivityAt || sessionData.startedAt,
+        status: this.normalizeStatus(sessionData.status || 'active'),
+        location: sessionData.location || '',
+        timezone: sessionData.timezone || '',
+        duration: 0 // Initialize duration as 0 for active sessions
       };
 
-      const record = await airtableService.create(this.tableName, fields);
+      const record = await database.create(this.tableName, fields);
       logger.info(`Session created successfully: ${record.id}`);
       
       return this.formatSessionRecord(record);
     } catch (error) {
-      // Handle specific Airtable field errors
-      if (error.message && error.message.includes('INVALID_MULTIPLE_CHOICE_OPTIONS')) {
-        logger.warn(`Session creation failed due to invalid field option. Retrying with basic fields only.`, {
-          originalMethod: sessionData.loginMethod,
-          normalizedMethod: this.normalizeLoginMethod(sessionData.loginMethod),
-          error: error.message
-        });
-        
-        // Retry with minimal fields to avoid field restriction issues
-        try {
-          const basicFields = {
-            'Session ID': sessionData.sessionId,
-            'User ID': sessionData.userId,
-            'User Email': sessionData.userEmail,
-            'Started At': sessionData.startedAt,
-            'Duration': 0 // Include Duration field in basic fields too
-            // Exclude Status and other potentially restricted fields
-          };
-          
-          const record = await airtableService.create(this.tableName, basicFields);
-          logger.info(`Session created with basic fields: ${record.id}`);
-          return this.formatSessionRecord(record);
-        } catch (retryError) {
-          logger.error('Failed to create session even with basic fields:', retryError);
-        }
-      } else {
-        logger.error('Error creating session:', error);
-      }
+      logger.error('Error creating session:', error);
       
       // Don't throw error to avoid breaking auth flow
       return null;
@@ -188,13 +171,13 @@ class SessionService {
     try {
       logger.info(`Updating session: ${sessionId}`);
 
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - cannot update session');
+      if (!database.pool) {
+        logger.warn('PostgreSQL not configured - cannot update session');
         return null;
       }
 
-      // Find session by Session ID
-      const sessions = await airtableService.findByField(this.tableName, 'Session ID', sessionId);
+      // Find session by session_id
+      const sessions = await database.findByField(this.tableName, 'session_id', sessionId);
       
       if (sessions.length === 0) {
         logger.warn(`Session not found: ${sessionId}`);
@@ -203,19 +186,19 @@ class SessionService {
 
       const sessionRecord = sessions[0];
       
-      // Map update data to Airtable fields
+      // Map update data to PostgreSQL fields
       const mappedData = {};
-      if (updateData.lastActivityAt) mappedData['Last Activity At'] = updateData.lastActivityAt;
-      if (updateData.endedAt) mappedData['Ended At'] = updateData.endedAt;
-      if (updateData.status) mappedData['Status'] = updateData.status;
-      if (updateData.duration !== undefined) mappedData['Duration'] = updateData.duration;
+      if (updateData.lastActivityAt) mappedData['last_activity_at'] = updateData.lastActivityAt;
+      if (updateData.endedAt) mappedData['ended_at'] = updateData.endedAt;
+      if (updateData.status) mappedData['status'] = updateData.status;
+      if (updateData.duration !== undefined) mappedData['duration'] = updateData.duration;
 
       // Enhanced logging for duration debugging
       if (updateData.duration !== undefined) {
         logger.info(`Duration field debug: value=${updateData.duration}, type=${typeof updateData.duration}`);
       }
 
-      const updatedRecord = await airtableService.update(this.tableName, sessionRecord.id, mappedData);
+      const updatedRecord = await database.update(this.tableName, sessionRecord.id, mappedData);
       
       return this.formatSessionRecord(updatedRecord);
     } catch (error) {
@@ -255,25 +238,29 @@ class SessionService {
     try {
       logger.info(`Expiring sessions for user: ${userId}`);
 
-      if (!airtableService.base) {
+      if (!database.pool) {
         return;
       }
 
-      // Find active sessions for the user
-      const records = await airtableService.base(this.tableName).select({
-        filterByFormula: `AND({User ID} = "${userId}", {Status} = "active")`,
-        fields: ['Session ID', 'Started At']
-      }).firstPage();
+      // Find active sessions for the user using SQL query
+      const query = `
+        SELECT session_id, started_at 
+        FROM ${this.tableName} 
+        WHERE user_id = $1 AND status = 'active'
+      `;
+      
+      const result = await database.query(query, [userId]);
+      const records = result.rows;
 
       const expiredAt = new Date().toISOString();
 
       for (const record of records) {
-        const sessionId = record.fields['Session ID'];
+        const sessionId = record.session_id;
         if (sessionId) {
-          // Calculate duration in seconds between Started At and Ended At (Airtable Duration field expects seconds)
-          const startedAt = new Date(record.fields['Started At']);
+          // Calculate duration in seconds between started_at and ended_at
+          const startedAt = new Date(record.started_at);
           const expiredAtDate = new Date(expiredAt);
-          const duration = Math.round((expiredAtDate - startedAt) / 1000); // seconds for Airtable Duration field
+          const duration = Math.round((expiredAtDate - startedAt) / 1000); // seconds
           
           await this.updateSession(sessionId, {
             endedAt: expiredAt,
@@ -358,27 +345,31 @@ class SessionService {
     try {
       logger.info(`Ending active sessions for user: ${userId}`);
 
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - cannot end sessions');
+      if (!database.pool) {
+        logger.warn('PostgreSQL not configured - cannot end sessions');
         return;
       }
 
-      // Find active sessions for the user
-      const records = await airtableService.base(this.tableName).select({
-        filterByFormula: `AND({User ID} = "${userId}", {Status} = "active")`,
-        fields: ['Session ID', 'Started At']
-      }).firstPage();
+      // Find active sessions for the user using SQL query
+      const query = `
+        SELECT session_id, started_at 
+        FROM ${this.tableName} 
+        WHERE user_id = $1 AND status = 'active'
+      `;
+      
+      const result = await database.query(query, [userId]);
+      const records = result.rows;
 
       const endedAt = new Date().toISOString();
 
       for (const record of records) {
-        const sessionId = record.fields['Session ID'];
+        const sessionId = record.session_id;
         if (sessionId) {
-          // Calculate duration in seconds between Started At and Ended At (Airtable Duration field expects seconds)
-          const startedAt = new Date(record.fields['Started At']);
+          // Calculate duration in seconds between started_at and ended_at
+          const startedAt = new Date(record.started_at);
           const endedAtDate = new Date(endedAt);
           const durationMs = endedAtDate - startedAt;
-          const duration = Math.round(durationMs / 1000); // seconds for Airtable Duration field
+          const duration = Math.round(durationMs / 1000); // seconds
           
           // Enhanced logging for duration calculation
           logger.info(`Session ${sessionId} duration calculation: ${durationMs}ms = ${duration} seconds`);
@@ -412,35 +403,38 @@ class SessionService {
   }
 
   /**
-   * Format session record from Airtable
-   * @param {Object} record - Airtable record
+   * Format session record from PostgreSQL
+   * @param {Object} record - PostgreSQL record
    * @returns {Object} Formatted session object
    */
   formatSessionRecord(record) {
-    if (!record || !record.fields) {
+    if (!record) {
       return null;
     }
 
-    const fields = record.fields;
+    // Handle both database service formatted records and direct PostgreSQL rows
+    const fields = record.fields || record;
     
     return {
-      id: record.id,
-      sessionId: fields['Session ID'],
-      userId: fields['User ID'],
-      userEmail: fields['User Email'],
-      loginMethod: fields['Login Method'],
-      ipAddress: fields['IP Address'],
-      userAgent: fields['User Agent'],
-      deviceType: fields['Device Type'],
-      browser: fields['Browser'],
-      os: fields['OS'],
-      startedAt: fields['Started At'],
-      lastActivityAt: fields['Last Activity At'],
-      endedAt: fields['Ended At'],
-      status: fields['Status'],
-      duration: fields['Duration'],
-      location: fields['Location'],
-      timezone: fields['Timezone']
+      id: record.id || fields.id,
+      sessionId: fields.session_id,
+      userId: fields.user_id,
+      userEmail: fields.user_email,
+      loginMethod: fields.login_method,
+      ipAddress: fields.ip_address,
+      userAgent: fields.user_agent,
+      deviceType: fields.device_type,
+      browser: fields.browser,
+      os: fields.os,
+      startedAt: fields.started_at,
+      lastActivityAt: fields.last_activity_at,
+      endedAt: fields.ended_at,
+      status: fields.status,
+      duration: fields.duration,
+      location: fields.location,
+      timezone: fields.timezone,
+      createdAt: fields.created_at,
+      updatedAt: fields.updated_at
     };
   }
 
@@ -450,13 +444,17 @@ class SessionService {
    */
   async getSessionStats() {
     try {
-      if (!airtableService.base) {
+      if (!database.pool) {
         return { total: 0, active: 0, expired: 0, loggedOut: 0 };
       }
 
-      const allSessions = await airtableService.base(this.tableName).select({
-        fields: ['Status', 'Login Method', 'Started At']
-      }).all();
+      const query = `
+        SELECT status, login_method, started_at 
+        FROM ${this.tableName}
+      `;
+      
+      const result = await database.query(query);
+      const allSessions = result.rows;
       
       const stats = {
         total: allSessions.length,
@@ -470,10 +468,9 @@ class SessionService {
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       allSessions.forEach(record => {
-        const fields = record.fields;
-        const status = fields['Status'];
-        const method = fields['Login Method'];
-        const startedAt = new Date(fields['Started At']);
+        const status = record.status;
+        const method = record.login_method;
+        const startedAt = new Date(record.started_at);
 
         // Count by status
         if (status === 'active') stats.active++;

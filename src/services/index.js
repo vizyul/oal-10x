@@ -1,9 +1,9 @@
 const authService = require('./auth.service');
-const airtableService = require('./airtable.service');
+const databaseService = require('./database.service');
 const emailService = require('./email.service');
 
 module.exports = {
   authService,
-  airtableService,
+  databaseService,
   emailService
 };

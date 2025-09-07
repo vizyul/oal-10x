@@ -1,5 +1,5 @@
 const { logger } = require('../utils');
-const airtable = require('./airtable.service');
+const database = require('./database.service');
 const youtubeMetadata = require('./youtube-metadata.service');
 
 class VideoProcessingService {
@@ -18,12 +18,12 @@ class VideoProcessingService {
       logger.info(`Starting video processing for ${videoId}`);
 
       // Get video record
-      const videoRecord = await airtable.findById('Videos', videoId);
+      const videoRecord = await database.findById('videos', videoId);
       if (!videoRecord) {
         throw new Error('Video not found');
       }
 
-      const videoData = videoRecord.fields;
+      const videoData = videoRecord.fields || videoRecord;
       
       // Update status to processing
       await this.updateProcessingStatus(videoId, 'processing', {
@@ -139,7 +139,7 @@ class VideoProcessingService {
    */
   async updateVideoWithMetadata(videoId, metadata) {
     try {
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       const updateData = {};
 
       // Map metadata to table fields
@@ -160,11 +160,11 @@ class VideoProcessingService {
       }
       
       if (currentFields.includes('tags') && metadata.tags?.length > 0) {
-        updateData.tags = metadata.tags.slice(0, 10); // Limit to 10 tags
+        updateData.tags = JSON.stringify(metadata.tags.slice(0, 10)); // Store as JSON string
       }
 
       if (Object.keys(updateData).length > 0) {
-        await airtable.update('Videos', videoId, updateData);
+        await database.update('videos', videoId, updateData);
         logger.info(`Video metadata updated for ${videoId}`, Object.keys(updateData));
       }
 
@@ -180,9 +180,9 @@ class VideoProcessingService {
    * @param {Array} processingSteps - Processing steps array to update
    */
   async generateAllContent(videoId, processingSteps) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const videoData = videoRecord.fields;
-    const currentFields = await this.getCurrentTableFields('Videos');
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord.fields || videoRecord;
+    const currentFields = await this.getCurrentTableFields('videos');
 
     // Generate AI Summary
     if (currentFields.includes('ai_summary') && !videoData.ai_summary) {
@@ -191,7 +191,7 @@ class VideoProcessingService {
         const summary = await this.generateSummary(videoData);
         
         if (summary) {
-          await airtable.update('Videos', videoId, { ai_summary: summary });
+          await database.update('videos', videoId, { ai_summary: summary });
           processingSteps.push({
             step: 'ai_summary',
             status: 'completed',
@@ -228,7 +228,7 @@ class VideoProcessingService {
         const titles = await this.generateTitles(videoData);
         
         if (titles && titles.length > 0) {
-          await airtable.update('Videos', videoId, { 
+          await database.update('videos', videoId, { 
             ai_title_suggestions: JSON.stringify(titles) 
           });
           processingSteps.push({
@@ -267,7 +267,7 @@ class VideoProcessingService {
         const thumbnails = await this.generateThumbnailConcepts(videoData);
         
         if (thumbnails && thumbnails.length > 0) {
-          await airtable.update('Videos', videoId, { 
+          await database.update('videos', videoId, { 
             ai_thumbnail_suggestions: JSON.stringify(thumbnails) 
           });
           processingSteps.push({
@@ -374,7 +374,7 @@ class VideoProcessingService {
    */
   async updateProcessingStatus(videoId, status, logData = {}) {
     try {
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       const updateData = {};
 
       if (currentFields.includes('status')) {
@@ -383,9 +383,10 @@ class VideoProcessingService {
 
       if (currentFields.includes('processing_log')) {
         // Get existing log
-        const videoRecord = await airtable.findById('Videos', videoId);
-        const existingLog = videoRecord.fields.processing_log 
-          ? JSON.parse(videoRecord.fields.processing_log)
+        const videoRecord = await database.findById('videos', videoId);
+        const recordData = videoRecord.fields || videoRecord;
+        const existingLog = recordData.processing_log 
+          ? JSON.parse(recordData.processing_log)
           : { steps: [] };
 
         // Merge logs
@@ -407,7 +408,7 @@ class VideoProcessingService {
       }
 
       if (Object.keys(updateData).length > 0) {
-        await airtable.update('Videos', videoId, updateData);
+        await database.update('videos', videoId, updateData);
         logger.info(`Processing status updated for ${videoId}`, { status, hasLog: !!updateData.processing_log });
       }
 
@@ -481,7 +482,7 @@ class VideoProcessingService {
    */
   async getCurrentTableFields(tableName) {
     try {
-      const schema = await airtable.getTableSchema(tableName);
+      const schema = await database.getTableSchema(tableName);
       return schema.fields || [];
     } catch (error) {
       logger.warn(`Could not get table schema for ${tableName}:`, error.message);
@@ -515,8 +516,8 @@ class VideoProcessingService {
   generateMockSummary(title, description, channelName) {
     const summaries = [
       `This video from ${channelName} titled "${title}" provides valuable insights and information. ${description.substring(0, 200)}...`,
-      `In this engaging content, the creator discusses key topics related to the subject matter. The video offers practical advice and actionable insights for viewers.`,
-      `This educational video explores important concepts and provides viewers with comprehensive information on the topic. The content is well-structured and informative.`
+      'In this engaging content, the creator discusses key topics related to the subject matter. The video offers practical advice and actionable insights for viewers.',
+      'This educational video explores important concepts and provides viewers with comprehensive information on the topic. The content is well-structured and informative.'
     ];
     
     return summaries[Math.floor(Math.random() * summaries.length)];
