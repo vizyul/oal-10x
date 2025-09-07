@@ -55,8 +55,8 @@ class YouTubeController {
       const result = await youtubeOAuth.handleOAuthCallback(code, state);
 
       if (result.success) {
-        logger.info('YouTube OAuth completed successfully', { 
-          channelName: result.channel.name 
+        logger.info('YouTube OAuth completed successfully', {
+          channelName: result.channel.name
         });
         return res.redirect('/videos/upload?success=connected');
       } else {
@@ -326,7 +326,7 @@ class YouTubeController {
       for (const videoId of videoIds) {
         try {
           const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-          
+
           logger.info(`Importing video ${videoId} for user ${actualUserId}`);
 
           // Check if video already exists for this user
@@ -336,7 +336,7 @@ class YouTubeController {
               const videoData = video.fields || video;
               return videoData.users_id === actualUserId;
             });
-            
+
             if (userVideo) {
               logger.warn(`Video ${videoId} already exists for user ${actualUserId}`);
               continue; // Skip this video
@@ -360,19 +360,19 @@ class YouTubeController {
             video_title: metadata?.title || `Imported Video ${videoId}`,
             channel_name: metadata?.channelTitle || 'YouTube Channel',
             channel_handle: metadata?.channelHandle || '',
-            
+
             // Content and media
             description: metadata?.description || '',
             duration: metadata?.duration || 0,
             upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
             thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // Direct URL for PostgreSQL
-            
+
             // Processing and categorization
             status: 'pending',
             category: 'Education',
             privacy_setting: 'public',
-            
+
             // User association and timestamps
             users_id: actualUserId, // PostgreSQL integer foreign key
             created_at: new Date().toISOString()
@@ -401,20 +401,20 @@ class YouTubeController {
               const transcriptService = require('../services/transcript.service');
               const processingStatusService = require('../services/processing-status.service');
               const recordId = postgresRecord.id;
-              
+
               if (recordId) {
                 // Initialize processing status
                 const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
                 processingStatusService.initializeVideoProcessing(
-                  videoId, 
-                  recordId, 
+                  videoId,
+                  recordId,
                   metadata?.title || 'Untitled Video',
                   actualUserId,
                   contentTypes
                 );
-                
+
                 logger.info(`Starting transcript extraction for video ${videoId}`);
-                
+
                 // Process transcript asynchronously - don't wait for completion
                 transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId)
                   .then(result => {
@@ -437,7 +437,7 @@ class YouTubeController {
           if (postgresRecord) {
             // Database write succeeded
             const video = this.formatPostgresVideoResponse(postgresRecord);
-            
+
             importedVideos.push({
               ...video,
               warnings: writeErrors.length > 0 ? writeErrors : undefined

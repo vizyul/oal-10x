@@ -24,7 +24,7 @@ class ContentGenerationService {
       if (contentType) conditions.content_type = contentType.toLowerCase();
 
       const records = await databaseService.findByMultipleFields('ai_prompts', conditions);
-      
+
       // Handle both database service formatted records and direct PostgreSQL rows
       const prompts = records.map(record => {
         if (record.fields) {
@@ -32,7 +32,7 @@ class ContentGenerationService {
         }
         return record;
       });
-      
+
       logger.debug(`Found ${prompts.length} prompts in PostgreSQL`);
       return prompts;
     } catch (error) {
@@ -51,12 +51,12 @@ class ContentGenerationService {
     try {
       const prompts = await this.getActivePrompts(provider);
       const prompt = prompts.find(p => p.name === name && p.ai_provider === provider.toLowerCase());
-      
+
       if (!prompt) {
         logger.warn(`Prompt not found: ${name} for provider ${provider}`);
         return null;
       }
-      
+
       return prompt;
     } catch (error) {
       logger.error(`Error getting prompt ${name} for ${provider}:`, error);
@@ -75,7 +75,7 @@ class ContentGenerationService {
     try {
 
       const processingStatusService = require('./processing-status.service');
-      
+
       // Update content status to pending
       processingStatusService.updateContentStatus(videoId, prompt.content_type, 'pending');
 
@@ -162,7 +162,7 @@ class ContentGenerationService {
           const PreferencesService = require('./preferences.service');
           const preferencesService = new PreferencesService();
           let userPreferences = null;
-          
+
           if (userEmail) {
             userPreferences = await preferencesService.getUserPreferences(userEmail);
           } else if (userId) {
@@ -173,7 +173,7 @@ class ContentGenerationService {
               userPreferences = await preferencesService.getUserPreferences(user.email);
             }
           }
-          
+
           if (userPreferences && userPreferences.aiProvider) {
             selectedProvider = userPreferences.aiProvider;
             logger.info(`Using user preferred AI provider: ${selectedProvider} for video ${videoId}`);
@@ -182,7 +182,7 @@ class ContentGenerationService {
           logger.warn(`Could not load user preferences for AI provider: ${prefError.message}`);
         }
       }
-      
+
       // Fallback to gemini if no provider determined
       selectedProvider = selectedProvider || 'gemini';
 
@@ -194,8 +194,8 @@ class ContentGenerationService {
 
       // Get active prompts for the provider and content types
       const allPrompts = await this.getActivePrompts(selectedProvider);
-      
-      const relevantPrompts = allPrompts.filter(prompt => 
+
+      const relevantPrompts = allPrompts.filter(prompt =>
         contentTypes.includes(prompt.content_type)
       );
 
@@ -223,7 +223,7 @@ class ContentGenerationService {
       // Process prompts in batches
       for (let i = 0; i < relevantPrompts.length; i += concurrent) {
         const batch = relevantPrompts.slice(i, i + concurrent);
-        
+
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(relevantPrompts.length / concurrent)}`);
 
         const batchPromises = batch.map(prompt =>
@@ -316,11 +316,11 @@ class ContentGenerationService {
         return;
       } catch (directUpdateError) {
         logger.debug(`Direct update failed, trying to find by airtable_id: ${directUpdateError.message}`);
-        
+
         // If direct update fails, try to find by airtable_id (backward compatibility)
         try {
           const records = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-          
+
           if (records.length > 0) {
             const record = records[0];
             const recordId = record.fields ? record.fields.id : record.id;
@@ -365,21 +365,21 @@ class ContentGenerationService {
 
       // Get videos from PostgreSQL database
       const allVideos = await databaseService.findAll('videos', { maxRecords: maxVideos * 2 });
-      
+
       // Filter videos that have transcripts but missing content
       let videos = allVideos.filter(record => {
         const fields = record.fields || record;
-        
+
         // Skip if no transcript or transcript too short
         if (!fields.transcript_text || fields.transcript_text.trim().length < 100) {
           return false;
         }
-        
+
         // Include if userId filter is specified and matches
         if (userId && fields.user_id !== userId) {
           return false;
         }
-        
+
         // Include if missing some content (e.g., blog_text or discussion_guide_text)
         return !fields.summary_text || !fields.discussion_guide_text || !fields.quiz_text;
       }).slice(0, maxVideos);
@@ -398,19 +398,19 @@ class ContentGenerationService {
           const fields = video.fields || video;
           const videoRecordId = video.id || fields.id;
           const videoId = fields.videoid || fields.video_id || fields.youtube_video_id;
-          
+
           const result = await this.generateAllContentForVideo(
             videoRecordId,
             videoId,
             fields.transcript_text,
             { provider, contentTypes, userId }
           );
-          
+
           results.push(result);
-          
+
           // Add delay between videos
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
+
         } catch (error) {
           const fields = video.fields || video;
           logger.error(`Failed to process video ${video.id || fields.id}:`, error.message);
@@ -459,17 +459,17 @@ class ContentGenerationService {
 
       // Get video statistics from PostgreSQL
       let videoStats = { total: 0, withTranscripts: 0, withGeneratedContent: 0 };
-      
+
       try {
         const allVideos = await databaseService.findAll('videos', { maxRecords: 1000 });
         videoStats.total = allVideos.length;
-        
+
         // Handle both database service formatted records and direct PostgreSQL rows
         videoStats.withTranscripts = allVideos.filter(v => {
           const fields = v.fields || v;
           return fields.transcript_text?.length > 100;
         }).length;
-        
+
         videoStats.withGeneratedContent = allVideos.filter(v => {
           const fields = v.fields || v;
           return fields.summary_text || fields.discussion_guide_text || fields.quiz_text;

@@ -12,13 +12,13 @@ async function resolveUserId(userId) {
   if (!userId || userId === 'undefined' || userId === 'null') {
     throw new Error('Invalid user ID: user ID is null or undefined');
   }
-  
+
   // If it's already an integer, return it
   const parsed = parseInt(userId);
   if (!isNaN(parsed) && userId.toString() === parsed.toString()) {
     return parsed;
   }
-  
+
   // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
   if (userId.toString().startsWith('rec')) {
     const records = await database.findByField('users', 'airtable_id', userId);
@@ -27,7 +27,7 @@ async function resolveUserId(userId) {
     }
     return records[0].fields.id;
   }
-  
+
   throw new Error(`Invalid user ID format: ${userId}`);
 }
 
@@ -329,7 +329,7 @@ const subscriptionController = {
 
           // Manually trigger subscription sync as backup to webhooks
           await stripeService.handleSubscriptionCreated(subscription);
-          
+
           // Log the manual sync event to subscription_events table
           const resolvedUserId = await resolveUserId(user.id);
           await database.create('subscription_events', {

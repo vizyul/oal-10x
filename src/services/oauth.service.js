@@ -58,7 +58,7 @@ class OAuthService {
         scope: ['name', 'email'],
         passReqToCallback: true // Apple needs access to request for ID token
       }, this.handleAppleOAuthCallback.bind(this)));
-      
+
       logger.info('Apple OAuth Strategy configured successfully');
     } else {
       logger.warn('Apple OAuth Strategy not configured - missing required environment variables');
@@ -80,7 +80,7 @@ class OAuthService {
 
       // Apple provides user data in the request body/query, not JWT claims
       let appleUserInfo = null;
-      
+
       // Try to get user info from request body first (most common)
       if (req.body && req.body.user) {
         try {
@@ -90,7 +90,7 @@ class OAuthService {
           logger.warn('Could not parse Apple user info from request body:', e.message);
         }
       }
-      
+
       // Try to get user info from query params as fallback
       if (!appleUserInfo && req.query && req.query.user) {
         try {
@@ -146,10 +146,10 @@ class OAuthService {
           jwtClaimsKeys: jwtClaims ? Object.keys(jwtClaims) : null,
           jwtClaims: jwtClaims
         });
-        
+
         // Try multiple ways to get user identifier
         let appleUserId = null;
-        
+
         // Method 1: JWT claims sub
         if (jwtClaims && jwtClaims.sub) {
           appleUserId = jwtClaims.sub;
@@ -163,26 +163,26 @@ class OAuthService {
         // Method 3: Profile email (if available)
         else if (profile && profile.email) {
           logger.info('Method 3 - Found email in profile, will lookup by email:', profile.email);
-          
+
           // Find existing user by email instead of Apple ID
           const existingUserByEmail = await authService.findUserByEmail(profile.email);
-          
+
           if (!existingUserByEmail) {
             throw new Error('No existing user found for this email. Please sign up first.');
           }
-          
+
           logger.info(`Found existing Apple user by email: ${existingUserByEmail.email}`);
           return done(null, existingUserByEmail);
         }
-        
+
         if (!appleUserId) {
           // Final fallback: For Apple subsequent logins, try to find the most recent Apple user
           logger.warn('No Apple user ID found - checking for recent Apple users as fallback');
-          
+
           try {
             // Find the most recent Apple user (assumes single Apple user or most recent login)
             const recentAppleUser = await authService.findMostRecentAppleUser();
-            
+
             if (recentAppleUser) {
               logger.info(`Using most recent Apple user as fallback: ${recentAppleUser.email}`);
               return done(null, recentAppleUser);
@@ -195,16 +195,16 @@ class OAuthService {
             return done(new Error('Apple subsequent login failed. Please try signing up again.'), null);
           }
         }
-        
+
         // Find existing user by Apple ID
         const existingUserByAppleId = await authService.findUserByAppleId(appleUserId);
-        
+
         if (!existingUserByAppleId) {
           throw new Error('No existing user found for this Apple ID. Please sign up first.');
         }
-        
+
         logger.info(`Found existing Apple user: ${existingUserByAppleId.email}`);
-        
+
         // For subsequent logins, return the existing user directly
         return done(null, existingUserByAppleId);
       }
@@ -241,38 +241,38 @@ class OAuthService {
 
   async handleOAuthCallback(provider, accessToken, refreshToken, profile, done) {
     try {
-      logger.info(`OAuth callback received for ${provider}`, { 
-        profileId: profile.id, 
+      logger.info(`OAuth callback received for ${provider}`, {
+        profileId: profile.id,
         email: profile.emails?.[0]?.value || profile.email,
         profileData: JSON.stringify(profile, null, 2)
       });
 
       // Extract user data from profile
       const userData = this.extractUserData(provider, profile);
-      
+
       if (!userData.email) {
         throw new Error(`No email address provided by ${provider}`);
       }
 
       // Check if user already exists
       let existingUser = await authService.findUserByEmail(userData.email);
-      
+
       logger.info(`OAuth flow for ${provider} - ${userData.email}:`, {
         userExists: !!existingUser,
         emailVerified: existingUser ? existingUser.emailVerified : null,
         welcomeEmailSent: existingUser ? existingUser.welcomeEmailSent : null
       });
-      
+
       if (existingUser) {
         // Update existing user with OAuth info if needed
         const oauthIdField = `${provider.charAt(0).toUpperCase() + provider.slice(1)} ID`;
-        
+
         // Check if this specific OAuth ID is already stored
         let needsUpdate = false;
         if (provider === 'google' && !existingUser.googleId) needsUpdate = true;
-        if (provider === 'apple' && !existingUser.appleId) needsUpdate = true;  
+        if (provider === 'apple' && !existingUser.appleId) needsUpdate = true;
         if (provider === 'microsoft' && !existingUser.microsoftId) needsUpdate = true;
-        
+
         logger.info(`OAuth ID check for ${provider}:`, {
           provider,
           hasGoogleId: !!existingUser.googleId,
@@ -281,7 +281,7 @@ class OAuthService {
           needsUpdate,
           profileId: profile.id
         });
-        
+
         if (needsUpdate) {
           await authService.updateUser(existingUser.id, {
             [oauthIdField]: profile.id,
@@ -299,23 +299,23 @@ class OAuthService {
           });
           // Send welcome email ONLY if we haven't sent a welcome email before
           const hasReceivedWelcomeEmail = existingUser['Welcome Email Sent'] || existingUser.welcomeEmailSent || false;
-          
+
           logger.info(`OAuth welcome email check for ${userData.email}:`, {
             'welcomeEmailSent': existingUser.welcomeEmailSent,
             'hasReceivedWelcomeEmail': hasReceivedWelcomeEmail
           });
-          
+
           if (!hasReceivedWelcomeEmail) {
             try {
               const firstName = existingUser['First Name'] || existingUser.firstName || 'there';
               await emailService.sendWelcomeEmail(userData.email, firstName);
-              
+
               // Mark that we've sent the welcome email
               await authService.updateUser(existingUser.id, {
                 'Welcome Email Sent': true,
                 'Welcome Email Sent At': new Date().toISOString()
               });
-              
+
               logger.info(`Welcome email sent to existing user: ${userData.email}`);
             } catch (emailError) {
               logger.error('Failed to send welcome email to existing user:', emailError);
@@ -324,7 +324,7 @@ class OAuthService {
           } else {
             logger.info(`Skipping welcome email for ${userData.email} - already sent`);
           }
-          
+
           logger.info('Returning existing user for token generation:', {
             id: existingUser.id,
             email: existingUser.email,
@@ -332,13 +332,13 @@ class OAuthService {
             status: existingUser.status,
             firstName: existingUser.firstName
           });
-          
+
           return done(null, existingUser);
         } else {
           // For Apple private emails, skip verification since they can't receive external emails
           if (provider === 'apple' && userData.isApplePrivateEmail) {
             logger.info(`Skipping email verification for Apple private relay: ${userData.email}`);
-            
+
             // Mark email as verified and activate user
             await authService.updateUser(existingUser.id, {
               emailVerified: true,
@@ -348,54 +348,54 @@ class OAuthService {
               subscription_tier: 'free',
               subscription_status: 'none'
             });
-            
+
             // Send welcome email if not sent before
             const hasReceivedWelcomeEmail = existingUser.welcomeEmailSent || false;
             if (!hasReceivedWelcomeEmail) {
               try {
                 const firstName = existingUser.firstName || 'there';
                 await emailService.sendWelcomeEmail(userData.email, firstName);
-                
+
                 await authService.updateUser(existingUser.id, {
                   'Welcome Email Sent': true,
                   'Welcome Email Sent At': new Date().toISOString()
                 });
-                
+
                 logger.info(`Welcome email sent to Apple private email user: ${userData.email}`);
               } catch (emailError) {
                 logger.error('Failed to send welcome email to Apple user:', emailError);
                 // Don't fail the login if welcome email fails
               }
             }
-            
+
             // Update the user object with verified status for token generation
             const updatedUser = {
               ...existingUser,
               emailVerified: true,
               status: 'active'
             };
-            
+
             return done(null, updatedUser);
           } else {
             // Regular email verification flow for non-Apple or regular Apple emails
             await this.sendVerificationForSocialUser(existingUser, userData.email);
-            return done(null, { 
-              pendingVerification: true, 
-              email: userData.email, 
+            return done(null, {
+              pendingVerification: true,
+              email: userData.email,
               provider: provider,
-              isApplePrivateEmail: userData.isApplePrivateEmail || false 
+              isApplePrivateEmail: userData.isApplePrivateEmail || false
             });
           }
         }
       }
 
-      // Create new user 
+      // Create new user
       const newUser = await this.createPendingSocialUser(provider, profile.id, userData);
-      
+
       // For Apple private emails, skip verification and activate immediately
       if (provider === 'apple' && userData.isApplePrivateEmail) {
         logger.info(`Skipping email verification for new Apple private relay user: ${userData.email}`);
-        
+
         // Mark email as verified and activate user
         await authService.updateUser(newUser.id, {
           emailVerified: true,
@@ -405,40 +405,40 @@ class OAuthService {
           subscription_tier: 'free',
           subscription_status: 'none'
         });
-        
+
         // Send welcome email
         try {
           const firstName = newUser.firstName || 'there';
           await emailService.sendWelcomeEmail(userData.email, firstName);
-          
+
           await authService.updateUser(newUser.id, {
             'Welcome Email Sent': true,
             'Welcome Email Sent At': new Date().toISOString()
           });
-          
+
           logger.info(`Welcome email sent to new Apple private email user: ${userData.email}`);
         } catch (emailError) {
           logger.error('Failed to send welcome email to new Apple user:', emailError);
           // Don't fail the signup if welcome email fails
         }
-        
+
         // Update the user object with verified status for token generation
         const updatedNewUser = {
           ...newUser,
           emailVerified: true,
           status: 'active'
         };
-        
+
         return done(null, updatedNewUser);
       } else {
         // Regular email verification flow for non-Apple or regular Apple emails
         await this.sendVerificationForSocialUser(newUser, userData.email);
-        
-        return done(null, { 
-          pendingVerification: true, 
-          email: userData.email, 
+
+        return done(null, {
+          pendingVerification: true,
+          email: userData.email,
           provider: provider,
-          isApplePrivateEmail: userData.isApplePrivateEmail || false 
+          isApplePrivateEmail: userData.isApplePrivateEmail || false
         });
       }
 
@@ -479,14 +479,14 @@ class OAuthService {
       userData.lastName = profile.name?.familyName;
       userData.profilePicture = profile.photos?.[0]?.value;
       break;
-      
+
     case 'microsoft':
       userData.email = profile.emails?.[0]?.value;
       userData.firstName = profile.name?.givenName;
       userData.lastName = profile.name?.familyName;
       userData.profilePicture = profile.photos?.[0]?.value;
       break;
-      
+
     case 'apple':
       userData.email = profile.email;
       userData.firstName = profile.name?.firstName;
@@ -542,7 +542,7 @@ class OAuthService {
 
       // Send verification email
       await emailService.sendVerificationCode(email, verificationCode);
-      
+
       logger.info(`Verification email sent to social login user: ${email}`);
     } catch (error) {
       logger.error('Failed to send verification email for social user:', {
@@ -587,13 +587,13 @@ class OAuthService {
       try {
         const firstName = user['First Name'] || user.firstName || 'there';
         await emailService.sendWelcomeEmail(email, firstName);
-        
+
         // Mark that welcome email has been sent
         await authService.updateUser(user.id, {
           'Welcome Email Sent': true,
           'Welcome Email Sent At': new Date().toISOString()
         });
-        
+
         logger.info(`Welcome email sent to social user: ${email}`);
       } catch (emailError) {
         logger.error('Failed to send welcome email to social user:', emailError);
@@ -627,7 +627,7 @@ class OAuthService {
 
   // Authentication middleware for different providers
   authenticateGoogle() {
-    return passport.authenticate('google', { 
+    return passport.authenticate('google', {
       scope: ['profile', 'email'],
       prompt: 'select_account'
     });
@@ -647,21 +647,21 @@ class OAuthService {
 
   // Callback handlers
   handleGoogleCallback() {
-    return passport.authenticate('google', { 
+    return passport.authenticate('google', {
       failureRedirect: '/auth/sign-in?error=oauth_failed',
       session: false
     });
   }
 
   handleMicrosoftCallback() {
-    return passport.authenticate('microsoft', { 
+    return passport.authenticate('microsoft', {
       failureRedirect: '/auth/sign-in?error=oauth_failed',
       session: false
     });
   }
 
   handleAppleCallback() {
-    return passport.authenticate('apple', { 
+    return passport.authenticate('apple', {
       failureRedirect: '/auth/sign-in?error=oauth_failed',
       session: false
     });

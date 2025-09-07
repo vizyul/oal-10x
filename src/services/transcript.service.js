@@ -5,7 +5,7 @@ class TranscriptService {
   constructor() {
     this.apiUrl = 'https://io.ourailegacy.com/api/appify/get-transcript';
     this.apiKey = process.env.TRANSCRIPT_API_KEY;
-    
+
     if (!this.apiKey) {
       logger.warn('TRANSCRIPT_API_KEY not configured. Transcript extraction will be disabled.');
     } else {
@@ -22,7 +22,7 @@ class TranscriptService {
     if (!Array.isArray(captions)) {
       return '';
     }
-    
+
     return captions.map(caption => {
       if (typeof caption === 'object' && caption.start !== undefined && caption.end !== undefined && caption.text) {
         const start = parseFloat(caption.start).toFixed(1);
@@ -65,7 +65,7 @@ class TranscriptService {
       if (response.status === 200 && response.data) {
         // Handle different response formats
         let transcript = null;
-        
+
         if (typeof response.data === 'string') {
           transcript = response.data;
         } else if (typeof response.data === 'object') {
@@ -97,11 +97,11 @@ class TranscriptService {
           } else {
             logger.warn(`Unexpected object structure for video ${videoId}:`, Object.keys(response.data));
             logger.debug('Object structure details logged in debug mode');
-            
+
             // Try to extract any string values from the object
             const stringValues = Object.values(response.data)
               .filter(val => typeof val === 'string' && val.length > 10);
-            
+
             if (stringValues.length > 0) {
               transcript = stringValues.join(' ');
             } else {
@@ -123,20 +123,20 @@ class TranscriptService {
               transcript = JSON.stringify(transcript);
             }
           }
-          
+
           // Ensure it's a string and has content
           if (typeof transcript === 'string' && transcript.trim().length > 0) {
             const trimmedTranscript = transcript.trim();
-            
+
             // PostgreSQL can handle large text fields, but still apply reasonable limits
             const POSTGRES_MAX_FIELD_SIZE = 500000; // 500KB reasonable limit for PostgreSQL
             let finalTranscript = trimmedTranscript;
-            
+
             if (trimmedTranscript.length > POSTGRES_MAX_FIELD_SIZE) {
               finalTranscript = trimmedTranscript.substring(0, POSTGRES_MAX_FIELD_SIZE - 100) + '\n\n[Transcript truncated due to size limit]';
               logger.warn(`Transcript truncated for ${videoId}: ${trimmedTranscript.length} -> ${finalTranscript.length} characters`);
             }
-            
+
             return finalTranscript;
           } else {
             return null;
@@ -212,19 +212,19 @@ class TranscriptService {
       logger.info(`Processing transcript for video ${videoId} (record: ${videoRecordId})`);
 
       const processingStatusService = require('./processing-status.service');
-      
+
       // Update transcript status to processing
       processingStatusService.updateTranscriptStatus(videoId, 'pending');
 
       // Extract transcript
       const transcript = await this.extractTranscript(videoId, videoUrl);
-      
+
       if (!transcript) {
         logger.info(`No transcript available for video ${videoId}`);
-        
+
         // Update transcript status to failed
         processingStatusService.updateTranscriptStatus(videoId, 'failed', 'No transcript available');
-        
+
         return {
           success: false,
           reason: 'No transcript available',
@@ -237,7 +237,7 @@ class TranscriptService {
       const updateResults = await this.updateVideoTranscript(videoRecordId, transcript);
 
       const success = updateResults.success;
-      
+
       // Update transcript status
       if (success) {
         processingStatusService.updateTranscriptStatus(videoId, 'completed');
@@ -254,10 +254,10 @@ class TranscriptService {
       if (success) {
         try {
           const contentGenerationService = require('./content-generation.service');
-          
+
           // Start content generation asynchronously - don't wait for completion
           logger.info(`Starting content generation for video ${videoId}`);
-          
+
           contentGenerationService.generateAllContentForVideo(videoRecordId, videoId, transcript, {
             contentTypes: ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'], // Generate all content types
             userId: userId
@@ -269,7 +269,7 @@ class TranscriptService {
           }).catch(error => {
             logger.warn(`Content generation failed for video ${videoId}:`, error.message);
           });
-          
+
         } catch (contentError) {
           logger.warn(`Error initiating content generation for video ${videoId}:`, contentError.message);
         }
@@ -301,18 +301,18 @@ class TranscriptService {
   async batchProcessTranscripts(videos, options = {}) {
     try {
       const { concurrent = 3, delayBetween = 1000 } = options;
-      
+
       logger.info(`Starting batch transcript processing for ${videos.length} videos`);
-      
+
       const results = [];
-      
+
       // Process in batches to avoid overwhelming the API
       for (let i = 0; i < videos.length; i += concurrent) {
         const batch = videos.slice(i, i + concurrent);
-        
+
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(videos.length / concurrent)}`);
-        
-        const batchPromises = batch.map(video => 
+
+        const batchPromises = batch.map(video =>
           this.processVideoTranscript(video.videoId, video.videoUrl, video.recordId)
             .catch(error => ({
               success: false,
@@ -320,21 +320,21 @@ class TranscriptService {
               videoId: video.videoId
             }))
         );
-        
+
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
-        
+
         // Add delay between batches to be respectful to the API
         if (i + concurrent < videos.length && delayBetween > 0) {
           await new Promise(resolve => setTimeout(resolve, delayBetween));
         }
       }
-      
+
       const successful = results.filter(r => r.success).length;
       logger.info(`Batch processing completed: ${successful}/${videos.length} successful`);
-      
+
       return results;
-      
+
     } catch (error) {
       logger.error('Error in batch transcript processing:', error);
       throw error;

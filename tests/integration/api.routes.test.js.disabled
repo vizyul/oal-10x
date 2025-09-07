@@ -6,7 +6,7 @@ const youtubeMetadataService = require('../../src/services/youtube-metadata.serv
 
 // Mock services
 jest.mock('../../src/services/auth.service');
-jest.mock('../../src/services/airtable.service');
+jest.mock('../../src/services/database.service');
 jest.mock('../../src/services/youtube-metadata.service');
 jest.mock('../../src/utils', () => ({
   logger: {

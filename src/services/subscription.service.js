@@ -5,19 +5,19 @@ class SubscriptionService {
   /**
    * Increment usage counter for a specific resource type
    * @param {string} userId - User ID
-   * @param {string} resource - Resource type ('videos', 'api_calls', 'storage', 'ai_summaries')  
+   * @param {string} resource - Resource type ('videos', 'api_calls', 'storage', 'ai_summaries')
    * @param {number} increment - Amount to increment by (default: 1)
    */
   async incrementUsage(userId, resource = 'videos', increment = 1) {
     try {
       logger.info(`Incrementing ${resource} usage for user ${userId} by ${increment}`);
-      
+
       // Use the existing incrementUserUsage function from subscription middleware
       // This function is not exported, so we need to access it through the middleware internals
       // For now, let's recreate the logic here or import it differently
-      
+
       const database = require('./database.service');
-      
+
       // Get user's active subscription
       const subscription = await this.getUserActiveSubscription(userId);
       if (!subscription) {
@@ -26,7 +26,7 @@ class SubscriptionService {
       }
 
       const now = new Date();
-      
+
       // Get user's integer ID for PostgreSQL
       let pgUserId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -56,7 +56,7 @@ class SubscriptionService {
       });
 
       const fieldName = this.getUsageFieldName(resource);
-      
+
       if (currentUsage) {
         // Update existing usage record in PostgreSQL
         const usageData = currentUsage.fields || currentUsage;
@@ -70,7 +70,7 @@ class SubscriptionService {
         // Create new usage record for current period
         const subscriptionRecords = await database.findByField('user_subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
         const subscriptionRecord = subscriptionRecords[0];
-        
+
         if (subscriptionRecord) {
           const subscriptionData = subscriptionRecord.fields || subscriptionRecord;
           const usageData = {
@@ -84,7 +84,7 @@ class SubscriptionService {
             ai_summaries_generated: resource === 'ai_summaries' ? increment : 0,
             analytics_views: resource === 'analytics' ? increment : 0
           };
-          
+
           await database.create('subscription_usage', usageData);
           logger.info(`Created new ${resource} usage record for user ${userId} in PostgreSQL: ${increment}`);
         }
@@ -104,7 +104,7 @@ class SubscriptionService {
     try {
       const database = require('./database.service');
       const now = new Date();
-      
+
       // Get user's integer ID for PostgreSQL
       let pgUserId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -125,20 +125,20 @@ class SubscriptionService {
         // This is likely already a PostgreSQL user ID
         pgUserId = parseInt(userId);
       }
-      
+
       logger.info(`Getting current usage for user ${userId} (pgUserId: ${pgUserId})`);
-      
+
       // Get usage records for this user
       const usageRecords = await database.findByField('subscription_usage', 'users_id', pgUserId);
       logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
-      
+
       // Find the current billing period usage record
       const currentUsage = usageRecords.find(usage => {
         const usageData = usage.fields || usage;
         const usagePeriodStart = new Date(usageData.period_start);
         const usagePeriodEnd = new Date(usageData.period_end);
         const isCurrentPeriod = usagePeriodStart <= now && usagePeriodEnd >= now;
-        
+
         logger.info(`Checking usage record: start=${usagePeriodStart.toISOString()}, end=${usagePeriodEnd.toISOString()}, current=${isCurrentPeriod}`);
         return isCurrentPeriod;
       });
@@ -155,7 +155,7 @@ class SubscriptionService {
         storage: usageData.storage_used_mb || 0,
         ai_summaries: usageData.ai_summaries_generated || 0
       };
-      
+
       logger.info(`Current usage for user ${pgUserId}:`, result);
       return result;
     } catch (error) {
@@ -166,13 +166,13 @@ class SubscriptionService {
 
   /**
    * Get user's active subscription
-   * @param {string} userId - User ID  
+   * @param {string} userId - User ID
    * @returns {Object|null} Active subscription or null
    */
   async getUserActiveSubscription(userId) {
     try {
       const database = require('./database.service');
-      
+
       // Get user's integer ID for PostgreSQL
       let pgUserId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -190,13 +190,13 @@ class SubscriptionService {
         }
         pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
       }
-      
+
       const subscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
       const activeSubscription = subscriptions.find(sub => {
         const subData = sub.fields || sub;
         return ['active', 'trialing', 'paused'].includes(subData.status);
       });
-      
+
       return activeSubscription ? (activeSubscription.fields || activeSubscription) : null;
     } catch (error) {
       logger.error('Error getting user subscription:', error);
@@ -212,12 +212,12 @@ class SubscriptionService {
   getUsageFieldName(resource) {
     const fieldMap = {
       'videos': 'videos_processed',
-      'api_calls': 'api_calls_made', 
+      'api_calls': 'api_calls_made',
       'storage': 'storage_used_mb',
       'ai_summaries': 'ai_summaries_generated',
       'analytics': 'analytics_views'
     };
-    
+
     return fieldMap[resource] || 'videos_processed';
   }
 

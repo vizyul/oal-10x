@@ -1,9 +1,9 @@
 const authService = require('../../src/services/auth.service');
-const airtableService = require('../../src/services/airtable.service');
+const database = require('../../src/services/database.service');
 const jwt = require('jsonwebtoken');
 
 // Mock dependencies
-jest.mock('../../src/services/airtable.service');
+jest.mock('../../src/services/database.service');
 jest.mock('../../src/utils', () => ({
   logger: {
     info: jest.fn(),
@@ -15,8 +15,8 @@ jest.mock('../../src/utils', () => ({
 describe('AuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock Airtable base as available by default
-    airtableService.base = jest.fn();
+    // Mock database pool as available by default
+    database.pool = jest.fn();
   });
 
   describe('createUser', () => {
@@ -43,23 +43,23 @@ describe('AuthService', () => {
         }
       };
 
-      airtableService.create.mockResolvedValue(mockRecord);
+      database.create.mockResolvedValue(mockRecord);
 
       const result = await authService.createUser(userData);
 
-      expect(airtableService.create).toHaveBeenCalledWith('Users', {
-        'Email': 'test@example.com',
-        'Password': 'hashedpassword',
-        'First Name': 'John',
-        'Last Name': 'Doe',
-        'Email Verified': false,
-        'Email Verification Token': undefined,
-        'Email Verification Expires': undefined,
-        'Terms Accepted': true,
-        'Privacy Accepted': true,
-        'Status': 'pending_verification',
-        'Created At': undefined,
-        'Updated At': undefined
+      expect(database.create).toHaveBeenCalledWith('users', {
+        email: 'test@example.com',
+        password: 'hashedpassword',
+        first_name: 'John',
+        last_name: 'Doe',
+        email_verified: false,
+        email_verification_token: undefined,
+        email_verification_expires: undefined,
+        terms_accepted: true,
+        privacy_accepted: true,
+        status: 'pending_verification',
+        subscription_tier: 'free',
+        subscription_status: 'none'
       });
 
       expect(result).toEqual({

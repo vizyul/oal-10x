@@ -22,7 +22,7 @@ class ProcessingQueueService {
 
       // Check if Processing Queue table exists
       const hasQueueTable = await this.hasProcessingQueueTable();
-      
+
       if (hasQueueTable) {
         // Add to PostgreSQL processing queue
         const queueItem = await database.create('processing_queue', {
@@ -35,10 +35,10 @@ class ProcessingQueueService {
         });
 
         logger.info(`Added to processing queue: ${queueItem.id}`, { taskType, videoId });
-        
+
         // Start processing if not already running
         this.startProcessing();
-        
+
         return {
           id: queueItem.id,
           videoId,
@@ -50,7 +50,7 @@ class ProcessingQueueService {
         // Fallback: direct processing if queue table doesn't exist
         logger.warn('Processing Queue table not available, processing directly');
         await this.processDirectly(videoId, taskType);
-        
+
         return {
           id: `direct-${Date.now()}`,
           videoId,
@@ -91,8 +91,8 @@ class ProcessingQueueService {
 
       const queueItem = queuedItems.rows[0];
       const { video_id, task_type } = queueItem;
-      
-      logger.info(`Processing queue item: ${queueItem.id}`, { 
+
+      logger.info(`Processing queue item: ${queueItem.id}`, {
         taskType: task_type,
         videoId: video_id
       });
@@ -114,7 +114,7 @@ class ProcessingQueueService {
         });
 
         logger.info(`Queue item completed: ${queueItem.id}`, { taskType: task_type });
-        
+
         return {
           id: queueItem.id,
           videoId: video_id,
@@ -124,7 +124,7 @@ class ProcessingQueueService {
 
       } catch (taskError) {
         logger.error(`Queue item failed: ${queueItem.id}`, taskError);
-        
+
         const retryCount = (queueItem.retry_count || 0) + 1;
         const shouldRetry = retryCount <= 3;
 
@@ -135,7 +135,7 @@ class ProcessingQueueService {
             retry_count: retryCount,
             error_message: taskError.message
           });
-          
+
           logger.info(`Queue item will retry: ${queueItem.id}`, { retryCount });
         } else {
           // Mark as failed
@@ -144,7 +144,7 @@ class ProcessingQueueService {
             error_message: taskError.message,
             completed_at: new Date().toISOString()
           });
-          
+
           logger.error(`Queue item permanently failed: ${queueItem.id}`);
         }
 
@@ -168,19 +168,19 @@ class ProcessingQueueService {
       case 'extract_metadata':
         await this.executeMetadataExtraction(videoId);
         break;
-          
+
       case 'generate_summary':
         await this.executeGenerateSummary(videoId);
         break;
-          
+
       case 'generate_titles':
         await this.executeGenerateTitles(videoId);
         break;
-          
+
       case 'generate_thumbnails':
         await this.executeGenerateThumbnails(videoId);
         break;
-          
+
       default:
         throw new Error(`Unknown task type: ${taskType}`);
       }
@@ -329,7 +329,7 @@ class ProcessingQueueService {
 
       // Get completed tasks older than 24 hours
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
+
       const completedItems = await database.query(`
         SELECT * FROM processing_queue 
         WHERE status = 'completed' AND completed_at < $1
@@ -401,13 +401,13 @@ class ProcessingQueueService {
   async processDirectly(videoId, taskType) {
     try {
       logger.info(`Processing directly: ${taskType} for video ${videoId}`);
-      
+
       if (taskType === 'full_processing') {
         await videoProcessing.processVideo(videoId);
       } else {
         await this.executeTask(videoId, taskType);
       }
-      
+
     } catch (error) {
       logger.error('Direct processing failed:', error);
       throw error;
@@ -427,7 +427,7 @@ class ProcessingQueueService {
     const videoRecord = await database.findById('videos', videoId);
     const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
     const summary = await videoProcessing.generateSummary(videoData);
-    
+
     const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_summary')) {
       await database.update('videos', videoId, { ai_summary: summary });
@@ -438,11 +438,11 @@ class ProcessingQueueService {
     const videoRecord = await database.findById('videos', videoId);
     const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
     const titles = await videoProcessing.generateTitles(videoData);
-    
+
     const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_title_suggestions')) {
-      await database.update('videos', videoId, { 
-        ai_title_suggestions: JSON.stringify(titles) 
+      await database.update('videos', videoId, {
+        ai_title_suggestions: JSON.stringify(titles)
       });
     }
   }
@@ -451,11 +451,11 @@ class ProcessingQueueService {
     const videoRecord = await database.findById('videos', videoId);
     const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
     const thumbnails = await videoProcessing.generateThumbnailConcepts(videoData);
-    
+
     const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_thumbnail_suggestions')) {
-      await database.update('videos', videoId, { 
-        ai_thumbnail_suggestions: JSON.stringify(thumbnails) 
+      await database.update('videos', videoId, {
+        ai_thumbnail_suggestions: JSON.stringify(thumbnails)
       });
     }
   }

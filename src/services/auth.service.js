@@ -18,7 +18,7 @@ class AuthService {
 
       // Map fields to PostgreSQL column names
       let fields = {};
-      
+
       // If userData has Airtable field names (OAuth), map them
       if (userData['Email']) {
         fields = {
@@ -33,7 +33,7 @@ class AuthService {
           privacy_accepted: userData['Privacy Accepted'] || false,
           status: userData['Status'] || 'pending',
           google_id: userData['Google ID'],
-          microsoft_id: userData['Microsoft ID'], 
+          microsoft_id: userData['Microsoft ID'],
           apple_id: userData['Apple ID'],
           registration_method: userData['Registration Method'],
           subscription_tier: userData['subscription_tier'] || 'free',
@@ -113,7 +113,7 @@ class AuthService {
 
       const user = this.formatUserRecord(records[0]);
       logger.info(`User found by Apple ID: ${user.email}`);
-      
+
       return user;
     } catch (error) {
       logger.error('Error finding user by Apple ID:', error);
@@ -136,7 +136,7 @@ class AuthService {
         ORDER BY updated_at DESC 
         LIMIT 1
       `;
-      
+
       const result = await database.query(query);
 
       if (result.rows.length === 0) {
@@ -146,7 +146,7 @@ class AuthService {
 
       const user = this.formatUserRecord(database.formatRecord(result.rows[0]));
       logger.info(`Found most recent Apple user: ${user.email}`);
-      
+
       return user;
     } catch (error) {
       logger.error('Error finding most recent Apple user:', error);
@@ -164,7 +164,7 @@ class AuthService {
       logger.info(`Finding user by ID: ${userId}`);
 
       const record = await database.findById(this.tableName, userId);
-      
+
       if (!record) {
         return null;
       }
@@ -187,7 +187,7 @@ class AuthService {
       logger.info(`Updating user: ${userId}`);
 
       const mappedData = {};
-      
+
       // Map common fields to PostgreSQL column names
       if (updateData.firstName) mappedData.first_name = updateData.firstName;
       if (updateData.lastName) mappedData.last_name = updateData.lastName;
@@ -202,22 +202,22 @@ class AuthService {
       if (updateData.lastLoginAt) mappedData.last_login_at = updateData.lastLoginAt;
       if (updateData.termsAccepted !== undefined) mappedData.terms_accepted = updateData.termsAccepted;
       if (updateData.privacyAccepted !== undefined) mappedData.privacy_accepted = updateData.privacyAccepted;
-      
+
       // Handle welcome email fields
       if (updateData['Welcome Email Sent'] !== undefined) mappedData.welcome_email_sent = updateData['Welcome Email Sent'];
       if (updateData['Welcome Email Sent At']) mappedData.welcome_email_sent_at = updateData['Welcome Email Sent At'];
-      
+
       // Handle OAuth ID fields
       if (updateData['Google ID']) mappedData.google_id = updateData['Google ID'];
       if (updateData['Microsoft ID']) mappedData.microsoft_id = updateData['Microsoft ID'];
       if (updateData['Apple ID']) mappedData.apple_id = updateData['Apple ID'];
-      
+
       // Handle subscription fields
       if (updateData.subscription_tier) mappedData.subscription_tier = updateData.subscription_tier;
       if (updateData.subscription_status) mappedData.subscription_status = updateData.subscription_status;
 
       const record = await database.update(this.tableName, userId, mappedData);
-      
+
       return this.formatUserRecord(record);
     } catch (error) {
       logger.error('Error updating user:', error);
@@ -233,7 +233,7 @@ class AuthService {
   async verifyEmailToken(token) {
     try {
       logger.info('Verifying email token');
-      
+
       const records = await database.findByField(
         this.tableName,
         'email_verification_token',
@@ -246,11 +246,11 @@ class AuthService {
       }
 
       const user = this.formatUserRecord(records[0]);
-      
+
       // Check if token is expired
       const now = new Date();
       const expiryDate = new Date(user.emailVerificationExpires);
-      
+
       if (now > expiryDate) {
         logger.warn('Email verification token expired');
         return null;
@@ -280,7 +280,7 @@ class AuthService {
   async deleteUser(userId) {
     try {
       logger.info(`Deleting user: ${userId}`);
-      
+
       const updatedUser = await this.updateUser(userId, {
         status: 'deleted'
       });
@@ -304,7 +304,7 @@ class AuthService {
 
     // Handle both direct PostgreSQL rows and formatted database service records
     const fields = record.fields || record;
-    
+
     return {
       id: record.id || fields.id,
       email: fields.email,
@@ -342,12 +342,12 @@ class AuthService {
   generateToken(userId, email, userData = null) {
     try {
       logger.info(`Generating JWT token for user: ${userId}`);
-      
-      const payload = { 
+
+      const payload = {
         userId: userId,
         email: email
       };
-      
+
       // Include additional user data if provided (for newer tokens to avoid database lookups)
       if (userData) {
         payload.firstName = userData.firstName;
@@ -357,7 +357,7 @@ class AuthService {
         payload.subscription_tier = userData.subscription_tier;
         payload.subscription_status = userData.subscription_status;
         payload.stripe_customer_id = userData.stripe_customer_id;
-        
+
         logger.info(`JWT payload debug for ${email}:`, {
           firstName: userData.firstName,
           emailVerified: userData.emailVerified,
@@ -366,7 +366,7 @@ class AuthService {
           subscription_status: userData.subscription_status
         });
       }
-      
+
       const token = jwt.sign(
         payload,
         process.env.JWT_SECRET,
@@ -387,7 +387,7 @@ class AuthService {
   async getUserStats() {
     try {
       const allUsers = await database.findAll(this.tableName);
-      
+
       const stats = {
         total: allUsers.length,
         active: 0,
@@ -398,7 +398,7 @@ class AuthService {
 
       allUsers.forEach(record => {
         const user = this.formatUserRecord(record);
-        
+
         if (user.status === 'active') stats.active++;
         if (user.status === 'pending_verification') stats.pending++;
         if (user.emailVerified) stats.verified++;

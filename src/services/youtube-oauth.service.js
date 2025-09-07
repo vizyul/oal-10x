@@ -678,10 +678,10 @@ class YouTubeOAuthService {
   async storeUserChannel(userId, channelData) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      
+
       // Check if channel already exists
       const existingChannels = await database.findByField('user_youtube_channels', 'channel_id', channelData.id);
-      
+
       const channelRecord = {
         user_id: resolvedUserId,
         channel_id: channelData.id,
@@ -705,7 +705,7 @@ class YouTubeOAuthService {
         result = await database.create('user_youtube_channels', channelRecord);
         logger.debug(`Channel created in PostgreSQL for user ${userId}`);
       }
-      
+
       return result;
     } catch (error) {
       logger.error('Error storing user channel:', error);

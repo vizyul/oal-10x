@@ -29,7 +29,7 @@ class SessionService {
       'microsoft_signup': 'microsoft',
       'social': 'email' // fallback for social verification
     };
-    
+
     return methodMap[method] || method || 'email';
   }
 
@@ -45,7 +45,7 @@ class SessionService {
       'Mobile': 'mobile',
       'Tablet': 'tablet'
     };
-    
+
     return deviceMap[deviceType] || 'desktop';
   }
 
@@ -61,7 +61,7 @@ class SessionService {
       'expired': 'expired',
       'logged_out': 'logged_out'
     };
-    
+
     return statusMap[status] || 'active';
   }
 
@@ -73,14 +73,14 @@ class SessionService {
   getDeviceInfo(req) {
     const userAgent = req.get('User-Agent') || '';
     const ip = req.ip || req.connection.remoteAddress || '';
-    
+
     // Simple browser detection
     let browser = 'Unknown';
     if (userAgent.includes('Chrome/')) browser = 'Chrome';
     else if (userAgent.includes('Firefox/')) browser = 'Firefox';
     else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) browser = 'Safari';
     else if (userAgent.includes('Edge/')) browser = 'Edge';
-    
+
     // Simple OS detection
     let os = 'Unknown';
     if (userAgent.includes('Windows')) os = 'Windows';
@@ -88,7 +88,7 @@ class SessionService {
     else if (userAgent.includes('Linux')) os = 'Linux';
     else if (userAgent.includes('iPhone')) os = 'iOS';
     else if (userAgent.includes('Android')) os = 'Android';
-    
+
     // Simple device type detection
     let deviceType = 'Desktop';
     if (userAgent.includes('Mobile') || userAgent.includes('iPhone') || userAgent.includes('Android')) {
@@ -96,7 +96,7 @@ class SessionService {
     } else if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
       deviceType = 'Tablet';
     }
-    
+
     return {
       ip,
       userAgent,
@@ -151,11 +151,11 @@ class SessionService {
 
       const record = await database.create(this.tableName, fields);
       logger.info(`Session created successfully: ${record.id}`);
-      
+
       return this.formatSessionRecord(record);
     } catch (error) {
       logger.error('Error creating session:', error);
-      
+
       // Don't throw error to avoid breaking auth flow
       return null;
     }
@@ -178,14 +178,14 @@ class SessionService {
 
       // Find session by session_id
       const sessions = await database.findByField(this.tableName, 'session_id', sessionId);
-      
+
       if (sessions.length === 0) {
         logger.warn(`Session not found: ${sessionId}`);
         return null;
       }
 
       const sessionRecord = sessions[0];
-      
+
       // Map update data to PostgreSQL fields
       const mappedData = {};
       if (updateData.lastActivityAt) mappedData['last_activity_at'] = updateData.lastActivityAt;
@@ -199,7 +199,7 @@ class SessionService {
       }
 
       const updatedRecord = await database.update(this.tableName, sessionRecord.id, mappedData);
-      
+
       return this.formatSessionRecord(updatedRecord);
     } catch (error) {
       logger.error('Error updating session:', error);
@@ -215,9 +215,9 @@ class SessionService {
   async endSession(sessionId) {
     try {
       logger.info(`Ending session: ${sessionId}`);
-      
+
       const endedAt = new Date().toISOString();
-      
+
       return await this.updateSession(sessionId, {
         endedAt,
         status: 'logged_out',
@@ -248,7 +248,7 @@ class SessionService {
         FROM ${this.tableName} 
         WHERE user_id = $1 AND status = 'active'
       `;
-      
+
       const result = await database.query(query, [userId]);
       const records = result.rows;
 
@@ -261,7 +261,7 @@ class SessionService {
           const startedAt = new Date(record.started_at);
           const expiredAtDate = new Date(expiredAt);
           const duration = Math.round((expiredAtDate - startedAt) / 1000); // seconds
-          
+
           await this.updateSession(sessionId, {
             endedAt: expiredAt,
             status: 'expired',
@@ -309,7 +309,7 @@ class SessionService {
       };
 
       const session = await this.createSession(sessionData);
-      
+
       if (session) {
         // Store session ID in request for potential future use
         req.sessionId = sessionId;
@@ -356,7 +356,7 @@ class SessionService {
         FROM ${this.tableName} 
         WHERE user_id = $1 AND status = 'active'
       `;
-      
+
       const result = await database.query(query, [userId]);
       const records = result.rows;
 
@@ -370,10 +370,10 @@ class SessionService {
           const endedAtDate = new Date(endedAt);
           const durationMs = endedAtDate - startedAt;
           const duration = Math.round(durationMs / 1000); // seconds
-          
+
           // Enhanced logging for duration calculation
           logger.info(`Session ${sessionId} duration calculation: ${durationMs}ms = ${duration} seconds`);
-          
+
           await this.updateSession(sessionId, {
             endedAt: endedAt,
             status: 'logged_out',
@@ -396,7 +396,7 @@ class SessionService {
    */
   async updateActivity(sessionId) {
     if (!sessionId) return;
-    
+
     await this.updateSession(sessionId, {
       lastActivityAt: new Date().toISOString()
     });
@@ -414,7 +414,7 @@ class SessionService {
 
     // Handle both database service formatted records and direct PostgreSQL rows
     const fields = record.fields || record;
-    
+
     return {
       id: record.id || fields.id,
       sessionId: fields.session_id,
@@ -452,10 +452,10 @@ class SessionService {
         SELECT status, login_method, started_at 
         FROM ${this.tableName}
       `;
-      
+
       const result = await database.query(query);
       const allSessions = result.rows;
-      
+
       const stats = {
         total: allSessions.length,
         active: 0,

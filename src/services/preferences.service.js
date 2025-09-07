@@ -21,7 +21,7 @@ class PreferencesService {
       // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         return null;
       }
@@ -32,16 +32,16 @@ class PreferencesService {
         'users_id',
         user.id
       );
-        
+
       if (records.length === 0) {
         return null;
       }
 
       const record = records[0];
-      
+
       // Handle both database service formatted records and direct PostgreSQL rows
       const fields = record.fields || record;
-      
+
       return {
         id: record.id || fields.id,
         preferenceKey: fields.preference_key,
@@ -80,12 +80,12 @@ class PreferencesService {
       // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         logger.error(`User not found when creating preferences: ${userEmail}`);
         throw new Error(`User not found: ${userEmail}`);
       }
-      
+
       logger.info(`Found user for preferences: ${user.id}`);
 
       const preferenceKey = uuidv4();
@@ -106,9 +106,9 @@ class PreferencesService {
       };
 
       logger.info('Attempting to create preferences record with fields:', fields);
-      
+
       const record = await database.create(this.tableName, fields);
-      
+
       logger.info('Successfully created preferences record:', record.id);
 
       if (!record) {
@@ -141,7 +141,7 @@ class PreferencesService {
 
   /**
    * Create preferences with specific updates applied
-   * @param {string} userEmail - User's email address 
+   * @param {string} userEmail - User's email address
    * @param {Object} updates - Updates to apply to defaults
    * @returns {Promise<Object>} Created preferences
    */
@@ -156,7 +156,7 @@ class PreferencesService {
       // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         logger.error(`User not found when creating preferences: ${userEmail}`);
         throw new Error(`User not found: ${userEmail}`);
@@ -196,9 +196,9 @@ class PreferencesService {
       }
 
       logger.info('Creating preferences record with fields:', fields);
-      
+
       const record = await database.create(this.tableName, fields);
-      
+
       if (!record) {
         throw new Error('Failed to create user preferences');
       }
@@ -243,7 +243,7 @@ class PreferencesService {
 
       // First, get the existing record
       const existingPrefs = await this.getUserPreferences(userEmail);
-      
+
       if (!existingPrefs) {
         // Create preferences with the updates applied directly
         logger.info(`No existing preferences found for ${userEmail}, creating with updates`);
@@ -309,12 +309,12 @@ class PreferencesService {
   async getOrCreateUserPreferences(userEmail) {
     try {
       let preferences = await this.getUserPreferences(userEmail);
-      
+
       if (!preferences) {
         logger.info(`No preferences found, creating defaults for: ${userEmail}`);
         preferences = await this.createDefaultPreferences(userEmail);
       }
-      
+
       return preferences;
     } catch (error) {
       logger.error('Error getting or creating user preferences:', error);

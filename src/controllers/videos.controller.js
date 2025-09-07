@@ -69,7 +69,7 @@ class VideosController {
 
       // Build the base query
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-      
+
       // Get total count for pagination
       const countQuery = `SELECT COUNT(*) as total FROM videos ${whereClause}`;
       const countResult = await database.query(countQuery, queryParams);
@@ -105,7 +105,7 @@ class VideosController {
           return this.formatVideoResponse(formattedRecord);
         } catch (formatError) {
           logger.error(`Error formatting video record ${record.id}:`, formatError.message);
-          
+
           // Return basic video object if formatting fails
           return {
             id: record.id,
@@ -137,14 +137,14 @@ class VideosController {
       logger.error('=== ERROR in getVideos method ===');
       logger.error('Error fetching videos:', error);
       logger.error('Error stack:', error.stack);
-      
+
       // More detailed error information
       const errorResponse = {
         success: false,
         message: 'Failed to fetch videos',
         error: error.message || 'Unknown error'
       };
-      
+
       try {
         res.status(500).json(errorResponse);
       } catch (responseError) {
@@ -186,7 +186,7 @@ class VideosController {
       }
 
       const record = await database.findById('videos', id);
-      
+
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -202,7 +202,7 @@ class VideosController {
           message: 'Access denied'
         });
       }
-      
+
       const video = this.formatVideoResponse(record);
 
       res.json({
@@ -236,14 +236,14 @@ class VideosController {
       }
 
       const userId = req.user.id;
-      const { 
-        youtube_url, 
-        video_title, 
-        channel_name, 
+      const {
+        youtube_url,
+        video_title,
+        channel_name,
         description,
         category,
         tags,
-        privacy_setting 
+        privacy_setting
       } = req.body;
 
       logger.info(`Creating new video for user ${userId}`, { youtube_url, video_title });
@@ -286,7 +286,7 @@ class VideosController {
           const videoData = video.fields || video;
           return videoData.users_id === actualUserId;
         });
-        
+
         if (userVideo) {
           return res.status(409).json({
             success: false,
@@ -313,21 +313,21 @@ class VideosController {
         video_title: video_title || metadata?.title || 'Untitled Video',
         channel_name: channel_name || metadata?.channelTitle || 'Unknown Channel',
         channel_handle: metadata?.channelHandle || '', // Now matches corrected column name
-        
+
         // Enhanced fields
         description: description || metadata?.description || '',
         duration: metadata?.duration || 0,
         upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
         thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
-        
+
         // Processing status
         status: 'pending',
-        
+
         // Categorization
         category: category || 'Education',
         privacy_setting: privacy_setting || 'public',
-        
+
         // User association
         users_id: actualUserId, // PostgreSQL uses users_id column name
         created_at: new Date().toISOString()
@@ -347,7 +347,7 @@ class VideosController {
         logger.info('Writing video to PostgreSQL...');
         postgresRecord = await database.create('videos', videoData);
         logger.info(`✅ Video created in PostgreSQL: ID ${postgresRecord.id}`);
-        
+
       } catch (postgresError) {
         logger.error('❌ Failed to create video in PostgreSQL:', postgresError);
         return res.status(500).json({
@@ -451,35 +451,35 @@ class VideosController {
 
       // Prepare update data
       const safeUpdateData = { ...updateData };
-      
+
       // Remove sensitive fields that shouldn't be updated directly
       delete safeUpdateData.id;
       delete safeUpdateData.videoid;
       delete safeUpdateData.youtube_url; // Prevent URL changes
       delete safeUpdateData.users_id; // Prevent ownership changes
       delete safeUpdateData.created_at;
-      
+
       // Handle processing log updates (if applicable)
       if (safeUpdateData.processing_log) {
         try {
           // Merge with existing log if it exists
-          const existingLog = existingData.processing_log 
-            ? (typeof existingData.processing_log === 'string' 
+          const existingLog = existingData.processing_log
+            ? (typeof existingData.processing_log === 'string'
               ? JSON.parse(existingData.processing_log)
               : existingData.processing_log)
             : { steps: [] };
-          
+
           const newLog = typeof safeUpdateData.processing_log === 'string'
             ? JSON.parse(safeUpdateData.processing_log)
             : safeUpdateData.processing_log;
-          
+
           const mergedLog = {
             ...existingLog,
             ...newLog,
             updated: new Date().toISOString(),
             steps: [...(existingLog.steps || []), ...(newLog.steps || [])]
           };
-          
+
           safeUpdateData.processing_log = JSON.stringify(mergedLog);
         } catch (logError) {
           logger.warn('Error merging processing log:', logError.message);
@@ -610,7 +610,7 @@ class VideosController {
       }
 
       const record = await database.findById('videos', id);
-      
+
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -655,7 +655,7 @@ class VideosController {
    * @returns {Object} Formatted video object
    */
   formatVideoResponse(record) {
-    
+
     try {
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordData = record.fields || record;
@@ -778,7 +778,7 @@ class VideosController {
   async triggerVideoProcessing(videoId, metadata) {
     try {
       const processingQueue = require('../services/processing-queue.service');
-      
+
       logger.info(`Video processing triggered for ${videoId}`, {
         hasMetadata: !!metadata,
         hasTranscript: !!metadata?.transcript
@@ -806,7 +806,7 @@ class VideosController {
         { task_type: 'generate_titles', priority: 2 },
         { task_type: 'generate_thumbnails', priority: 1 }
       ];
-      
+
       for (const task of processingTasks) {
         try {
           await processingQueue.addToQueue(videoId, task.task_type, task.priority);
@@ -814,7 +814,7 @@ class VideosController {
           logger.warn(`Could not add ${task.task_type} to queue:`, queueError.message);
         }
       }
-      
+
     } catch (error) {
       logger.error('Error triggering video processing:', error);
     }
@@ -872,7 +872,7 @@ class VideosController {
 
       // Trigger processing
       const videoProcessing = require('../services/video-processing.service');
-      
+
       // Process in background
       videoProcessing.processVideo(id)
         .then(result => {

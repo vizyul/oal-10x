@@ -28,11 +28,11 @@ const subscriptionMiddleware = {
 
         const userTier = req.user.subscription_tier || 'free';
         const userStatus = req.user.subscription_status || 'none';
-        
+
         // Check if user has sufficient tier
         const userTierLevel = TIER_HIERARCHY[userTier] || 0;
         const requiredTierLevel = TIER_HIERARCHY[minTier] || 1;
-        
+
         if (userTierLevel < requiredTierLevel) {
           return handleSubscriptionError(req, res, 'Subscription upgrade required', 403, {
             current_tier: userTier,
@@ -74,7 +74,7 @@ const subscriptionMiddleware = {
 
         const userId = req.user.id;
         const userTier = req.user.subscription_tier || 'free';
-        
+
         // Get tier configuration
         const tierConfig = stripeConfig.getTierConfig(userTier);
         if (!tierConfig) {
@@ -153,13 +153,13 @@ const subscriptionMiddleware = {
 
         const userTier = req.user.subscription_tier || 'free';
         const tierConfig = stripeConfig.getTierConfig(userTier);
-        
+
         if (!tierConfig) {
           return handleSubscriptionError(req, res, 'Invalid subscription tier', 500);
         }
 
         const hasAccess = checkFeatureAccess(tierConfig, feature);
-        
+
         if (!hasAccess) {
           return handleSubscriptionError(req, res, 'Feature requires upgrade', 403, {
             feature,
@@ -220,10 +220,10 @@ const subscriptionMiddleware = {
  * Helper function to handle subscription-related errors
  */
 function handleSubscriptionError(req, res, message, statusCode = 403, details = {}) {
-  logger.warn(`Subscription error: ${message}`, { 
-    userId: req.user?.id, 
+  logger.warn(`Subscription error: ${message}`, {
+    userId: req.user?.id,
     path: req.path,
-    details 
+    details
   });
 
   // For API requests, return JSON
@@ -254,7 +254,7 @@ function handleSubscriptionError(req, res, message, statusCode = 403, details = 
  */
 function getResourceLimit(tierConfig, resource) {
   if (!tierConfig) return 0;
-  
+
   switch (resource) {
   case 'videos':
     return tierConfig.videoLimit || 0;
@@ -272,7 +272,7 @@ function getResourceLimit(tierConfig, resource) {
  */
 function checkFeatureAccess(tierConfig, feature) {
   if (!tierConfig) return false;
-  
+
   switch (feature) {
   case 'analytics':
     return tierConfig.analyticsAccess === true;
@@ -429,7 +429,7 @@ async function incrementUserUsage(userId, resource, increment = 1) {
     let currentUsage = usageResult.rows[0];
 
     const fieldName = getUsageFieldName(resource);
-    
+
     if (currentUsage) {
       // Update existing usage record
       const newValue = (currentUsage[fieldName] || 0) + increment;
@@ -448,7 +448,7 @@ async function incrementUserUsage(userId, resource, increment = 1) {
       `;
       const subscriptionResult = await database.query(subscriptionQuery, [subscription.stripe_subscription_id]);
       const subscriptionRecord = subscriptionResult.rows[0];
-      
+
       if (subscriptionRecord) {
         const insertQuery = `
           INSERT INTO subscription_usage (
@@ -506,7 +506,7 @@ function getUsageFieldName(resource) {
     'ai_summaries': 'ai_summaries_generated',
     'analytics': 'analytics_views'
   };
-  
+
   return fieldMap[resource] || 'videos_processed';
 }
 
