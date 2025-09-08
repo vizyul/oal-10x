@@ -1,52 +1,64 @@
-const airtableService = require('./airtable.service');
+const database = require('./database.service');
 const jwt = require('jsonwebtoken');
 const { logger } = require('../utils');
 
 class AuthService {
   constructor() {
-    this.tableName = 'Users'; // Airtable table name for users
+    this.tableName = 'users'; // PostgreSQL table name for users
   }
 
   /**
-   * Create a new user in Airtable
+   * Create a new user in PostgreSQL
    * @param {Object} userData - User data object
    * @returns {Promise<Object>} Created user object
    */
   async createUser(userData) {
     try {
-      logger.info('Creating new user in Airtable');
-      
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - cannot create user');
-        throw new Error('Database not configured');
-      }
+      logger.info('Creating new user in PostgreSQL');
 
-      // Handle both camelCase format (regular signup) and Airtable field format (OAuth)
+      // Map fields to PostgreSQL column names
       let fields = {};
-      
-      // If userData has Airtable field names, use them directly
+
+      // If userData has Airtable field names (OAuth), map them
       if (userData['Email']) {
-        // OAuth/direct Airtable format - copy all fields
-        fields = { ...userData };
+        fields = {
+          email: userData['Email'],
+          password: userData['Password'],
+          first_name: userData['First Name'],
+          last_name: userData['Last Name'],
+          email_verified: userData['Email Verified'] || false,
+          email_verification_token: userData['Email Verification Token'],
+          email_verification_expires: userData['Email Verification Expires'],
+          terms_accepted: userData['Terms Accepted'] || false,
+          privacy_accepted: userData['Privacy Accepted'] || false,
+          status: userData['Status'] || 'pending',
+          google_id: userData['Google ID'],
+          microsoft_id: userData['Microsoft ID'],
+          apple_id: userData['Apple ID'],
+          registration_method: userData['Registration Method'],
+          subscription_tier: userData['subscription_tier'] || 'free',
+          subscription_status: userData['subscription_status'] || 'none',
+          stripe_customer_id: userData['stripe_customer_id']
+        };
       } else {
         // Regular signup camelCase format
         fields = {
-          'Email': userData.email,
-          'Password': userData.password,
-          'First Name': userData.firstName,
-          'Last Name': userData.lastName,
-          'Email Verified': userData.emailVerified,
-          'Email Verification Token': userData.emailVerificationToken,
-          'Email Verification Expires': userData.emailVerificationExpires,
-          'Terms Accepted': userData.termsAccepted,
-          'Privacy Accepted': userData.privacyAccepted,
-          'Status': userData.status,
-          'Created At': userData.createdAt,
-          'Updated At': userData.updatedAt
+          email: userData.email,
+          password: userData.password,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+          email_verified: userData.emailVerified || false,
+          email_verification_token: userData.emailVerificationToken,
+          email_verification_expires: userData.emailVerificationExpires,
+          terms_accepted: userData.termsAccepted || false,
+          privacy_accepted: userData.privacyAccepted || false,
+          status: userData.status || 'pending',
+          subscription_tier: userData.subscription_tier || 'free',
+          subscription_status: userData.subscription_status || 'none'
         };
       }
 
-      const record = await airtableService.create(this.tableName, fields);
+      const record = await database.create(this.tableName, fields);
 
       return this.formatUserRecord(record);
     } catch (error) {
@@ -62,16 +74,9 @@ class AuthService {
    */
   async findUserByEmail(email) {
     try {
-      // Finding user by email
-      
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - returning null for user lookup');
-        return null;
-      }
-
-      const records = await airtableService.findByField(
+      const records = await database.findByField(
         this.tableName,
-        'Email',
+        'email',
         email
       );
 
@@ -82,15 +87,6 @@ class AuthService {
       return this.formatUserRecord(records[0]);
     } catch (error) {
       logger.error('Error finding user by email:', error.message || error);
-      
-      // If it's a table not found error, log it but don't crash
-      if (error.message && error.message.includes('does not exist')) {
-        logger.error(`Users table does not exist in Airtable base - please create it first`);
-        return null;
-      }
-      
-      // For other Airtable errors, also return null to avoid crashing
-      logger.error('Airtable error - continuing without user lookup');
       return null;
     }
   }
@@ -103,15 +99,10 @@ class AuthService {
   async findUserByAppleId(appleId) {
     try {
       logger.info(`Finding user by Apple ID: ${appleId}`);
-      
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - returning null for Apple ID lookup');
-        return null;
-      }
 
-      const records = await airtableService.findByField(
+      const records = await database.findByField(
         this.tableName,
-        'Apple ID',
+        'apple_id',
         appleId
       );
 
@@ -122,7 +113,7 @@ class AuthService {
 
       const user = this.formatUserRecord(records[0]);
       logger.info(`User found by Apple ID: ${user.email}`);
-      
+
       return user;
     } catch (error) {
       logger.error('Error finding user by Apple ID:', error);
@@ -137,27 +128,25 @@ class AuthService {
   async findMostRecentAppleUser() {
     try {
       logger.info('Finding most recent Apple user as fallback');
-      
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - returning null for Apple user lookup');
-        return null;
-      }
 
-      // Get Apple users sorted by updated timestamp descending (most recent first)
-      const records = await airtableService.base(this.tableName).select({
-        filterByFormula: "AND({Registration Method} = 'apple', {Status} = 'active')",
-        sort: [{ field: 'Updated At', direction: 'desc' }],
-        maxRecords: 1
-      }).firstPage();
+      // Use raw SQL to get Apple users sorted by updated timestamp descending
+      const query = `
+        SELECT * FROM ${this.tableName} 
+        WHERE registration_method = 'apple' AND status = 'active'
+        ORDER BY updated_at DESC 
+        LIMIT 1
+      `;
 
-      if (records.length === 0) {
+      const result = await database.query(query);
+
+      if (result.rows.length === 0) {
         logger.info('No active Apple users found');
         return null;
       }
 
-      const user = this.formatUserRecord(records[0]);
+      const user = this.formatUserRecord(database.formatRecord(result.rows[0]));
       logger.info(`Found most recent Apple user: ${user.email}`);
-      
+
       return user;
     } catch (error) {
       logger.error('Error finding most recent Apple user:', error);
@@ -173,14 +162,9 @@ class AuthService {
   async findUserById(userId) {
     try {
       logger.info(`Finding user by ID: ${userId}`);
-      
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - returning null for user lookup');
-        return null;
-      }
 
-      const record = await airtableService.findById(this.tableName, userId);
-      
+      const record = await database.findById(this.tableName, userId);
+
       if (!record) {
         return null;
       }
@@ -202,46 +186,38 @@ class AuthService {
     try {
       logger.info(`Updating user: ${userId}`);
 
-      if (!airtableService.base) {
-        logger.warn('Airtable not configured - cannot update user');
-        throw new Error('Database not configured');
-      }
-
       const mappedData = {};
-      
-      // Map common fields
-      if (updateData.firstName) mappedData['First Name'] = updateData.firstName;
-      if (updateData.lastName) mappedData['Last Name'] = updateData.lastName;
-      if (updateData.email) mappedData['Email'] = updateData.email;
-      if (updateData.password) mappedData['Password'] = updateData.password;
-      if (updateData.emailVerified !== undefined) mappedData['Email Verified'] = updateData.emailVerified;
-      if (updateData.emailVerificationToken) mappedData['Email Verification Token'] = updateData.emailVerificationToken;
-      if (updateData.emailVerificationExpires) mappedData['Email Verification Expires'] = updateData.emailVerificationExpires;
-      if (updateData.emailVerificationToken === null) mappedData['Email Verification Token'] = null;
-      if (updateData.emailVerificationExpires === null) mappedData['Email Verification Expires'] = null;
-      if (updateData.status) mappedData['Status'] = updateData.status;
-      if (updateData.lastLoginAt) mappedData['Last Login At'] = updateData.lastLoginAt;
-      if (updateData.termsAccepted !== undefined) mappedData['Terms Accepted'] = updateData.termsAccepted;
-      if (updateData.privacyAccepted !== undefined) mappedData['Privacy Accepted'] = updateData.privacyAccepted;
-      
-      // Handle welcome email fields
-      if (updateData['Welcome Email Sent'] !== undefined) mappedData['Welcome Email Sent'] = updateData['Welcome Email Sent'];
-      if (updateData['Welcome Email Sent At']) mappedData['Welcome Email Sent At'] = updateData['Welcome Email Sent At'];
-      
-      // Handle OAuth ID fields
-      if (updateData['Google ID']) mappedData['Google ID'] = updateData['Google ID'];
-      if (updateData['Microsoft ID']) mappedData['Microsoft ID'] = updateData['Microsoft ID'];
-      if (updateData['Apple ID']) mappedData['Apple ID'] = updateData['Apple ID'];
-      
-      // Handle subscription fields
-      if (updateData.subscription_tier) mappedData['subscription_tier'] = updateData.subscription_tier;
-      if (updateData.subscription_status) mappedData['subscription_status'] = updateData.subscription_status;
-      
-      // Always update the "Updated At" timestamp
-      mappedData['Updated At'] = new Date().toISOString();
 
-      const record = await airtableService.update(this.tableName, userId, mappedData);
-      
+      // Map common fields to PostgreSQL column names
+      if (updateData.firstName) mappedData.first_name = updateData.firstName;
+      if (updateData.lastName) mappedData.last_name = updateData.lastName;
+      if (updateData.email) mappedData.email = updateData.email;
+      if (updateData.password) mappedData.password = updateData.password;
+      if (updateData.emailVerified !== undefined) mappedData.email_verified = updateData.emailVerified;
+      if (updateData.emailVerificationToken) mappedData.email_verification_token = updateData.emailVerificationToken;
+      if (updateData.emailVerificationExpires) mappedData.email_verification_expires = updateData.emailVerificationExpires;
+      if (updateData.emailVerificationToken === null) mappedData.email_verification_token = null;
+      if (updateData.emailVerificationExpires === null) mappedData.email_verification_expires = null;
+      if (updateData.status) mappedData.status = updateData.status;
+      if (updateData.lastLoginAt) mappedData.last_login_at = updateData.lastLoginAt;
+      if (updateData.termsAccepted !== undefined) mappedData.terms_accepted = updateData.termsAccepted;
+      if (updateData.privacyAccepted !== undefined) mappedData.privacy_accepted = updateData.privacyAccepted;
+
+      // Handle welcome email fields
+      if (updateData['Welcome Email Sent'] !== undefined) mappedData.welcome_email_sent = updateData['Welcome Email Sent'];
+      if (updateData['Welcome Email Sent At']) mappedData.welcome_email_sent_at = updateData['Welcome Email Sent At'];
+
+      // Handle OAuth ID fields
+      if (updateData['Google ID']) mappedData.google_id = updateData['Google ID'];
+      if (updateData['Microsoft ID']) mappedData.microsoft_id = updateData['Microsoft ID'];
+      if (updateData['Apple ID']) mappedData.apple_id = updateData['Apple ID'];
+
+      // Handle subscription fields
+      if (updateData.subscription_tier) mappedData.subscription_tier = updateData.subscription_tier;
+      if (updateData.subscription_status) mappedData.subscription_status = updateData.subscription_status;
+
+      const record = await database.update(this.tableName, userId, mappedData);
+
       return this.formatUserRecord(record);
     } catch (error) {
       logger.error('Error updating user:', error);
@@ -257,10 +233,10 @@ class AuthService {
   async verifyEmailToken(token) {
     try {
       logger.info('Verifying email token');
-      
-      const records = await airtableService.findByField(
+
+      const records = await database.findByField(
         this.tableName,
-        'Email Verification Token',
+        'email_verification_token',
         token
       );
 
@@ -270,11 +246,11 @@ class AuthService {
       }
 
       const user = this.formatUserRecord(records[0]);
-      
+
       // Check if token is expired
       const now = new Date();
       const expiryDate = new Date(user.emailVerificationExpires);
-      
+
       if (now > expiryDate) {
         logger.warn('Email verification token expired');
         return null;
@@ -304,7 +280,7 @@ class AuthService {
   async deleteUser(userId) {
     try {
       logger.info(`Deleting user: ${userId}`);
-      
+
       const updatedUser = await this.updateUser(userId, {
         status: 'deleted'
       });
@@ -317,43 +293,43 @@ class AuthService {
   }
 
   /**
-   * Format Airtable record to user object
-   * @param {Object} record - Airtable record
+   * Format PostgreSQL record to user object
+   * @param {Object} record - PostgreSQL record
    * @returns {Object} Formatted user object
    */
   formatUserRecord(record) {
-    if (!record || !record.fields) {
+    if (!record) {
       return null;
     }
 
-    const fields = record.fields;
-    
-    
+    // Handle both direct PostgreSQL rows and formatted database service records
+    const fields = record.fields || record;
+
     return {
-      id: record.id,
-      email: fields['Email'],
-      password: fields['Password'],
-      firstName: fields['First Name'],
-      lastName: fields['Last Name'],
-      fullName: `${fields['First Name']} ${fields['Last Name']}`,
-      emailVerified: fields['Email Verified'] || false,
-      emailVerificationToken: fields['Email Verification Token'],
-      emailVerificationExpires: fields['Email Verification Expires'],
-      termsAccepted: fields['Terms Accepted'] || false,
-      privacyAccepted: fields['Privacy Accepted'] || false,
-      status: fields['Status'] || 'pending',
-      createdAt: fields['Created At'],
-      updatedAt: fields['Updated At'],
-      lastLoginAt: fields['Last Login At'],
-      googleId: fields['Google ID'],
-      appleId: fields['Apple ID'],
-      microsoftId: fields['Microsoft ID'],
-      registrationMethod: fields['Registration Method'],
-      welcomeEmailSent: fields['Welcome Email Sent'] || false,
-      welcomeEmailSentAt: fields['Welcome Email Sent At'],
-      subscription_tier: fields['subscription_tier'] || 'free',
-      subscription_status: fields['subscription_status'] || 'none',
-      stripe_customer_id: fields['stripe_customer_id']
+      id: record.id || fields.id,
+      email: fields.email,
+      password: fields.password,
+      firstName: fields.first_name,
+      lastName: fields.last_name,
+      fullName: `${fields.first_name || ''} ${fields.last_name || ''}`.trim(),
+      emailVerified: fields.email_verified || false,
+      emailVerificationToken: fields.email_verification_token,
+      emailVerificationExpires: fields.email_verification_expires,
+      termsAccepted: fields.terms_accepted || false,
+      privacyAccepted: fields.privacy_accepted || false,
+      status: fields.status || 'pending',
+      createdAt: fields.created_at,
+      updatedAt: fields.updated_at,
+      lastLoginAt: fields.last_login_at,
+      googleId: fields.google_id,
+      appleId: fields.apple_id,
+      microsoftId: fields.microsoft_id,
+      registrationMethod: fields.registration_method,
+      welcomeEmailSent: fields.welcome_email_sent || false,
+      welcomeEmailSentAt: fields.welcome_email_sent_at,
+      subscription_tier: fields.subscription_tier || 'free',
+      subscription_status: fields.subscription_status || 'none',
+      stripe_customer_id: fields.stripe_customer_id
     };
   }
 
@@ -366,12 +342,12 @@ class AuthService {
   generateToken(userId, email, userData = null) {
     try {
       logger.info(`Generating JWT token for user: ${userId}`);
-      
-      const payload = { 
+
+      const payload = {
         userId: userId,
         email: email
       };
-      
+
       // Include additional user data if provided (for newer tokens to avoid database lookups)
       if (userData) {
         payload.firstName = userData.firstName;
@@ -381,7 +357,7 @@ class AuthService {
         payload.subscription_tier = userData.subscription_tier;
         payload.subscription_status = userData.subscription_status;
         payload.stripe_customer_id = userData.stripe_customer_id;
-        
+
         logger.info(`JWT payload debug for ${email}:`, {
           firstName: userData.firstName,
           emailVerified: userData.emailVerified,
@@ -390,7 +366,7 @@ class AuthService {
           subscription_status: userData.subscription_status
         });
       }
-      
+
       const token = jwt.sign(
         payload,
         process.env.JWT_SECRET,
@@ -410,8 +386,8 @@ class AuthService {
    */
   async getUserStats() {
     try {
-      const allUsers = await airtableService.findAll(this.tableName);
-      
+      const allUsers = await database.findAll(this.tableName);
+
       const stats = {
         total: allUsers.length,
         active: 0,
@@ -422,7 +398,7 @@ class AuthService {
 
       allUsers.forEach(record => {
         const user = this.formatUserRecord(record);
-        
+
         if (user.status === 'active') stats.active++;
         if (user.status === 'pending_verification') stats.pending++;
         if (user.emailVerified) stats.verified++;

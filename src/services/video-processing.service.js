@@ -1,5 +1,5 @@
 const { logger } = require('../utils');
-const airtable = require('./airtable.service');
+const database = require('./database.service');
 const youtubeMetadata = require('./youtube-metadata.service');
 
 class VideoProcessingService {
@@ -18,13 +18,13 @@ class VideoProcessingService {
       logger.info(`Starting video processing for ${videoId}`);
 
       // Get video record
-      const videoRecord = await airtable.findById('Videos', videoId);
+      const videoRecord = await database.findById('videos', videoId);
       if (!videoRecord) {
         throw new Error('Video not found');
       }
 
-      const videoData = videoRecord.fields;
-      
+      const videoData = videoRecord.fields || videoRecord;
+
       // Update status to processing
       await this.updateProcessingStatus(videoId, 'processing', {
         started: new Date().toISOString(),
@@ -36,11 +36,11 @@ class VideoProcessingService {
       // Step 1: Extract metadata (if not already done)
       if (!videoData.duration || !videoData.description) {
         logger.info(`Extracting metadata for video ${videoId}`);
-        
+
         try {
           const metadata = await this.extractMetadata(videoData.youtube_url);
           await this.updateVideoWithMetadata(videoId, metadata);
-          
+
           processingSteps.push({
             step: 'metadata_extraction',
             status: 'completed',
@@ -73,7 +73,7 @@ class VideoProcessingService {
       await this.generateAllContent(videoId, processingSteps);
 
       // Final status update
-      const finalStatus = processingSteps.every(step => 
+      const finalStatus = processingSteps.every(step =>
         step.status === 'completed' || step.status === 'skipped'
       ) ? 'completed' : 'error';
 
@@ -92,7 +92,7 @@ class VideoProcessingService {
 
     } catch (error) {
       logger.error('Video processing failed:', error);
-      
+
       await this.updateProcessingStatus(videoId, 'error', {
         error: error.message,
         failed: new Date().toISOString(),
@@ -116,9 +116,9 @@ class VideoProcessingService {
   async extractMetadata(videoUrl) {
     try {
       logger.info(`Extracting metadata from ${videoUrl}`);
-      
+
       const metadata = await youtubeMetadata.extractVideoMetadata(videoUrl);
-      
+
       logger.info('Metadata extraction completed', {
         title: metadata.title,
         duration: metadata.duration,
@@ -139,32 +139,32 @@ class VideoProcessingService {
    */
   async updateVideoWithMetadata(videoId, metadata) {
     try {
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       const updateData = {};
 
       // Map metadata to table fields
       if (currentFields.includes('description') && metadata.description) {
         updateData.description = this.cleanText(metadata.description, 1000);
       }
-      
+
       if (currentFields.includes('duration') && metadata.duration) {
         updateData.duration = metadata.duration;
       }
-      
+
       if (currentFields.includes('upload_date') && metadata.publishedAt) {
         updateData.upload_date = metadata.publishedAt;
       }
-      
+
       if (currentFields.includes('thumbnail_url') && metadata.thumbnails?.[0]?.url) {
         updateData.thumbnail_url = metadata.thumbnails[0].url;
       }
-      
+
       if (currentFields.includes('tags') && metadata.tags?.length > 0) {
-        updateData.tags = metadata.tags.slice(0, 10); // Limit to 10 tags
+        updateData.tags = JSON.stringify(metadata.tags.slice(0, 10)); // Store as JSON string
       }
 
       if (Object.keys(updateData).length > 0) {
-        await airtable.update('Videos', videoId, updateData);
+        await database.update('videos', videoId, updateData);
         logger.info(`Video metadata updated for ${videoId}`, Object.keys(updateData));
       }
 
@@ -180,18 +180,18 @@ class VideoProcessingService {
    * @param {Array} processingSteps - Processing steps array to update
    */
   async generateAllContent(videoId, processingSteps) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const videoData = videoRecord.fields;
-    const currentFields = await this.getCurrentTableFields('Videos');
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord.fields || videoRecord;
+    const currentFields = await this.getCurrentTableFields('videos');
 
     // Generate AI Summary
     if (currentFields.includes('ai_summary') && !videoData.ai_summary) {
       try {
         logger.info(`Generating AI summary for video ${videoId}`);
         const summary = await this.generateSummary(videoData);
-        
+
         if (summary) {
-          await airtable.update('Videos', videoId, { ai_summary: summary });
+          await database.update('videos', videoId, { ai_summary: summary });
           processingSteps.push({
             step: 'ai_summary',
             status: 'completed',
@@ -215,7 +215,7 @@ class VideoProcessingService {
         step: 'ai_summary',
         status: 'skipped',
         timestamp: new Date().toISOString(),
-        reason: currentFields.includes('ai_summary') 
+        reason: currentFields.includes('ai_summary')
           ? 'Summary already exists'
           : 'Field not available'
       });
@@ -226,10 +226,10 @@ class VideoProcessingService {
       try {
         logger.info(`Generating title suggestions for video ${videoId}`);
         const titles = await this.generateTitles(videoData);
-        
+
         if (titles && titles.length > 0) {
-          await airtable.update('Videos', videoId, { 
-            ai_title_suggestions: JSON.stringify(titles) 
+          await database.update('videos', videoId, {
+            ai_title_suggestions: JSON.stringify(titles)
           });
           processingSteps.push({
             step: 'ai_titles',
@@ -265,10 +265,10 @@ class VideoProcessingService {
       try {
         logger.info(`Generating thumbnail concepts for video ${videoId}`);
         const thumbnails = await this.generateThumbnailConcepts(videoData);
-        
+
         if (thumbnails && thumbnails.length > 0) {
-          await airtable.update('Videos', videoId, { 
-            ai_thumbnail_suggestions: JSON.stringify(thumbnails) 
+          await database.update('videos', videoId, {
+            ai_thumbnail_suggestions: JSON.stringify(thumbnails)
           });
           processingSteps.push({
             step: 'ai_thumbnails',
@@ -309,17 +309,17 @@ class VideoProcessingService {
     try {
       // This is a placeholder for AI integration
       // In a real implementation, you would call an AI service like OpenAI, Gemini, etc.
-      
+
       const title = videoData.video_title || 'Untitled Video';
       const description = videoData.description || '';
       const channelName = videoData.channel_name || 'Unknown Channel';
-      
+
       // Mock AI summary generation
       const summary = this.generateMockSummary(title, description, channelName);
-      
+
       logger.info('AI summary generated', { length: summary.length });
       return summary;
-      
+
     } catch (error) {
       logger.error('Summary generation failed:', error);
       throw error;
@@ -336,10 +336,10 @@ class VideoProcessingService {
       // Mock title generation
       const baseTitle = videoData.video_title || 'Untitled Video';
       const titles = this.generateMockTitles(baseTitle);
-      
+
       logger.info('Title suggestions generated', { count: titles.length });
       return titles;
-      
+
     } catch (error) {
       logger.error('Title generation failed:', error);
       throw error;
@@ -356,10 +356,10 @@ class VideoProcessingService {
       // Mock thumbnail concept generation
       const title = videoData.video_title || 'Untitled Video';
       const concepts = this.generateMockThumbnailConcepts(title);
-      
+
       logger.info('Thumbnail concepts generated', { count: concepts.length });
       return concepts;
-      
+
     } catch (error) {
       logger.error('Thumbnail generation failed:', error);
       throw error;
@@ -374,7 +374,7 @@ class VideoProcessingService {
    */
   async updateProcessingStatus(videoId, status, logData = {}) {
     try {
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       const updateData = {};
 
       if (currentFields.includes('status')) {
@@ -383,9 +383,10 @@ class VideoProcessingService {
 
       if (currentFields.includes('processing_log')) {
         // Get existing log
-        const videoRecord = await airtable.findById('Videos', videoId);
-        const existingLog = videoRecord.fields.processing_log 
-          ? JSON.parse(videoRecord.fields.processing_log)
+        const videoRecord = await database.findById('videos', videoId);
+        const recordData = videoRecord.fields || videoRecord;
+        const existingLog = recordData.processing_log
+          ? JSON.parse(recordData.processing_log)
           : { steps: [] };
 
         // Merge logs
@@ -407,7 +408,7 @@ class VideoProcessingService {
       }
 
       if (Object.keys(updateData).length > 0) {
-        await airtable.update('Videos', videoId, updateData);
+        await database.update('videos', videoId, updateData);
         logger.info(`Processing status updated for ${videoId}`, { status, hasLog: !!updateData.processing_log });
       }
 
@@ -425,7 +426,7 @@ class VideoProcessingService {
   async handleProcessingError(videoId, error) {
     try {
       logger.error(`Processing error for video ${videoId}:`, error);
-      
+
       await this.updateProcessingStatus(videoId, 'error', {
         error: error.message,
         errorStack: error.stack,
@@ -451,7 +452,7 @@ class VideoProcessingService {
     try {
       // In a full implementation, this would query the Processing Queue table
       // For now, return mock data
-      
+
       return {
         totalItems: this.processingQueue.size,
         processing: this.isProcessing,
@@ -481,7 +482,7 @@ class VideoProcessingService {
    */
   async getCurrentTableFields(tableName) {
     try {
-      const schema = await airtable.getTableSchema(tableName);
+      const schema = await database.getTableSchema(tableName);
       return schema.fields || [];
     } catch (error) {
       logger.warn(`Could not get table schema for ${tableName}:`, error.message);
@@ -497,16 +498,16 @@ class VideoProcessingService {
    */
   cleanText(text, maxLength = 1000) {
     if (!text) return '';
-    
+
     let cleaned = text
       .replace(/\n{3,}/g, '\n\n')
       .replace(/\s+/g, ' ')
       .trim();
-    
+
     if (cleaned.length > maxLength) {
       cleaned = cleaned.substring(0, maxLength).trim() + '...';
     }
-    
+
     return cleaned;
   }
 
@@ -515,17 +516,17 @@ class VideoProcessingService {
   generateMockSummary(title, description, channelName) {
     const summaries = [
       `This video from ${channelName} titled "${title}" provides valuable insights and information. ${description.substring(0, 200)}...`,
-      `In this engaging content, the creator discusses key topics related to the subject matter. The video offers practical advice and actionable insights for viewers.`,
-      `This educational video explores important concepts and provides viewers with comprehensive information on the topic. The content is well-structured and informative.`
+      'In this engaging content, the creator discusses key topics related to the subject matter. The video offers practical advice and actionable insights for viewers.',
+      'This educational video explores important concepts and provides viewers with comprehensive information on the topic. The content is well-structured and informative.'
     ];
-    
+
     return summaries[Math.floor(Math.random() * summaries.length)];
   }
 
   generateMockTitles(baseTitle) {
     const prefixes = ['How to', 'Top 5', 'Ultimate Guide to', 'Everything About', 'Mastering'];
     const suffixes = ['- Complete Tutorial', '(2024 Update)', '| Step by Step', '- Pro Tips', 'Explained'];
-    
+
     return [
       baseTitle, // Keep original
       `${prefixes[0]} ${baseTitle.toLowerCase()}`,

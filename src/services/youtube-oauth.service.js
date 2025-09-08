@@ -58,7 +58,7 @@ class YouTubeOAuthService {
 
       // Generate state parameter to prevent CSRF attacks
       const state = crypto.randomBytes(32).toString('hex');
-      
+
       // Store state temporarily (in production, use Redis or similar)
       // For now, we'll encode userId in the state for simplicity
       const stateData = {
@@ -108,7 +108,7 @@ class YouTubeOAuthService {
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
       const { userId, timestamp } = stateData;
       logger.info('Decoded OAuth state', { userId, userIdType: typeof userId, timestamp });
-      
+
       // Validate user ID
       if (!userId || userId === 'undefined' || userId === 'null') {
         throw new Error('Invalid user ID in OAuth state');
@@ -121,7 +121,7 @@ class YouTubeOAuthService {
 
       // Exchange code for tokens
       const { tokens } = await this.oauth2Client.getToken(code);
-      
+
       if (!tokens.access_token) {
         throw new Error('Failed to obtain access token');
       }
@@ -150,16 +150,16 @@ class YouTubeOAuthService {
 
       // Encrypt and store tokens
       const encryptedTokens = await this.encryptTokens(tokens);
-      
+
       // Store tokens in Airtable
       await this.storeUserTokens(userId, encryptedTokens, channelData, tokens.scope);
 
       // Store channel information
       await this.storeUserChannel(userId, channelData);
 
-      logger.info(`OAuth completed for user ${userId}`, { 
+      logger.info(`OAuth completed for user ${userId}`, {
         channelId: channel.id,
-        channelName: channel.snippet.title 
+        channelName: channel.snippet.title
       });
 
       return {
@@ -191,7 +191,7 @@ class YouTubeOAuthService {
       }
 
       const decryptedTokens = await this.decryptTokens(tokenRecord);
-      
+
       if (!decryptedTokens.refresh_token) {
         throw new Error('No refresh token available');
       }
@@ -203,7 +203,7 @@ class YouTubeOAuthService {
       const refreshResult = await this.oauth2Client.refreshAccessToken();
       // Only log OAuth refresh in debug mode
       logger.debug('OAuth tokens refreshed successfully');
-      
+
       // Google OAuth client returns credentials, not tokens
       let tokens;
       if (refreshResult?.tokens) {
@@ -213,7 +213,7 @@ class YouTubeOAuthService {
       } else {
         throw new Error('No tokens or credentials returned from refresh');
       }
-      
+
       // Update stored tokens
       const updatedTokens = {
         ...decryptedTokens,
@@ -227,17 +227,17 @@ class YouTubeOAuthService {
 
       // tokens.expiry_date might be undefined, use a fallback
       const expiresAt = tokens.expiry_date || (Date.now() + 3600000); // Default to 1 hour from now
-      
+
       return {
         success: true,
         expiresAt: expiresAt
       };
     } catch (error) {
       logger.error('Error refreshing access token:', error.message || 'Unknown error');
-      logger.error('Full refresh error details:', { 
-        name: error.name, 
-        message: error.message, 
-        stack: error.stack?.substring(0, 500) 
+      logger.error('Full refresh error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack?.substring(0, 500)
       });
       throw new Error(`Token refresh failed: ${error.message || 'Unknown error'}`);
     }
@@ -364,7 +364,7 @@ class YouTubeOAuthService {
         .map(item => {
           const videoId = item.snippet.resourceId.videoId;
           const videoDetails = videoDetailsResponse.data.items?.find(v => v.id === videoId);
-          
+
           return {
             id: videoId,
             videoId: videoId,
@@ -398,14 +398,14 @@ class YouTubeOAuthService {
    */
   parseDuration(duration) {
     if (!duration) return null;
-    
+
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (!match) return null;
-    
+
     const hours = parseInt(match[1] || 0);
     const minutes = parseInt(match[2] || 0);
     const seconds = parseInt(match[3] || 0);
-    
+
     return hours * 3600 + minutes * 60 + seconds;
   }
 
@@ -431,7 +431,7 @@ class YouTubeOAuthService {
       }
 
       const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads;
-      
+
       if (!uploadsPlaylistId) {
         return { videos: [], nextPageToken: null, totalResults: 0 };
       }
@@ -457,7 +457,7 @@ class YouTubeOAuthService {
       }
 
       const decryptedTokens = await this.decryptTokens(tokenRecord);
-      
+
       if (decryptedTokens.access_token) {
         // Revoke token with Google
         await this.oauth2Client.revokeToken(decryptedTokens.access_token);
@@ -517,13 +517,13 @@ class YouTubeOAuthService {
     if (!userId || userId === 'undefined' || userId === 'null') {
       throw new Error('Invalid user ID: user ID is null or undefined');
     }
-    
+
     // If it's already an integer, return it
     const parsed = parseInt(userId);
     if (!isNaN(parsed) && userId.toString() === parsed.toString()) {
       return parsed;
     }
-    
+
     // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
     if (userId.toString().startsWith('rec')) {
       const records = await database.findByField('users', 'airtable_id', userId);
@@ -532,7 +532,7 @@ class YouTubeOAuthService {
       }
       return records[0].fields.id;
     }
-    
+
     throw new Error(`Invalid user ID format: ${userId}`);
   }
 
@@ -629,13 +629,13 @@ class YouTubeOAuthService {
   async storeUserTokens(userId, encryptedTokens, channelData, scope) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      
+
       // Check if tokens already exist for this user and channel
       const existingRecords = await database.query(
         'SELECT id FROM youtube_oauth_tokens WHERE user_id = $1 AND channel_id = $2',
         [resolvedUserId, channelData.id]
       );
-      
+
       const tokenData = {
         user_id: resolvedUserId,
         encrypted_tokens: encryptedTokens.encrypted_tokens,
@@ -647,8 +647,7 @@ class YouTubeOAuthService {
         channel_name: channelData.name,
         channel_thumbnail: channelData.thumbnail,
         is_active: true,
-        last_refreshed: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        last_refreshed: new Date().toISOString()
       };
 
       let result;
@@ -663,7 +662,7 @@ class YouTubeOAuthService {
         result = await database.create('youtube_oauth_tokens', tokenData);
         logger.debug(`Tokens created in PostgreSQL for user ${userId}`);
       }
-      
+
       return result;
     } catch (error) {
       logger.error('Error storing user tokens:', error);
@@ -679,6 +678,10 @@ class YouTubeOAuthService {
   async storeUserChannel(userId, channelData) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
+
+      // Check if channel already exists
+      const existingChannels = await database.findByField('user_youtube_channels', 'channel_id', channelData.id);
+
       const channelRecord = {
         user_id: resolvedUserId,
         channel_id: channelData.id,
@@ -691,9 +694,18 @@ class YouTubeOAuthService {
         last_synced: new Date().toISOString()
       };
 
-      // Store in PostgreSQL
-      const result = await database.create('user_youtube_channels', channelRecord);
-      logger.debug(`Channel stored in PostgreSQL for user ${userId}`);
+      let result;
+      if (existingChannels && existingChannels.length > 0) {
+        // Update existing channel
+        const existingChannel = existingChannels[0];
+        result = await database.update('user_youtube_channels', existingChannel.id, channelRecord);
+        logger.debug(`Channel updated in PostgreSQL for user ${userId}`);
+      } else {
+        // Create new channel
+        result = await database.create('user_youtube_channels', channelRecord);
+        logger.debug(`Channel created in PostgreSQL for user ${userId}`);
+      }
+
       return result;
     } catch (error) {
       logger.error('Error storing user channel:', error);
@@ -711,7 +723,7 @@ class YouTubeOAuthService {
       // Get tokens from PostgreSQL
       const resolvedUserId = await this.resolveUserId(userId);
       const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
-      
+
       if (!records || records.length === 0) {
         return null;
       }
@@ -737,7 +749,7 @@ class YouTubeOAuthService {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
       const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
-      
+
       if (!records || records.length === 0) {
         throw new Error('No tokens found to update');
       }
@@ -765,7 +777,7 @@ class YouTubeOAuthService {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
       const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
-      
+
       for (const record of records) {
         await database.update('youtube_oauth_tokens', record.id, {
           is_active: false

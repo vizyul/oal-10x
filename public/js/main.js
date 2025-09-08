@@ -82,15 +82,15 @@ class ThemeManager {
           return;
         } else if (response.status === 503) {
           // Service unavailable (table not set up) - show user-friendly message
-          console.info('Theme preferences will be saved locally only. User preferences system is being set up.');
+          // Theme preferences will be saved locally only
           return;
         } else {
-          console.warn('Failed to save theme preference to server:', response.status);
+          // Failed to save theme preference to server
         }
       }
     } catch (error) {
       // Silently handle network errors to prevent unhandled rejections
-      console.debug('Theme preference save skipped:', error.message);
+      // Theme preference save skipped
     }
   }
 }

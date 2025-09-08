@@ -47,11 +47,11 @@ class YouTubeMetadataService {
 
       // Get video details from YouTube API
       const videoData = await this.getVideoDetails(videoId);
-      
+
       // Get additional metadata
       const thumbnails = await this.getVideoThumbnails(videoId);
       const stats = await this.getVideoStats(videoId);
-      
+
       // Try to get captions/transcript if available
       let transcript = null;
       try {
@@ -164,7 +164,7 @@ class YouTubeMetadataService {
       }
 
       const video = response.data.items[0];
-      
+
       // Check if video is available
       if (video.status.privacyStatus === 'private') {
         throw new Error('Video is private');
@@ -299,7 +299,7 @@ class YouTubeMetadataService {
       }
 
       // Find English captions or the first available
-      let captionTrack = captionsResponse.data.items.find(item => 
+      let captionTrack = captionsResponse.data.items.find(item =>
         item.snippet.language === 'en' || item.snippet.language === 'en-US'
       );
 
@@ -539,7 +539,7 @@ class YouTubeMetadataService {
 
     // Remove excessive whitespace and newlines
     let cleaned = description.replace(/\n{3,}/g, '\n\n').trim();
-    
+
     // Truncate if too long
     if (cleaned.length > maxLength) {
       cleaned = cleaned.substring(0, maxLength).trim() + '...';
@@ -584,7 +584,7 @@ class YouTubeMetadataService {
   getHighResThumbnailUrl(videoId, thumbnails) {
     // Priority order: maxresdefault > sddefault > hqdefault > mqdefault > default
     const priorities = ['maxresdefault', 'standard', 'high', 'medium', 'default'];
-    
+
     // First try to get from YouTube API thumbnails
     if (thumbnails) {
       for (const priority of priorities) {

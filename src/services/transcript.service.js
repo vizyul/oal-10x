@@ -5,7 +5,7 @@ class TranscriptService {
   constructor() {
     this.apiUrl = 'https://io.ourailegacy.com/api/appify/get-transcript';
     this.apiKey = process.env.TRANSCRIPT_API_KEY;
-    
+
     if (!this.apiKey) {
       logger.warn('TRANSCRIPT_API_KEY not configured. Transcript extraction will be disabled.');
     } else {
@@ -22,7 +22,7 @@ class TranscriptService {
     if (!Array.isArray(captions)) {
       return '';
     }
-    
+
     return captions.map(caption => {
       if (typeof caption === 'object' && caption.start !== undefined && caption.end !== undefined && caption.text) {
         const start = parseFloat(caption.start).toFixed(1);
@@ -65,7 +65,7 @@ class TranscriptService {
       if (response.status === 200 && response.data) {
         // Handle different response formats
         let transcript = null;
-        
+
         if (typeof response.data === 'string') {
           transcript = response.data;
         } else if (typeof response.data === 'object') {
@@ -96,12 +96,12 @@ class TranscriptService {
             }).join(' ');
           } else {
             logger.warn(`Unexpected object structure for video ${videoId}:`, Object.keys(response.data));
-            logger.debug(`Object structure details logged in debug mode`);
-            
+            logger.debug('Object structure details logged in debug mode');
+
             // Try to extract any string values from the object
             const stringValues = Object.values(response.data)
               .filter(val => typeof val === 'string' && val.length > 10);
-            
+
             if (stringValues.length > 0) {
               transcript = stringValues.join(' ');
             } else {
@@ -123,20 +123,20 @@ class TranscriptService {
               transcript = JSON.stringify(transcript);
             }
           }
-          
+
           // Ensure it's a string and has content
           if (typeof transcript === 'string' && transcript.trim().length > 0) {
             const trimmedTranscript = transcript.trim();
-            
-            // Airtable has a field size limit, so truncate very large transcripts
-            const AIRTABLE_MAX_FIELD_SIZE = 100000; // 100KB limit for Airtable
+
+            // PostgreSQL can handle large text fields, but still apply reasonable limits
+            const POSTGRES_MAX_FIELD_SIZE = 500000; // 500KB reasonable limit for PostgreSQL
             let finalTranscript = trimmedTranscript;
-            
-            if (trimmedTranscript.length > AIRTABLE_MAX_FIELD_SIZE) {
-              finalTranscript = trimmedTranscript.substring(0, AIRTABLE_MAX_FIELD_SIZE - 100) + '\n\n[Transcript truncated due to size limit]';
+
+            if (trimmedTranscript.length > POSTGRES_MAX_FIELD_SIZE) {
+              finalTranscript = trimmedTranscript.substring(0, POSTGRES_MAX_FIELD_SIZE - 100) + '\n\n[Transcript truncated due to size limit]';
               logger.warn(`Transcript truncated for ${videoId}: ${trimmedTranscript.length} -> ${finalTranscript.length} characters`);
             }
-            
+
             return finalTranscript;
           } else {
             return null;
@@ -166,50 +166,29 @@ class TranscriptService {
   }
 
   /**
-   * Update video transcript in both Airtable and PostgreSQL
-   * @param {string} videoRecordId - Airtable record ID
+   * Update video transcript in PostgreSQL
+   * @param {string} videoRecordId - Video record ID
    * @param {string} transcript - Video transcript text
    * @returns {Promise<Object>} Update results
    */
   async updateVideoTranscript(videoRecordId, transcript) {
     try {
-      const airtable = require('./airtable.service');
       const databaseService = require('./database.service');
 
       const results = {
-        airtable: { success: false, error: null },
-        postgres: { success: false, error: null }
+        success: false,
+        error: null
       };
 
-      // Update Airtable
+      // Update PostgreSQL
       try {
-        await airtable.update('Videos', videoRecordId, {
+        await databaseService.update('videos', videoRecordId, {
           transcript_text: transcript
         });
-        results.airtable.success = true;
-        logger.debug(`Updated Airtable transcript for record ${videoRecordId}`);
-      } catch (airtableError) {
-        results.airtable.error = airtableError.message;
-        logger.error(`Failed to update Airtable transcript for ${videoRecordId}:`, airtableError.message);
-      }
-
-      // Update PostgreSQL - find record by Airtable ID
-      try {
-        const postgresRecords = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-        
-        if (postgresRecords.length > 0) {
-          const postgresRecord = postgresRecords[0];
-          await databaseService.update('videos', postgresRecord.fields.id, {
-            transcript_text: transcript
-          });
-          results.postgres.success = true;
-          logger.debug(`Updated PostgreSQL transcript for record ${postgresRecord.fields.id}`);
-        } else {
-          results.postgres.error = 'PostgreSQL record not found';
-          logger.warn(`PostgreSQL record not found for Airtable ID ${videoRecordId}`);
-        }
+        results.success = true;
+        logger.debug(`Updated PostgreSQL transcript for record ${videoRecordId}`);
       } catch (postgresError) {
-        results.postgres.error = postgresError.message;
+        results.error = postgresError.message;
         logger.error(`Failed to update PostgreSQL transcript for ${videoRecordId}:`, postgresError.message);
       }
 
@@ -222,10 +201,10 @@ class TranscriptService {
   }
 
   /**
-   * Process transcript for a video (extract and update databases)
+   * Process transcript for a video (extract and update database)
    * @param {string} videoId - YouTube video ID
    * @param {string} videoUrl - Full YouTube video URL
-   * @param {string} videoRecordId - Airtable record ID
+   * @param {string} videoRecordId - Video record ID
    * @returns {Promise<Object>} Processing results
    */
   async processVideoTranscript(videoId, videoUrl, videoRecordId, userId = null) {
@@ -233,19 +212,19 @@ class TranscriptService {
       logger.info(`Processing transcript for video ${videoId} (record: ${videoRecordId})`);
 
       const processingStatusService = require('./processing-status.service');
-      
+
       // Update transcript status to processing
       processingStatusService.updateTranscriptStatus(videoId, 'pending');
 
       // Extract transcript
       const transcript = await this.extractTranscript(videoId, videoUrl);
-      
+
       if (!transcript) {
         logger.info(`No transcript available for video ${videoId}`);
-        
+
         // Update transcript status to failed
         processingStatusService.updateTranscriptStatus(videoId, 'failed', 'No transcript available');
-        
+
         return {
           success: false,
           reason: 'No transcript available',
@@ -254,11 +233,11 @@ class TranscriptService {
         };
       }
 
-      // Update databases
+      // Update database
       const updateResults = await this.updateVideoTranscript(videoRecordId, transcript);
 
-      const success = updateResults.airtable.success || updateResults.postgres.success;
-      
+      const success = updateResults.success;
+
       // Update transcript status
       if (success) {
         processingStatusService.updateTranscriptStatus(videoId, 'completed');
@@ -268,30 +247,29 @@ class TranscriptService {
 
       logger.info(`Transcript processing completed for video ${videoId}`, {
         transcriptLength: transcript.length,
-        airtableSuccess: updateResults.airtable.success,
-        postgresSuccess: updateResults.postgres.success
+        success: updateResults.success
       });
 
       // Trigger content generation if transcript was successfully stored
       if (success) {
         try {
           const contentGenerationService = require('./content-generation.service');
-          
+
           // Start content generation asynchronously - don't wait for completion
           logger.info(`Starting content generation for video ${videoId}`);
-          
+
           contentGenerationService.generateAllContentForVideo(videoRecordId, videoId, transcript, {
             contentTypes: ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'], // Generate all content types
             userId: userId
           }).then(result => {
-            logger.info(`✅ Content generation completed for video ${videoId}`, {
+            logger.info(`Content generation completed for video ${videoId}`, {
               successful: result.summary?.successful || 0,
               failed: result.summary?.failed || 0
             });
           }).catch(error => {
-            logger.warn(`⚠️  Content generation failed for video ${videoId}:`, error.message);
+            logger.warn(`Content generation failed for video ${videoId}:`, error.message);
           });
-          
+
         } catch (contentError) {
           logger.warn(`Error initiating content generation for video ${videoId}:`, contentError.message);
         }
@@ -323,18 +301,18 @@ class TranscriptService {
   async batchProcessTranscripts(videos, options = {}) {
     try {
       const { concurrent = 3, delayBetween = 1000 } = options;
-      
+
       logger.info(`Starting batch transcript processing for ${videos.length} videos`);
-      
+
       const results = [];
-      
+
       // Process in batches to avoid overwhelming the API
       for (let i = 0; i < videos.length; i += concurrent) {
         const batch = videos.slice(i, i + concurrent);
-        
+
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(videos.length / concurrent)}`);
-        
-        const batchPromises = batch.map(video => 
+
+        const batchPromises = batch.map(video =>
           this.processVideoTranscript(video.videoId, video.videoUrl, video.recordId)
             .catch(error => ({
               success: false,
@@ -342,21 +320,21 @@ class TranscriptService {
               videoId: video.videoId
             }))
         );
-        
+
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
-        
+
         // Add delay between batches to be respectful to the API
         if (i + concurrent < videos.length && delayBetween > 0) {
           await new Promise(resolve => setTimeout(resolve, delayBetween));
         }
       }
-      
+
       const successful = results.filter(r => r.success).length;
       logger.info(`Batch processing completed: ${successful}/${videos.length} successful`);
-      
+
       return results;
-      
+
     } catch (error) {
       logger.error('Error in batch transcript processing:', error);
       throw error;

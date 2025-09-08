@@ -1,5 +1,4 @@
 const aiChatService = require('./ai-chat.service');
-const airtable = require('./airtable.service');
 const databaseService = require('./database.service');
 const { logger } = require('../utils');
 
@@ -19,45 +18,22 @@ class ContentGenerationService {
     try {
       logger.debug('Getting active prompts', { provider, contentType });
 
-      // Try PostgreSQL first, fallback to Airtable
-      let prompts = [];
-      
-      try {
-        // Build filter conditions for PostgreSQL
-        const conditions = { is_active: true };
-        if (provider) conditions.ai_provider = provider.toLowerCase();
-        if (contentType) conditions.content_type = contentType.toLowerCase();
+      // Build filter conditions for PostgreSQL
+      const conditions = { is_active: true };
+      if (provider) conditions.ai_provider = provider.toLowerCase();
+      if (contentType) conditions.content_type = contentType.toLowerCase();
 
-        const records = await databaseService.findByMultipleFields('ai_prompts', conditions);
-        prompts = records.map(record => record.fields);
-        
-        logger.debug(`Found ${prompts.length} prompts in PostgreSQL`);
-      } catch (pgError) {
-        logger.warn('PostgreSQL query failed, trying Airtable:', pgError.message);
-        
-        // Fallback to Airtable
-        try {
-          let filterFormula = 'is_active = TRUE()';
-          if (provider) {
-            filterFormula += ` AND ai_provider = "${provider.toLowerCase()}"`;
-          }
-          if (contentType) {
-            filterFormula += ` AND content_type = "${contentType.toLowerCase()}"`;
-          }
+      const records = await databaseService.findByMultipleFields('ai_prompts', conditions);
 
-          const airtableRecords = await airtable.findAll('AI_Prompts', {
-            filterByFormula: filterFormula,
-            maxRecords: 100
-          });
-          
-          prompts = airtableRecords.map(record => record.fields);
-          logger.debug(`Found ${prompts.length} prompts in Airtable`);
-        } catch (airtableError) {
-          logger.error('Both PostgreSQL and Airtable failed:', airtableError.message);
-          throw new Error('Could not retrieve prompts from either database');
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const prompts = records.map(record => {
+        if (record.fields) {
+          return record.fields;
         }
-      }
+        return record;
+      });
 
+      logger.debug(`Found ${prompts.length} prompts in PostgreSQL`);
       return prompts;
     } catch (error) {
       logger.error('Error getting active prompts:', error);
@@ -75,12 +51,12 @@ class ContentGenerationService {
     try {
       const prompts = await this.getActivePrompts(provider);
       const prompt = prompts.find(p => p.name === name && p.ai_provider === provider.toLowerCase());
-      
+
       if (!prompt) {
         logger.warn(`Prompt not found: ${name} for provider ${provider}`);
         return null;
       }
-      
+
       return prompt;
     } catch (error) {
       logger.error(`Error getting prompt ${name} for ${provider}:`, error);
@@ -99,7 +75,7 @@ class ContentGenerationService {
     try {
 
       const processingStatusService = require('./processing-status.service');
-      
+
       // Update content status to pending
       processingStatusService.updateContentStatus(videoId, prompt.content_type, 'pending');
 
@@ -163,7 +139,7 @@ class ContentGenerationService {
 
   /**
    * Generate all content types for a video
-   * @param {string} videoRecordId - Airtable video record ID
+   * @param {string} videoRecordId - PostgreSQL video record ID (or Airtable ID for backward compatibility)
    * @param {string} videoId - YouTube video ID
    * @param {string} transcript - Video transcript
    * @param {Object} options - Generation options
@@ -186,7 +162,7 @@ class ContentGenerationService {
           const PreferencesService = require('./preferences.service');
           const preferencesService = new PreferencesService();
           let userPreferences = null;
-          
+
           if (userEmail) {
             userPreferences = await preferencesService.getUserPreferences(userEmail);
           } else if (userId) {
@@ -197,7 +173,7 @@ class ContentGenerationService {
               userPreferences = await preferencesService.getUserPreferences(user.email);
             }
           }
-          
+
           if (userPreferences && userPreferences.aiProvider) {
             selectedProvider = userPreferences.aiProvider;
             logger.info(`Using user preferred AI provider: ${selectedProvider} for video ${videoId}`);
@@ -206,7 +182,7 @@ class ContentGenerationService {
           logger.warn(`Could not load user preferences for AI provider: ${prefError.message}`);
         }
       }
-      
+
       // Fallback to gemini if no provider determined
       selectedProvider = selectedProvider || 'gemini';
 
@@ -218,8 +194,8 @@ class ContentGenerationService {
 
       // Get active prompts for the provider and content types
       const allPrompts = await this.getActivePrompts(selectedProvider);
-      
-      const relevantPrompts = allPrompts.filter(prompt => 
+
+      const relevantPrompts = allPrompts.filter(prompt =>
         contentTypes.includes(prompt.content_type)
       );
 
@@ -247,7 +223,7 @@ class ContentGenerationService {
       // Process prompts in batches
       for (let i = 0; i < relevantPrompts.length; i += concurrent) {
         const batch = relevantPrompts.slice(i, i + concurrent);
-        
+
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(relevantPrompts.length / concurrent)}`);
 
         const batchPromises = batch.map(prompt =>
@@ -300,7 +276,7 @@ class ContentGenerationService {
 
   /**
    * Update video record with generated content
-   * @param {string} videoRecordId - Airtable video record ID
+   * @param {string} videoRecordId - PostgreSQL video record ID (or Airtable ID for backward compatibility)
    * @param {Object} generatedContent - Generated content by type
    * @returns {Promise<void>}
    */
@@ -319,7 +295,7 @@ class ContentGenerationService {
         chapters_text: ['chapters_text', 'chapters_url']
       };
 
-      // Prepare updates for Airtable
+      // Prepare updates for database
       Object.entries(generatedContent).forEach(([contentType, data]) => {
         const [textField, urlField] = fieldMappings[contentType] || [];
         if (textField && data.content) {
@@ -333,27 +309,31 @@ class ContentGenerationService {
         return;
       }
 
-      // Update Airtable
+      // First try to find the record by direct ID (assuming it's a PostgreSQL ID)
       try {
-        await airtable.update('Videos', videoRecordId, updates);
-        logger.debug(`Updated Airtable record ${videoRecordId} with generated content`);
-      } catch (airtableError) {
-        logger.error(`Failed to update Airtable record ${videoRecordId}:`, airtableError.message);
-      }
+        await databaseService.update('videos', videoRecordId, updates);
+        logger.debug(`Updated video record ${videoRecordId} with generated content`);
+        return;
+      } catch (directUpdateError) {
+        logger.debug(`Direct update failed, trying to find by airtable_id: ${directUpdateError.message}`);
 
-      // Update PostgreSQL
-      try {
-        const postgresRecords = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-        
-        if (postgresRecords.length > 0) {
-          const postgresRecord = postgresRecords[0];
-          await databaseService.update('videos', postgresRecord.fields.id, updates);
-          logger.debug(`Updated PostgreSQL record ${postgresRecord.fields.id} with generated content`);
-        } else {
-          logger.warn(`PostgreSQL record not found for Airtable ID ${videoRecordId}`);
+        // If direct update fails, try to find by airtable_id (backward compatibility)
+        try {
+          const records = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
+
+          if (records.length > 0) {
+            const record = records[0];
+            const recordId = record.fields ? record.fields.id : record.id;
+            await databaseService.update('videos', recordId, updates);
+            logger.debug(`Updated video record ${recordId} (found by airtable_id ${videoRecordId}) with generated content`);
+          } else {
+            logger.error(`Video record not found with ID or airtable_id: ${videoRecordId}`);
+            throw new Error(`Video record not found: ${videoRecordId}`);
+          }
+        } catch (fallbackError) {
+          logger.error(`Failed to update video record ${videoRecordId}:`, fallbackError.message);
+          throw fallbackError;
         }
-      } catch (postgresError) {
-        logger.error(`Failed to update PostgreSQL record for ${videoRecordId}:`, postgresError.message);
       }
 
     } catch (error) {
@@ -383,44 +363,28 @@ class ContentGenerationService {
         userId
       });
 
-      // Build filter for videos that have transcripts but missing content
-      let filterConditions = {
-        transcript_text: { operator: 'IS NOT NULL' }
-      };
+      // Get videos from PostgreSQL database
+      const allVideos = await databaseService.findAll('videos', { maxRecords: maxVideos * 2 });
 
-      if (userId) {
-        filterConditions.user_id = userId;
-      }
+      // Filter videos that have transcripts but missing content
+      let videos = allVideos.filter(record => {
+        const fields = record.fields || record;
 
-      // Get videos from database
-      let videos = [];
-      try {
-        // Try PostgreSQL first
-        const allVideos = await databaseService.findAll('videos', { maxRecords: maxVideos * 2 });
-        videos = allVideos.filter(record => {
-          const fields = record.fields;
-          return fields.transcript_text && 
-                 fields.transcript_text.trim().length > 100 && // Minimum transcript length
-                 (!fields.blog_text || !fields.discussion_guide_text); // Missing some content
-        }).slice(0, maxVideos);
-        
-        logger.info(`Found ${videos.length} videos in PostgreSQL needing content generation`);
-      } catch (pgError) {
-        logger.warn('PostgreSQL query failed, trying Airtable:', pgError.message);
-        
-        // Fallback to Airtable
-        const airtableVideos = await airtable.findAll('Videos', {
-          filterByFormula: 'AND(NOT(transcript_text = ""), LEN(transcript_text) > 100)',
-          maxRecords: maxVideos
-        });
-        
-        videos = airtableVideos.filter(record => {
-          const fields = record.fields;
-          return !fields.blog_text || !fields.discussion_guide_text;
-        });
-        
-        logger.info(`Found ${videos.length} videos in Airtable needing content generation`);
-      }
+        // Skip if no transcript or transcript too short
+        if (!fields.transcript_text || fields.transcript_text.trim().length < 100) {
+          return false;
+        }
+
+        // Include if userId filter is specified and matches
+        if (userId && fields.user_id !== userId) {
+          return false;
+        }
+
+        // Include if missing some content (e.g., blog_text or discussion_guide_text)
+        return !fields.summary_text || !fields.discussion_guide_text || !fields.quiz_text;
+      }).slice(0, maxVideos);
+
+      logger.info(`Found ${videos.length} videos needing content generation`);
 
       if (videos.length === 0) {
         logger.info('No videos found that need content generation');
@@ -431,24 +395,28 @@ class ContentGenerationService {
       const results = [];
       for (const video of videos) {
         try {
-          const fields = video.fields;
+          const fields = video.fields || video;
+          const videoRecordId = video.id || fields.id;
+          const videoId = fields.videoid || fields.video_id || fields.youtube_video_id;
+
           const result = await this.generateAllContentForVideo(
-            video.id || fields.airtable_id,
-            fields.videoid || fields.video_id,
+            videoRecordId,
+            videoId,
             fields.transcript_text,
-            { provider, contentTypes }
+            { provider, contentTypes, userId }
           );
-          
+
           results.push(result);
-          
+
           // Add delay between videos
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
+
         } catch (error) {
-          logger.error(`Failed to process video ${video.id}:`, error.message);
+          const fields = video.fields || video;
+          logger.error(`Failed to process video ${video.id || fields.id}:`, error.message);
           results.push({
-            videoId: fields.videoid || fields.video_id,
-            videoRecordId: video.id,
+            videoId: fields.videoid || fields.video_id || fields.youtube_video_id,
+            videoRecordId: video.id || fields.id,
             success: false,
             error: error.message
           });
@@ -489,16 +457,23 @@ class ContentGenerationService {
         promptsByContentType[prompt.content_type]++;
       });
 
-      // Get video statistics (try PostgreSQL first)
+      // Get video statistics from PostgreSQL
       let videoStats = { total: 0, withTranscripts: 0, withGeneratedContent: 0 };
-      
+
       try {
         const allVideos = await databaseService.findAll('videos', { maxRecords: 1000 });
         videoStats.total = allVideos.length;
-        videoStats.withTranscripts = allVideos.filter(v => v.fields.transcript_text?.length > 100).length;
-        videoStats.withGeneratedContent = allVideos.filter(v => 
-          v.fields.blog_text || v.fields.discussion_guide_text || v.fields.quiz_text
-        ).length;
+
+        // Handle both database service formatted records and direct PostgreSQL rows
+        videoStats.withTranscripts = allVideos.filter(v => {
+          const fields = v.fields || v;
+          return fields.transcript_text?.length > 100;
+        }).length;
+
+        videoStats.withGeneratedContent = allVideos.filter(v => {
+          const fields = v.fields || v;
+          return fields.summary_text || fields.discussion_guide_text || fields.quiz_text;
+        }).length;
       } catch (error) {
         logger.warn('Could not get video statistics from database:', error.message);
       }

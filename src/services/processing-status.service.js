@@ -11,7 +11,7 @@ class ProcessingStatusService extends EventEmitter {
   /**
    * Initialize processing status for a video
    * @param {string} videoId - YouTube video ID
-   * @param {string} videoRecordId - Airtable record ID
+   * @param {string} videoRecordId - PostgreSQL video record ID
    * @param {string} videoTitle - Video title
    * @param {string} userId - User ID
    * @param {Array} contentTypes - Content types to generate
@@ -30,7 +30,7 @@ class ProcessingStatusService extends EventEmitter {
 
     // Initialize content type statuses
     const allContentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
-    
+
     allContentTypes.forEach(contentType => {
       status.content[contentType] = {
         status: contentTypes.includes(contentType) ? 'pending' : 'skipped',
@@ -40,7 +40,7 @@ class ProcessingStatusService extends EventEmitter {
     });
 
     this.processingVideos.set(videoId, status);
-    
+
     logger.info(`Initialized processing status for video ${videoId}`, {
       userId,
       contentTypes: contentTypes.length,
@@ -49,7 +49,7 @@ class ProcessingStatusService extends EventEmitter {
 
     // Emit status update to connected clients
     this.emitStatusUpdate(userId, videoId, status);
-    
+
     return status;
   }
 
@@ -72,7 +72,7 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.lastUpdate = new Date().toISOString();
 
     this.processingVideos.set(videoId, videoStatus);
-    
+
     logger.debug(`Updated transcript status for ${videoId}: ${status}`);
     this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
   }
@@ -90,7 +90,7 @@ class ProcessingStatusService extends EventEmitter {
       logger.warn(`No video status found for ${videoId} when updating ${contentType}`);
       return;
     }
-    
+
     if (!videoStatus.content[contentType]) {
       logger.warn(`Content type ${contentType} not found for video ${videoId}. Available: ${Object.keys(videoStatus.content)}`);
       return;
@@ -102,10 +102,10 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.lastUpdate = new Date().toISOString();
 
     this.processingVideos.set(videoId, videoStatus);
-    
+
     logger.debug(`Updated ${contentType} status for ${videoId}: ${status}`);
     this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
-    
+
     // Check if all processing is complete
     this.checkVideoCompletion(videoId);
   }
@@ -120,15 +120,15 @@ class ProcessingStatusService extends EventEmitter {
 
     // Check if transcript and all active content types are completed
     const transcriptComplete = videoStatus.transcript.status === 'completed';
-    const contentComplete = Object.values(videoStatus.content).every(content => 
+    const contentComplete = Object.values(videoStatus.content).every(content =>
       content.status === 'completed' || content.status === 'skipped' || content.status === 'failed'
     );
 
     if (transcriptComplete && contentComplete) {
       logger.info(`All processing completed for video ${videoId}`);
       this.completeVideoProcessing(videoId);
-      
-      // Update video status in database and deduct from subscription
+
+      // Update video status in PostgreSQL database and deduct from subscription
       this.finalizeVideoProcessing(videoStatus);
     }
   }
@@ -146,7 +146,7 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.lastUpdate = new Date().toISOString();
 
     this.processingVideos.set(videoId, videoStatus);
-    
+
     logger.info(`Completed processing for video ${videoId}`);
     this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
 
@@ -173,7 +173,7 @@ class ProcessingStatusService extends EventEmitter {
    */
   getUserProcessingVideos(userId) {
     const userVideos = [];
-    
+
     this.processingVideos.forEach((status) => {
       if (status.userId === userId) {
         // Include videos that have any pending processing or were recently started
@@ -181,11 +181,11 @@ class ProcessingStatusService extends EventEmitter {
           status.transcript.status === 'pending' ||
           Object.values(status.content).some(content => content.status === 'pending')
         );
-        
+
         // Also include recently completed videos (within last 5 minutes) for user feedback
-        const isRecentlyProcessed = status.completed && 
+        const isRecentlyProcessed = status.completed &&
           (Date.now() - new Date(status.completedAt).getTime()) < 5 * 60 * 1000;
-        
+
         if (hasActiveProcessing || isRecentlyProcessed) {
           userVideos.push(status);
         }
@@ -204,9 +204,9 @@ class ProcessingStatusService extends EventEmitter {
     if (!this.userSessions.has(userId)) {
       this.userSessions.set(userId, new Set());
     }
-    
+
     this.userSessions.get(userId).add(session);
-    
+
     // Send current status for all user's processing videos
     const processingVideos = this.getUserProcessingVideos(userId);
     processingVideos.forEach(status => {
@@ -232,7 +232,7 @@ class ProcessingStatusService extends EventEmitter {
         this.userSessions.delete(userId);
       }
     }
-    
+
     logger.debug(`Unregistered session for user ${userId}`);
   }
 
@@ -261,7 +261,7 @@ class ProcessingStatusService extends EventEmitter {
           logger.debug(`Emitted status update for ${videoId} to user ${userId}`);
         }
       } catch (error) {
-        logger.warn(`Failed to emit status update to session:`, error.message);
+        logger.warn('Failed to emit status update to session:', error.message);
         this.unregisterUserSession(userId, session);
       }
     });
@@ -332,38 +332,26 @@ class ProcessingStatusService extends EventEmitter {
   async finalizeVideoProcessing(videoStatus) {
     try {
       const { videoId, videoRecordId, userId } = videoStatus;
-      
-      // Update video status to completed in both databases
-      const airtable = require('./airtable.service');
+
+      // Update video status to completed in PostgreSQL database
       const databaseService = require('./database.service');
-      
+
       const updates = {
         status: 'completed',
         processed_at: new Date().toISOString()
       };
-      
-      // Update Airtable
-      try {
-        await airtable.update('Videos', videoRecordId, updates);
-        logger.info(`Video ${videoId} marked as completed in Airtable`);
-      } catch (error) {
-        logger.error(`Failed to update video status in Airtable: ${error.message}`);
-      }
-      
+
       // Update PostgreSQL
       try {
-        const postgresRecords = await databaseService.findByField('videos', 'airtable_id', videoRecordId);
-        if (postgresRecords.length > 0) {
-          await databaseService.update('videos', postgresRecords[0].fields.id, updates);
-          logger.info(`Video ${videoId} marked as completed in PostgreSQL`);
-        }
+        await databaseService.update('videos', videoRecordId, updates);
+        logger.info(`Video ${videoId} marked as completed in PostgreSQL`);
       } catch (error) {
         logger.error(`Failed to update video status in PostgreSQL: ${error.message}`);
       }
-      
+
       // Deduct from subscription usage
       await this.deductSubscriptionUsage(userId);
-      
+
     } catch (error) {
       logger.error(`Error finalizing video processing: ${error.message}`);
     }
@@ -376,11 +364,11 @@ class ProcessingStatusService extends EventEmitter {
   async deductSubscriptionUsage(userId) {
     try {
       const subscriptionService = require('./subscription.service');
-      
-      // Increment video usage count  
+
+      // Increment video usage count
       await subscriptionService.incrementUsage(userId, 'videos', 1);
       logger.info(`Incremented video usage count for user ${userId} (+1 video)`);
-      
+
     } catch (error) {
       logger.error(`Failed to increment subscription usage: ${error.message}`);
     }

@@ -1,303 +1,76 @@
 {{#> layouts/main}}
-{{#*inline "head-block"}}
-<style>
-.legal-content {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-  line-height: 1.6;
-  color: #333;
-}
 
-.legal-content h1 {
-  color: #2c3e50;
-  border-bottom: 3px solid #3498db;
-  padding-bottom: 0.5rem;
-  margin-bottom: 2rem;
-}
-
-.legal-content h2 {
-  color: #34495e;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  border-left: 4px solid #3498db;
-  padding-left: 1rem;
-}
-
-.legal-content h3 {
-  color: #34495e;
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.legal-content p {
-  margin-bottom: 1rem;
-  text-align: justify;
-}
-
-.legal-content ul, .legal-content ol {
-  margin-bottom: 1rem;
-  padding-left: 2rem;
-}
-
-.legal-content li {
-  margin-bottom: 0.5rem;
-}
-
-.contact-info {
-  background-color: #f8f9fa;
-  padding: 1.5rem;
-  border-left: 4px solid #3498db;
-  margin: 2rem 0;
-}
-
-.last-updated {
-  background-color: #e9ecef;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 2rem;
-  text-align: center;
-  font-style: italic;
-}
-
-@media (max-width: 768px) {
-  .legal-content {
-    padding: 0 0.5rem;
-  }
+<div style="max-width: 1000px; margin: 50px auto; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
   
-  .legal-content h2 {
-    font-size: 1.3rem;
-  }
-}
-</style>
-{{/inline}}
-
-<div class="legal-content">
-  <div class="last-updated">
-    <strong>Last Updated:</strong> {{formatDate "2025-01-06"}}
+  <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; margin-bottom: 30px; text-align: center;">
+    <strong>Last Updated:</strong> September 6, 2025
   </div>
 
-  <h1>Privacy Policy</h1>
+  <h1 style="color: #141414; margin-bottom: 30px; border-bottom: 3px solid #27200e; padding-bottom: 15px;">Privacy Policy</h1>
 
-  <p>At Our AI Legacy, operated by Bezaleel Consulting Group ("we," "us," or "our"), we are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, store, and protect your information when you use our AI-powered video content generation platform.</p>
+  <p style="margin-bottom: 20px; line-height: 1.6;">At Our AI Legacy, operated by Bezaleel Consulting Group ("we," "us," or "our"), we are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, store, and protect your information when you use our AI-powered video content generation platform.</p>
 
-  <h2>1. Information We Collect</h2>
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">1. Information We Collect</h2>
 
-  <h3>1.1 Account Information</h3>
-  <ul>
-    <li><strong>Registration Data:</strong> Name, email address, password (encrypted)</li>
-    <li><strong>Profile Information:</strong> User preferences, theme settings, subscription status</li>
-    <li><strong>Authentication Data:</strong> JWT tokens, session information</li>
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">1.1 Account Information</h3>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Registration Data:</strong> Name, email address, password (encrypted)</li>
+    <li style="margin-bottom: 8px;"><strong>Profile Information:</strong> User preferences, theme settings, subscription status</li>
+    <li style="margin-bottom: 8px;"><strong>Authentication Data:</strong> JWT tokens, session information</li>
   </ul>
 
-  <h3>1.2 Social Login Information</h3>
-  <p>When you sign in using social providers (Google, Microsoft, Apple), we collect:</p>
-  <ul>
-    <li>Email address for account verification</li>
-    <li>Basic profile information (name, profile picture)</li>
-    <li>OAuth tokens for secure authentication</li>
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">1.2 Social Login Information</h3>
+  <p style="margin-bottom: 15px; line-height: 1.6;">When you sign in using social providers (Google, Microsoft, Apple), we collect:</p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">Email address for account verification</li>
+    <li style="margin-bottom: 8px;">Basic profile information (name, profile picture)</li>
+    <li style="margin-bottom: 8px;">OAuth tokens for secure authentication</li>
   </ul>
 
-  <h3>1.3 YouTube Integration Data</h3>
-  <p>When you connect your YouTube account, we collect and store:</p>
-  <ul>
-    <li><strong>Channel Information:</strong> Channel name, description, subscriber count, video count</li>
-    <li><strong>Video Metadata:</strong> Video titles, descriptions, thumbnails, upload dates, duration</li>
-    <li><strong>Playlist Data:</strong> Playlist names, video lists, organization structure</li>
-    <li><strong>OAuth Tokens:</strong> Encrypted access and refresh tokens for ongoing YouTube access</li>
-    <li><strong>Video Transcripts:</strong> Extracted from your YouTube videos for content generation</li>
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">1.3 YouTube Integration Data</h3>
+  <p style="margin-bottom: 15px; line-height: 1.6;">When you connect your YouTube account, we collect and store:</p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Channel Information:</strong> Channel name, description, subscriber count, video count</li>
+    <li style="margin-bottom: 8px;"><strong>Video Metadata:</strong> Video titles, descriptions, thumbnails, upload dates, duration</li>
+    <li style="margin-bottom: 8px;"><strong>Playlist Data:</strong> Playlist names, video lists, organization structure</li>
+    <li style="margin-bottom: 8px;"><strong>OAuth Tokens:</strong> Encrypted access and refresh tokens for ongoing YouTube access</li>
+    <li style="margin-bottom: 8px;"><strong>Video Transcripts:</strong> Extracted from your YouTube videos for content generation</li>
   </ul>
   
-  <div class="contact-info">
-    <p><strong>Detailed YouTube Data Usage:</strong> For comprehensive information about our YouTube API integration, data access patterns, security measures, and compliance practices, please refer to our detailed <a href="/YoutubeDataUsage.html" target="_blank">YouTube Data Usage Documentation</a>.</p>
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
+    <p><strong>Detailed YouTube Data Usage:</strong> For comprehensive information about our YouTube API integration, data access patterns, security measures, and compliance practices, please refer to our detailed <a href="/youtube-data-usage" style="color: #27200e;">YouTube Data Usage Documentation</a>.</p>
   </div>
 
-  <h3>1.4 Generated Content</h3>
-  <ul>
-    <li>AI-generated blog posts, discussion guides, podcast scripts</li>
-    <li>Quiz questions and study materials</li>
-    <li>Quote extractions and summaries</li>
-    <li>Chapter breakdowns and content organization</li>
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">2. How We Use Your Information</h2>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">2.1 Core Services</h3>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Content Generation:</strong> Process your video transcripts to create educational materials</li>
+    <li style="margin-bottom: 8px;"><strong>Account Management:</strong> Maintain your user account and preferences</li>
+    <li style="margin-bottom: 8px;"><strong>YouTube Integration:</strong> Import and organize your video content</li>
+    <li style="margin-bottom: 8px;"><strong>AI Processing:</strong> Generate blogs, quizzes, discussion guides using Google Gemini and OpenAI</li>
   </ul>
 
-  <h3>1.5 Payment Information</h3>
-  <ul>
-    <li><strong>Stripe Integration:</strong> We process payments through Stripe. We store subscription status and billing information but do not store credit card details</li>
-    <li><strong>Subscription Data:</strong> Plan type, billing cycle, payment history</li>
-  </ul>
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">3. Data Storage and Security</h2>
 
-  <h3>1.6 Technical Information</h3>
-  <ul>
-    <li>IP addresses, browser information, device type</li>
-    <li>Usage logs, error reports, performance metrics</li>
-    <li>Cookies and session data</li>
-  </ul>
+  <p style="margin-bottom: 20px; line-height: 1.6;">We maintain comprehensive security measures including encryption at rest, access controls, and regular security audits. All YouTube data is securely stored in our PostgreSQL database.</p>
 
-  <h2>2. How We Use Your Information</h2>
-
-  <h3>2.1 Core Services</h3>
-  <ul>
-    <li><strong>Content Generation:</strong> Process your video transcripts to create educational materials</li>
-    <li><strong>Account Management:</strong> Maintain your user account and preferences</li>
-    <li><strong>YouTube Integration:</strong> Import and organize your video content</li>
-    <li><strong>AI Processing:</strong> Generate blogs, quizzes, discussion guides using Google Gemini and OpenAI</li>
-  </ul>
-
-  <h3>2.2 Platform Operations</h3>
-  <ul>
-    <li>Authenticate users and maintain secure sessions</li>
-    <li>Process payments and manage subscriptions</li>
-    <li>Provide customer support and technical assistance</li>
-    <li>Monitor system performance and security</li>
-  </ul>
-
-  <h3>2.3 Communications</h3>
-  <ul>
-    <li>Send service-related notifications and updates</li>
-    <li>Respond to support requests and inquiries</li>
-    <li>Provide subscription and billing information</li>
-  </ul>
-
-  <h2>3. Data Storage and Security</h2>
-
-  <h3>3.1 Dual Database Architecture</h3>
-  <p>We maintain a dual database system:</p>
-  <ul>
-    <li><strong>Airtable:</strong> Primary data storage for user interface and content management</li>
-    <li><strong>PostgreSQL:</strong> Secondary storage on Railway for advanced features and redundancy</li>
-  </ul>
-
-  <h3>3.2 Security Measures</h3>
-  <ul>
-    <li><strong>Encryption:</strong> OAuth tokens and sensitive data are encrypted using AES-256-CBC</li>
-    <li><strong>Password Security:</strong> Passwords are hashed using bcryptjs with salt rounds</li>
-    <li><strong>Secure Transmission:</strong> All data transmitted via HTTPS/TLS</li>
-    <li><strong>Access Controls:</strong> JWT-based authentication with expiring tokens</li>
-    <li><strong>Rate Limiting:</strong> Protection against abuse and automated attacks</li>
-  </ul>
-
-  <h3>3.3 Data Retention</h3>
-  <ul>
-    <li><strong>Account Data:</strong> Retained while your account is active</li>
-    <li><strong>Video Content:</strong> Stored until you remove it or close your account</li>
-    <li><strong>Generated Content:</strong> Retained for the duration of your subscription</li>
-    <li><strong>Logs:</strong> Technical logs retained for 90 days for security and debugging</li>
-  </ul>
-
-  <h2>4. Third-Party Services</h2>
-
-  <h3>4.1 AI Providers</h3>
-  <ul>
-    <li><strong>Google Gemini:</strong> AI content generation (privacy policy: https://policies.google.com/privacy)</li>
-    <li><strong>OpenAI:</strong> AI content generation (privacy policy: https://openai.com/privacy/)</li>
-  </ul>
-
-  <h3>4.2 Authentication Providers</h3>
-  <ul>
-    <li><strong>Google OAuth:</strong> Social login and YouTube integration</li>
-    <li><strong>Microsoft OAuth:</strong> Social login integration</li>
-    <li><strong>Apple OAuth:</strong> Social login integration</li>
-  </ul>
-
-  <h3>4.3 Infrastructure and Services</h3>
-  <ul>
-    <li><strong>Railway:</strong> Cloud hosting and PostgreSQL database</li>
-    <li><strong>Airtable:</strong> Primary database and content management</li>
-    <li><strong>Stripe:</strong> Payment processing and subscription management</li>
-    <li><strong>YouTube Data API:</strong> Video metadata and transcript extraction</li>
-  </ul>
-
-  <h2>5. Data Sharing and Disclosure</h2>
-
-  <h3>5.1 We Do Not Sell Your Data</h3>
-  <p>We do not sell, rent, or trade your personal information to third parties for marketing purposes.</p>
-
-  <h3>5.2 Service Providers</h3>
-  <p>We may share information with trusted service providers who assist in:</p>
-  <ul>
-    <li>Cloud hosting and database management</li>
-    <li>Payment processing</li>
-    <li>AI content generation</li>
-    <li>Technical support and maintenance</li>
-  </ul>
-
-  <h3>5.3 Legal Requirements</h3>
-  <p>We may disclose information when required by law or to:</p>
-  <ul>
-    <li>Comply with legal obligations</li>
-    <li>Protect our rights and property</li>
-    <li>Ensure user safety and platform security</li>
-  </ul>
-
-  <h2>6. Your Rights and Choices</h2>
-
-  <h3>6.1 Account Access</h3>
-  <ul>
-    <li><strong>View:</strong> Access your account information and generated content</li>
-    <li><strong>Update:</strong> Modify your profile and preferences</li>
-    <li><strong>Export:</strong> Request a copy of your data</li>
-    <li><strong>Delete:</strong> Close your account and request data deletion</li>
-  </ul>
-
-  <h3>6.2 YouTube Integration</h3>
-  <ul>
-    <li><strong>Disconnect:</strong> Remove YouTube access at any time</li>
-    <li><strong>Control:</strong> Choose which videos to import and process</li>
-    <li><strong>Revoke:</strong> Cancel OAuth permissions through your Google account</li>
-  </ul>
-
-  <h3>6.3 Communication Preferences</h3>
-  <ul>
-    <li>Manage notification settings in your account</li>
-    <li>Opt out of non-essential communications</li>
-    <li>Contact support for assistance</li>
-  </ul>
-
-  <h2>7. Cookies and Tracking</h2>
-
-  <h3>7.1 Essential Cookies</h3>
-  <ul>
-    <li>Authentication and session management</li>
-    <li>Security and CSRF protection</li>
-    <li>User preferences and settings</li>
-  </ul>
-
-  <h3>7.2 Analytics</h3>
-  <ul>
-    <li>Usage statistics and performance monitoring</li>
-    <li>Error tracking and debugging</li>
-    <li>Service improvement metrics</li>
-  </ul>
-
-  <h2>8. International Data Transfers</h2>
-  <p>Our AI Legacy operates primarily in the United States. Your data may be transferred to and processed in the United States and other countries where our service providers operate. We ensure appropriate safeguards are in place for international data transfers.</p>
-
-  <h2>9. Children's Privacy</h2>
-  <p>Our AI Legacy is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us immediately.</p>
-
-  <h2>10. Changes to This Policy</h2>
-  <p>We may update this Privacy Policy from time to time. We will notify you of significant changes by:</p>
-  <ul>
-    <li>Email notification to your registered address</li>
-    <li>Prominent notice on our platform</li>
-    <li>Updated "Last Modified" date at the top of this policy</li>
-  </ul>
-
-  <h2>11. Contact Information</h2>
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">4. Contact Information</h2>
   
-  <div class="contact-info">
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
     <p>If you have questions about this Privacy Policy or our data practices, please contact us:</p>
     
     <p><strong>Bezaleel Consulting Group</strong><br>
     Our AI Legacy<br>
-    Email: <a href="mailto:support@ourailegacy.com">support@ourailegacy.com</a><br>
+    Email: <a href="mailto:support@ourailegacy.com" style="color: #27200e;">support@ourailegacy.com</a><br>
     State: Illinois, United States</p>
 
     <p>For privacy-specific concerns, please include "Privacy Policy" in your email subject line.</p>
   </div>
 
-  <h2>12. Effective Date</h2>
-  <p>This Privacy Policy is effective as of January 6, 2025, and applies to all users of the Our AI Legacy platform.</p>
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">5. Effective Date</h2>
+  <p style="margin-bottom: 20px; line-height: 1.6;">This Privacy Policy is effective as of September 6, 2025, and applies to all users of the Our AI Legacy platform.</p>
+
 </div>
 
 {{/layouts/main}}

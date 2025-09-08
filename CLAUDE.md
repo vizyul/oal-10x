@@ -18,18 +18,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for ministry use.
 
-**Dual Database Architecture**: This application writes data to TWO databases independently:
-1. **Airtable** (primary) - Main data storage and user interface
-2. **PostgreSQL** (secondary) - Additional data storage for advanced features
-Both databases should receive the same data when records are created/updated.
+**Database Architecture**: This application has been migrated from Airtable to PostgreSQL as the primary database.
+- **PostgreSQL** (primary) - Main data storage for all application data
+- **Note**: Previous dual-database architecture (Airtable + PostgreSQL) was resolved during migration
 
-### Current Airtable Videos Table Fields (as of 2025-09-05):
+### Previous Airtable Videos Table Fields (Legacy Reference):
+**Note**: These fields are for reference only as the application now uses PostgreSQL.
 **Available Fields:**
 - `Id` (Primary Field, Number)
 - `blog` (Button)
 - `blog_text` (Long text)
 - `blog_url` (URL)
-- `chanel_handle` (Single line text) - Note: typo in field name
+- `channel_handle` (Single line text) - YouTube channel handle
 - `Channel` (Button)
 - `channel_name` (Single line text)
 - `chapter` (Button)
@@ -65,7 +65,7 @@ Both databases should receive the same data when records are created/updated.
 - `youtube_url` (Single line text)
 
 **Key Import Fields Available:**
-- Basic video info: `youtube_url`, `videoid`, `video_title`, `channel_name`, `chanel_handle`
+- Basic video info: `youtube_url`, `videoid`, `video_title`, `channel_name`, `channel_handle`
 - Media: `thumbnail` (Attachment format), `duration` (Number)
 - Content: `description` (Long text), `upload_date` (Date)
 - Processing: `status`, `category`, `privacy_setting` (newly added fields)
@@ -80,7 +80,9 @@ Both databases should receive the same data when records are created/updated.
 - **Start development**: `npm run dev` - Uses nodemon to watch for changes
 - **Start production**: `npm start` - Runs the server directly
 - **Run tests**: `npm test` - Executes Jest test suite
-- **Code validation**: Use `node -c <filename>` for syntax checking (lint is not configured on this system)
+- **Code linting**: `npm run lint` - Check code quality with ESLint v9
+- **Auto-fix lint issues**: `npm run lint:fix` - Automatically fix fixable ESLint issues
+- **Code validation**: Use `node -c <filename>` for syntax checking
 
 ### Port Management (Windows)
 
@@ -205,10 +207,96 @@ package.json         # Updated with OAuth packages (passport, etc.)
 
 ## Testing
 
-- **Framework**: Jest
+- **Framework**: Jest with comprehensive configuration
+- **Coverage Requirements**: 80% minimum for branches, functions, lines, and statements
 - **Structure**: Separate unit and integration test directories
-- **Setup**: Test helpers in `tests/helpers/setup.js`
-- **Coverage**: Authentication routes and services
+- **Setup**: Test helpers in `tests/helpers/setup.js` with HTTPS and OAuth mock support
+- **Environment**: Configured for Apple OAuth testing on `dev.ourailegacy.com:4433`
+
+### Test Commands
+
+- `npm test` - Full test suite with linting precheck and coverage
+- `npm run test:unit` - Unit tests only (`tests/unit/`)
+- `npm run test:integration` - Integration tests only (`tests/integration/`)
+- `npm run test:coverage` - Tests with coverage report
+- `npm run test:watch` - Tests in watch mode for development
+- `npm run test:ci` - CI-optimized test run (no watch, coverage, pass with no tests)
+- `npm run validate` - Complete validation: lint + test:ci
+
+### Current Test Status
+
+**✅ Working Tests:**
+- `tests/unit/database.service.test.js` - 9 comprehensive tests for PostgreSQL database service
+- All tests pass and provide good coverage of core database operations
+
+**📋 Tests Needing Updates (Currently Disabled):**
+- `tests/unit/auth.test.js.disabled` - 21 tests for auth service (needs PostgreSQL migration updates)
+- `tests/integration/auth.routes.test.js.disabled` - 16 tests for auth routes (needs mock updates for new architecture)
+- `tests/integration/api.routes.test.js.disabled` - API route tests (needs service reference updates)
+
+### Testing Next Steps
+
+**Priority 1: Update Unit Tests**
+1. **Auth Service Tests** (`tests/unit/auth.test.js.disabled`):
+   - Update mocks from `airtableService` to `database` service
+   - Change expected calls from Airtable format to PostgreSQL format
+   - Update field mappings (e.g., `'Email'` → `email`, `'First Name'` → `first_name`)
+   - Fix formatUserRecord expectations for PostgreSQL schema
+
+**Priority 2: Update Integration Tests**
+2. **Auth Routes Tests** (`tests/integration/auth.routes.test.js.disabled`):
+   - Fix service mock setup for `emailService.sendVerificationEmail`
+   - Update response expectations (some routes return 302 redirects instead of JSON)
+   - Verify OAuth redirect flows work with new PostgreSQL user model
+   - Update JWT token verification tests
+
+3. **API Routes Tests** (`tests/integration/api.routes.test.js.disabled`):
+   - Update service imports from `airtableService` to `database`
+   - Fix mock configurations for PostgreSQL architecture
+   - Update expected response formats
+
+**Priority 3: Add New Test Coverage**
+4. **Missing Service Tests**:
+   - `subscription.service.js` - Usage tracking and billing
+   - `stripe.service.js` - Payment processing
+   - `transcript.service.js` - YouTube transcript extraction
+   - `content-generation.service.js` - AI content generation
+
+5. **Controller Tests**:
+   - `videos.controller.js` - Video CRUD operations
+   - `youtube.controller.js` - YouTube integration
+   - `subscription.controller.js` - Subscription management
+
+### Test Architecture Notes
+
+- **PostgreSQL Testing**: All tests should use mocked `database.service` instead of `airtableService`
+- **Mock Environment**: Tests configured with proper OAuth test credentials
+- **HTTPS Testing**: Supports Apple OAuth requirements with `dev.ourailegacy.com:4433`
+- **Coverage Goals**: Maintain 80% coverage across all metrics as codebase grows
+- **CI Integration**: Tests run automatically with `npm run validate` command
+
+### Example Test Update Pattern
+
+When updating disabled tests, follow this pattern:
+```javascript
+// OLD (Airtable):
+const airtableService = require('../../src/services/airtable.service');
+jest.mock('../../src/services/airtable.service');
+airtableService.create.mockResolvedValue(mockRecord);
+expect(airtableService.create).toHaveBeenCalledWith('Users', {
+  'Email': 'test@example.com',
+  'First Name': 'John'
+});
+
+// NEW (PostgreSQL):
+const database = require('../../src/services/database.service');
+jest.mock('../../src/services/database.service');
+database.create.mockResolvedValue(mockRecord);
+expect(database.create).toHaveBeenCalledWith('users', {
+  email: 'test@example.com',
+  first_name: 'John'
+});
+```
 
 ## Deployment
 
@@ -359,3 +447,5 @@ Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+- Please stop trying to use the rm (remove) comand. This is a windows computer
+- Create a folder for all debugging and test scripts call adhoc and exclude this folder from source control. Then move all non project related files from the root of the project into that folder

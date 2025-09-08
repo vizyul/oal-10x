@@ -10,11 +10,11 @@ function generateRandomString(length = 32, charset = 'abcdefghijklmnopqrstuvwxyz
   let result = '';
   const charsetLength = charset.length;
   const randomBytes = crypto.randomBytes(length);
-  
+
   for (let i = 0; i < length; i++) {
     result += charset[randomBytes[i] % charsetLength];
   }
-  
+
   return result;
 }
 
@@ -37,7 +37,7 @@ function hashPassword(password, salt = null) {
   if (!salt) {
     salt = crypto.randomBytes(32).toString('hex');
   }
-  
+
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
   return `${salt}:${hash}`;
 }
@@ -62,17 +62,17 @@ function verifyPassword(password, hashedPassword) {
  */
 function formatDate(date, format = 'YYYY-MM-DD') {
   if (!date) return '';
-  
+
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  
+
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
-  
+
   return format
     .replace('YYYY', year)
     .replace('MM', month)
@@ -89,13 +89,13 @@ function formatDate(date, format = 'YYYY-MM-DD') {
  */
 function formatRelativeTime(date) {
   if (!date) return '';
-  
+
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  
+
   const now = new Date();
   const diffInSeconds = Math.floor((now - d) / 1000);
-  
+
   if (diffInSeconds < 60) {
     return 'just now';
   } else if (diffInSeconds < 3600) {
@@ -144,7 +144,7 @@ function toTitleCase(str) {
  */
 function slugify(str, separator = '-') {
   if (!str || typeof str !== 'string') return '';
-  
+
   return str
     .toString()
     .toLowerCase()
@@ -165,9 +165,9 @@ function slugify(str, separator = '-') {
  */
 function truncateText(text, maxLength = 100, suffix = '...') {
   if (!text || typeof text !== 'string') return '';
-  
+
   if (text.length <= maxLength) return text;
-  
+
   return text.slice(0, maxLength - suffix.length) + suffix;
 }
 
@@ -249,23 +249,23 @@ function throttle(func, limit) {
  */
 async function retry(func, maxRetries = 3, delay = 1000) {
   let lastError;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await func();
     } catch (error) {
       lastError = error;
-      
+
       if (attempt === maxRetries) {
         throw error;
       }
-      
+
       // Exponential backoff: delay * 2^(attempt - 1)
       const backoffDelay = delay * Math.pow(2, attempt - 1);
       await sleep(backoffDelay);
     }
   }
-  
+
   throw lastError;
 }
 
@@ -294,31 +294,31 @@ function generateUUID() {
  */
 function maskSensitiveData(value, type = 'email') {
   if (!value || typeof value !== 'string') return '';
-  
+
   switch (type) {
-    case 'email':
-      const [username, domain] = value.split('@');
-      if (!domain) return value;
-      const maskedUsername = username.length > 2 
-        ? username.substring(0, 2) + '*'.repeat(username.length - 2)
-        : '*'.repeat(username.length);
-      return `${maskedUsername}@${domain}`;
-    
-    case 'phone':
-      if (value.length <= 4) return value;
-      const visibleDigits = 4;
-      const masked = '*'.repeat(value.length - visibleDigits);
-      return masked + value.slice(-visibleDigits);
-    
-    case 'card':
-      if (value.length <= 4) return value;
-      const lastFour = value.slice(-4);
-      return '*'.repeat(value.length - 4) + lastFour;
-    
-    default:
-      return value.length > 4 
-        ? value.substring(0, 2) + '*'.repeat(value.length - 4) + value.slice(-2)
-        : '*'.repeat(value.length);
+  case 'email':
+    const [username, domain] = value.split('@');
+    if (!domain) return value;
+    const maskedUsername = username.length > 2
+      ? username.substring(0, 2) + '*'.repeat(username.length - 2)
+      : '*'.repeat(username.length);
+    return `${maskedUsername}@${domain}`;
+
+  case 'phone':
+    if (value.length <= 4) return value;
+    const visibleDigits = 4;
+    const masked = '*'.repeat(value.length - visibleDigits);
+    return masked + value.slice(-visibleDigits);
+
+  case 'card':
+    if (value.length <= 4) return value;
+    const lastFour = value.slice(-4);
+    return '*'.repeat(value.length - 4) + lastFour;
+
+  default:
+    return value.length > 4
+      ? value.substring(0, 2) + '*'.repeat(value.length - 4) + value.slice(-2)
+      : '*'.repeat(value.length);
   }
 }
 
@@ -329,7 +329,7 @@ function maskSensitiveData(value, type = 'email') {
  */
 function parseUserAgent(userAgent) {
   if (!userAgent) return { browser: 'Unknown', os: 'Unknown' };
-  
+
   const browsers = {
     Chrome: /Chrome\/(\d+)/,
     Firefox: /Firefox\/(\d+)/,
@@ -337,7 +337,7 @@ function parseUserAgent(userAgent) {
     Edge: /Edge\/(\d+)/,
     Opera: /Opera\/(\d+)/
   };
-  
+
   const operatingSystems = {
     Windows: /Windows NT (\d+\.\d+)/,
     macOS: /Mac OS X (\d+[._]\d+)/,
@@ -345,12 +345,12 @@ function parseUserAgent(userAgent) {
     Android: /Android (\d+)/,
     iOS: /OS (\d+_\d+)/
   };
-  
+
   let browser = 'Unknown';
   let browserVersion = '';
   let os = 'Unknown';
   let osVersion = '';
-  
+
   // Detect browser
   for (const [name, regex] of Object.entries(browsers)) {
     const match = userAgent.match(regex);
@@ -360,7 +360,7 @@ function parseUserAgent(userAgent) {
       break;
     }
   }
-  
+
   // Detect OS
   for (const [name, regex] of Object.entries(operatingSystems)) {
     const match = userAgent.match(regex);
@@ -370,7 +370,7 @@ function parseUserAgent(userAgent) {
       break;
     }
   }
-  
+
   return {
     browser: browserVersion ? `${browser} ${browserVersion}` : browser,
     os: osVersion ? `${os} ${osVersion}` : os,
@@ -387,13 +387,13 @@ function parseUserAgent(userAgent) {
  */
 function formatFileSize(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  
+
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
@@ -405,20 +405,20 @@ function formatFileSize(bytes, decimals = 2) {
  */
 function normalizePhoneNumber(phoneNumber, defaultCountryCode = '+1') {
   if (!phoneNumber) return '';
-  
+
   // Remove all non-digit characters
   let digits = phoneNumber.replace(/\D/g, '');
-  
+
   // If no country code and number doesn't start with country code digits
   if (digits.length === 10 && !phoneNumber.startsWith('+')) {
     digits = defaultCountryCode.replace('+', '') + digits;
   }
-  
+
   // Format as +X-XXX-XXX-XXXX for US numbers
   if (digits.length === 11 && digits.startsWith('1')) {
     return `+1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
   }
-  
+
   // For international numbers, just add the + if not present
   if (phoneNumber.startsWith('+')) {
     return phoneNumber;
@@ -435,13 +435,13 @@ function normalizePhoneNumber(phoneNumber, defaultCountryCode = '+1') {
  */
 function generateInitials(name, maxLength = 2) {
   if (!name || typeof name !== 'string') return '';
-  
+
   const words = name.trim().split(/\s+/);
   const initials = words
     .slice(0, maxLength)
     .map(word => word.charAt(0).toUpperCase())
     .join('');
-  
+
   return initials;
 }
 
@@ -452,59 +452,59 @@ function generateInitials(name, maxLength = 2) {
  */
 function calculatePasswordStrength(password) {
   if (!password) return { score: 0, feedback: [] };
-  
+
   let score = 0;
   const feedback = [];
-  
+
   // Length check
   if (password.length >= 8) {
     score += 1;
   } else {
     feedback.push('Use at least 8 characters');
   }
-  
+
   if (password.length >= 12) {
     score += 1;
   }
-  
+
   // Character variety
   if (/[a-z]/.test(password)) {
     score += 1;
   } else {
     feedback.push('Include lowercase letters');
   }
-  
+
   if (/[A-Z]/.test(password)) {
     score += 1;
   } else {
     feedback.push('Include uppercase letters');
   }
-  
+
   if (/[0-9]/.test(password)) {
     score += 1;
   } else {
     feedback.push('Include numbers');
   }
-  
+
   if (/[^A-Za-z0-9]/.test(password)) {
     score += 1;
   } else {
     feedback.push('Include special characters');
   }
-  
+
   // Common patterns penalty
   if (/(.)\1{2,}/.test(password)) {
     score -= 1;
     feedback.push('Avoid repeated characters');
   }
-  
+
   if (/123|abc|qwe|asd/i.test(password)) {
     score -= 1;
     feedback.push('Avoid common patterns');
   }
-  
+
   const strength = score <= 2 ? 'weak' : score <= 4 ? 'fair' : score <= 5 ? 'good' : 'strong';
-  
+
   return {
     score: Math.max(0, Math.min(6, score)),
     strength,
@@ -519,15 +519,15 @@ function calculatePasswordStrength(password) {
  */
 function escapeHtml(text) {
   if (!text) return '';
-  
+
   const map = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;'
+    '\'': '&#039;'
   };
-  
+
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
@@ -538,20 +538,20 @@ function escapeHtml(text) {
  */
 function generateSecureFilename(originalName) {
   if (!originalName) return generateUUID();
-  
+
   const extension = originalName.split('.').pop();
   const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
-  
+
   // Remove dangerous characters and normalize
   const safeName = nameWithoutExtension
     .replace(/[^a-zA-Z0-9.-]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
     .toLowerCase();
-  
+
   const timestamp = Date.now();
   const randomStr = generateRandomString(8);
-  
+
   return `${safeName}_${timestamp}_${randomStr}.${extension}`;
 }
 

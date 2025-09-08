@@ -104,51 +104,26 @@ build/
 .railway/
 
 # Test and setup files
-check-bezaleel-user.js
-check-user.js
-Graph-API-Domains-Postman-Collection.json
 setup-airtable.js
 test-contact-route.js
 test-email.js
-verify-tenant.js
 
-# Session testing files (Claude Code generated)
+# Session testing files (Claude Code generated - legacy patterns)
 test-*.js
 debug-*.*
 check-*.js
 fix-*.*
-add-welcome*.js
-migrate-*.js
-youtube_plan.md
-setup-enhanced-airtable-tables.js
-setup-subscription-tables.js
-stripe-subscription-plan.md
-create-test-user.js
-generate-jwt-token.js
-TEST-USER-SETUP.md
-analyze-airtable-schema.js
-quick-schema-analysis.js
-postgres-schema.sql
-airtable-postgres-mapping.csv
-airtable-schema-quick.csv
-generate-postgres-schema.js
-setup-database.js
-airtable-user-youtube-channels.json
-airtable-youtube-oauth-tokens.json
-setup-youtube-tables.js
-update-oauth-ids.js
-youtube-oauth-postgres-schema.sql
-test-ui-fixes.md
-srcserver.js
 
-# Style recommendation file
-style-recommendation.html
+
 
 # Errors folder
 errors/
 powershell_scripts/
 csv-data/
 scripts/
+
+# Adhoc debugging and test scripts
+adhoc/
 
 # Stripe webhook test files
 test-subscription-*.json

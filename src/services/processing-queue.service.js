@@ -1,5 +1,5 @@
 const { logger } = require('../utils');
-const airtable = require('./airtable.service');
+const database = require('./database.service');
 const videoProcessing = require('./video-processing.service');
 
 class ProcessingQueueService {
@@ -22,11 +22,11 @@ class ProcessingQueueService {
 
       // Check if Processing Queue table exists
       const hasQueueTable = await this.hasProcessingQueueTable();
-      
+
       if (hasQueueTable) {
-        // Add to Airtable queue
-        const queueItem = await airtable.create('Processing Queue', {
-          video_id: [videoId], // Link to Videos table
+        // Add to PostgreSQL processing queue
+        const queueItem = await database.create('processing_queue', {
+          video_id: videoId, // Foreign key to videos table
           task_type: taskType,
           status: 'queued',
           priority: priority,
@@ -35,10 +35,10 @@ class ProcessingQueueService {
         });
 
         logger.info(`Added to processing queue: ${queueItem.id}`, { taskType, videoId });
-        
+
         // Start processing if not already running
         this.startProcessing();
-        
+
         return {
           id: queueItem.id,
           videoId,
@@ -50,7 +50,7 @@ class ProcessingQueueService {
         // Fallback: direct processing if queue table doesn't exist
         logger.warn('Processing Queue table not available, processing directly');
         await this.processDirectly(videoId, taskType);
-        
+
         return {
           id: `direct-${Date.now()}`,
           videoId,
@@ -77,76 +77,74 @@ class ProcessingQueueService {
         return null;
       }
 
-      // Get highest priority queued item
-      const queuedItems = await airtable.findAll('Processing Queue', {
-        filterByFormula: '{status} = "queued"',
-        sort: [
-          { field: 'priority', direction: 'desc' },
-          { field: 'created_at', direction: 'asc' }
-        ],
-        maxRecords: 1
-      });
+      // Get highest priority queued item using PostgreSQL WHERE clause
+      const queuedItems = await database.query(`
+        SELECT * FROM processing_queue 
+        WHERE status = 'queued' 
+        ORDER BY priority DESC, created_at ASC 
+        LIMIT 1
+      `);
 
-      if (!queuedItems || queuedItems.length === 0) {
+      if (!queuedItems.rows || queuedItems.rows.length === 0) {
         return null;
       }
 
-      const queueItem = queuedItems[0];
-      const { video_id, task_type } = queueItem.fields;
-      
-      logger.info(`Processing queue item: ${queueItem.id}`, { 
+      const queueItem = queuedItems.rows[0];
+      const { video_id, task_type } = queueItem;
+
+      logger.info(`Processing queue item: ${queueItem.id}`, {
         taskType: task_type,
-        videoId: video_id?.[0]
+        videoId: video_id
       });
 
       // Mark as processing
-      await airtable.update('Processing Queue', queueItem.id, {
+      await database.update('processing_queue', queueItem.id, {
         status: 'processing',
         started_at: new Date().toISOString()
       });
 
       try {
         // Process the task
-        await this.executeTask(video_id[0], task_type);
+        await this.executeTask(video_id, task_type);
 
         // Mark as completed
-        await airtable.update('Processing Queue', queueItem.id, {
+        await database.update('processing_queue', queueItem.id, {
           status: 'completed',
           completed_at: new Date().toISOString()
         });
 
         logger.info(`Queue item completed: ${queueItem.id}`, { taskType: task_type });
-        
+
         return {
           id: queueItem.id,
-          videoId: video_id[0],
+          videoId: video_id,
           taskType: task_type,
           status: 'completed'
         };
 
       } catch (taskError) {
         logger.error(`Queue item failed: ${queueItem.id}`, taskError);
-        
-        const retryCount = (queueItem.fields.retry_count || 0) + 1;
+
+        const retryCount = (queueItem.retry_count || 0) + 1;
         const shouldRetry = retryCount <= 3;
 
         if (shouldRetry) {
           // Schedule retry
-          await airtable.update('Processing Queue', queueItem.id, {
+          await database.update('processing_queue', queueItem.id, {
             status: 'queued',
             retry_count: retryCount,
             error_message: taskError.message
           });
-          
+
           logger.info(`Queue item will retry: ${queueItem.id}`, { retryCount });
         } else {
           // Mark as failed
-          await airtable.update('Processing Queue', queueItem.id, {
+          await database.update('processing_queue', queueItem.id, {
             status: 'failed',
             error_message: taskError.message,
             completed_at: new Date().toISOString()
           });
-          
+
           logger.error(`Queue item permanently failed: ${queueItem.id}`);
         }
 
@@ -167,24 +165,24 @@ class ProcessingQueueService {
   async executeTask(videoId, taskType) {
     try {
       switch (taskType) {
-        case 'extract_metadata':
-          await this.executeMetadataExtraction(videoId);
-          break;
-          
-        case 'generate_summary':
-          await this.executeGenerateSummary(videoId);
-          break;
-          
-        case 'generate_titles':
-          await this.executeGenerateTitles(videoId);
-          break;
-          
-        case 'generate_thumbnails':
-          await this.executeGenerateThumbnails(videoId);
-          break;
-          
-        default:
-          throw new Error(`Unknown task type: ${taskType}`);
+      case 'extract_metadata':
+        await this.executeMetadataExtraction(videoId);
+        break;
+
+      case 'generate_summary':
+        await this.executeGenerateSummary(videoId);
+        break;
+
+      case 'generate_titles':
+        await this.executeGenerateTitles(videoId);
+        break;
+
+      case 'generate_thumbnails':
+        await this.executeGenerateThumbnails(videoId);
+        break;
+
+      default:
+        throw new Error(`Unknown task type: ${taskType}`);
       }
     } catch (error) {
       logger.error(`Task execution failed: ${taskType}`, error);
@@ -242,17 +240,18 @@ class ProcessingQueueService {
         return 0;
       }
 
-      // Get failed tasks that haven't exceeded retry limit
-      const failedItems = await airtable.findAll('Processing Queue', {
-        filterByFormula: 'AND({status} = "failed", {retry_count} < 3)',
-        sort: [{ field: 'created_at', direction: 'asc' }]
-      });
+      // Get failed tasks that haven't exceeded retry limit using PostgreSQL
+      const failedItems = await database.query(`
+        SELECT * FROM processing_queue 
+        WHERE status = 'failed' AND retry_count < 3 
+        ORDER BY created_at ASC
+      `);
 
       let retriedCount = 0;
 
-      for (const item of failedItems) {
+      for (const item of failedItems.rows) {
         try {
-          await airtable.update('Processing Queue', item.id, {
+          await database.update('processing_queue', item.id, {
             status: 'queued',
             error_message: ''
           });
@@ -330,16 +329,17 @@ class ProcessingQueueService {
 
       // Get completed tasks older than 24 hours
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
-      const completedItems = await airtable.findAll('Processing Queue', {
-        filterByFormula: `AND({status} = "completed", IS_BEFORE({completed_at}, "${oneDayAgo}"))`
-      });
+
+      const completedItems = await database.query(`
+        SELECT * FROM processing_queue 
+        WHERE status = 'completed' AND completed_at < $1
+      `, [oneDayAgo]);
 
       let clearedCount = 0;
 
-      for (const item of completedItems) {
+      for (const item of completedItems.rows) {
         try {
-          await airtable.delete('Processing Queue', item.id);
+          await database.delete('processing_queue', item.id);
           clearedCount++;
         } catch (deleteError) {
           logger.error(`Failed to delete completed task ${item.id}:`, deleteError);
@@ -366,10 +366,10 @@ class ProcessingQueueService {
    */
   async hasProcessingQueueTable() {
     try {
-      await airtable.findAll('Processing Queue', { maxRecords: 1 });
+      await database.query('SELECT 1 FROM processing_queue LIMIT 1');
       return true;
     } catch (error) {
-      if (error.message.includes('NOT_FOUND') || error.message.includes('does not exist')) {
+      if (error.message.includes('relation') && error.message.includes('does not exist')) {
         return false;
       }
       throw error;
@@ -383,10 +383,10 @@ class ProcessingQueueService {
    */
   async getQueueCount(status) {
     try {
-      const items = await airtable.findAll('Processing Queue', {
-        filterByFormula: `{status} = "${status}"`
-      });
-      return items.length;
+      const result = await database.query(`
+        SELECT COUNT(*) as count FROM processing_queue WHERE status = $1
+      `, [status]);
+      return parseInt(result.rows[0].count) || 0;
     } catch (error) {
       logger.warn(`Error counting ${status} items:`, error.message);
       return 0;
@@ -401,13 +401,13 @@ class ProcessingQueueService {
   async processDirectly(videoId, taskType) {
     try {
       logger.info(`Processing directly: ${taskType} for video ${videoId}`);
-      
+
       if (taskType === 'full_processing') {
         await videoProcessing.processVideo(videoId);
       } else {
         await this.executeTask(videoId, taskType);
       }
-      
+
     } catch (error) {
       logger.error('Direct processing failed:', error);
       throw error;
@@ -417,41 +417,45 @@ class ProcessingQueueService {
   // Task execution methods
 
   async executeMetadataExtraction(videoId) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const metadata = await videoProcessing.extractMetadata(videoRecord.fields.youtube_url);
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
+    const metadata = await videoProcessing.extractMetadata(videoData.youtube_url);
     await videoProcessing.updateVideoWithMetadata(videoId, metadata);
   }
 
   async executeGenerateSummary(videoId) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const summary = await videoProcessing.generateSummary(videoRecord.fields);
-    
-    const currentFields = await videoProcessing.getCurrentTableFields('Videos');
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
+    const summary = await videoProcessing.generateSummary(videoData);
+
+    const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_summary')) {
-      await airtable.update('Videos', videoId, { ai_summary: summary });
+      await database.update('videos', videoId, { ai_summary: summary });
     }
   }
 
   async executeGenerateTitles(videoId) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const titles = await videoProcessing.generateTitles(videoRecord.fields);
-    
-    const currentFields = await videoProcessing.getCurrentTableFields('Videos');
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
+    const titles = await videoProcessing.generateTitles(videoData);
+
+    const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_title_suggestions')) {
-      await airtable.update('Videos', videoId, { 
-        ai_title_suggestions: JSON.stringify(titles) 
+      await database.update('videos', videoId, {
+        ai_title_suggestions: JSON.stringify(titles)
       });
     }
   }
 
   async executeGenerateThumbnails(videoId) {
-    const videoRecord = await airtable.findById('Videos', videoId);
-    const thumbnails = await videoProcessing.generateThumbnailConcepts(videoRecord.fields);
-    
-    const currentFields = await videoProcessing.getCurrentTableFields('Videos');
+    const videoRecord = await database.findById('videos', videoId);
+    const videoData = videoRecord?.fields || videoRecord; // Handle both database service formatted records and direct PostgreSQL rows
+    const thumbnails = await videoProcessing.generateThumbnailConcepts(videoData);
+
+    const currentFields = await videoProcessing.getCurrentTableFields('videos');
     if (currentFields.includes('ai_thumbnail_suggestions')) {
-      await airtable.update('Videos', videoId, { 
-        ai_thumbnail_suggestions: JSON.stringify(thumbnails) 
+      await database.update('videos', videoId, {
+        ai_thumbnail_suggestions: JSON.stringify(thumbnails)
       });
     }
   }

@@ -143,11 +143,11 @@ class AIChatService {
       });
 
       const messages = [];
-      
+
       if (systemMessage) {
         messages.push({ role: 'system', content: systemMessage });
       }
-      
+
       messages.push({ role: 'user', content: prompt });
 
       const completion = await this.openai.chat.completions.create({
@@ -254,14 +254,14 @@ class AIChatService {
   async generateContent(provider, options) {
     try {
       switch (provider.toLowerCase()) {
-        case 'gemini':
-          return await this.generateWithGemini(options);
-        case 'chatgpt':
-          return await this.generateWithChatGPT(options);
-        case 'claude':
-          return await this.generateWithClaude(options);
-        default:
-          throw new Error(`Unsupported AI provider: ${provider}`);
+      case 'gemini':
+        return await this.generateWithGemini(options);
+      case 'chatgpt':
+        return await this.generateWithChatGPT(options);
+      case 'claude':
+        return await this.generateWithClaude(options);
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
       }
     } catch (error) {
       logger.error(`AI content generation failed for provider ${provider}:`, error.message);
@@ -278,21 +278,21 @@ class AIChatService {
    */
   async generateContentWithRetry(provider, options, maxRetries = 2) {
     let lastError;
-    
+
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
         logger.debug(`AI generation attempt ${attempt}/${maxRetries + 1} for ${provider}`);
         const result = await this.generateContent(provider, options);
-        
+
         if (attempt > 1) {
           logger.info(`AI generation succeeded on attempt ${attempt} for ${provider}`);
         }
-        
+
         return result;
       } catch (error) {
         lastError = error;
         logger.warn(`AI generation attempt ${attempt} failed for ${provider}:`, error.message);
-        
+
         if (attempt <= maxRetries) {
           // Wait before retry (exponential backoff)
           const delay = Math.pow(2, attempt - 1) * 1000;
@@ -301,7 +301,7 @@ class AIChatService {
         }
       }
     }
-    
+
     throw lastError;
   }
 
@@ -313,24 +313,24 @@ class AIChatService {
    */
   processPromptTemplate(promptText, variables = {}) {
     let processed = promptText;
-    
+
     // Replace {{VARIABLE}} placeholders
     Object.entries(variables).forEach(([key, value]) => {
       const placeholder = new RegExp(`{{${key}}}`, 'gi');
       processed = processed.replace(placeholder, value || '');
     });
-    
+
     // Also handle [INSERT TRANSCRIPT HERE] format for backward compatibility
     if (variables.TRANSCRIPT) {
       processed = processed.replace(/\[INSERT TRANSCRIPT HERE\]/gi, variables.TRANSCRIPT);
     }
-    
+
     // Log if there are unresolved placeholders
     const unresolvedPlaceholders = processed.match(/{{[^}]+}}/g);
     if (unresolvedPlaceholders) {
       logger.warn('Unresolved placeholders found in prompt:', unresolvedPlaceholders);
     }
-    
+
     return processed;
   }
 
@@ -341,14 +341,14 @@ class AIChatService {
    */
   isProviderAvailable(provider) {
     switch (provider.toLowerCase()) {
-      case 'gemini':
-        return !!this.gemini;
-      case 'chatgpt':
-        return !!this.openai;
-      case 'claude':
-        return !!this.anthropic;
-      default:
-        return false;
+    case 'gemini':
+      return !!this.gemini;
+    case 'chatgpt':
+      return !!this.openai;
+    case 'claude':
+      return !!this.anthropic;
+    default:
+      return false;
     }
   }
 
@@ -377,7 +377,7 @@ class AIChatService {
         maxTokens: 50,
         temperature: 0.1
       });
-      
+
       const success = response.toLowerCase().includes('hello');
       logger.info(`${provider} test ${success ? 'passed' : 'failed'}:`, response.substring(0, 100));
       return success;

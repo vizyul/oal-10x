@@ -1,0 +1,172 @@
+{{#> layouts/main}}
+
+<div style="max-width: 1000px; margin: 50px auto; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+  
+  <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; margin-bottom: 30px; text-align: center;">
+    <strong>Last Updated:</strong> September 6, 2025
+  </div>
+
+  <h1 style="color: #141414; margin-bottom: 30px; border-bottom: 3px solid #27200e; padding-bottom: 15px;">YouTube Data Usage - Our AI Legacy Platform</h1>
+
+  <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 30px; border: 1px solid #e5e5e5;">
+    <h3 style="margin-top: 0; color: #27200e; margin-bottom: 15px;">Table of Contents</h3>
+    <ul style="list-style-type: none; padding-left: 0;">
+      <li style="margin-bottom: 8px;"><a href="#overview" style="color: #27200e; text-decoration: none; font-weight: 500;">Overview</a></li>
+      <li style="margin-bottom: 8px;"><a href="#application-info" style="color: #27200e; text-decoration: none; font-weight: 500;">Application Information</a></li>
+      <li style="margin-bottom: 8px;"><a href="#integration-purpose" style="color: #27200e; text-decoration: none; font-weight: 500;">YouTube Integration Purpose</a></li>
+      <li style="margin-bottom: 8px;"><a href="#oauth-scopes" style="color: #27200e; text-decoration: none; font-weight: 500;">OAuth Scopes Requested</a></li>
+      <li style="margin-bottom: 8px;"><a href="#data-access" style="color: #27200e; text-decoration: none; font-weight: 500;">Detailed Data Access and Usage</a></li>
+      <li style="margin-bottom: 8px;"><a href="#data-storage" style="color: #27200e; text-decoration: none; font-weight: 500;">Data Storage and Security</a></li>
+      <li style="margin-bottom: 8px;"><a href="#user-control" style="color: #27200e; text-decoration: none; font-weight: 500;">User Control and Consent</a></li>
+      <li style="margin-bottom: 8px;"><a href="#contact" style="color: #27200e; text-decoration: none; font-weight: 500;">Contact Information and Support</a></li>
+    </ul>
+  </div>
+
+  <h2 id="overview" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Overview</h2>
+  <p style="margin-bottom: 20px; line-height: 1.6;">Our AI Legacy is a ministry-focused content creation platform that transforms YouTube video content into educational materials using artificial intelligence. This document provides a comprehensive explanation of how we access, process, and utilize YouTube data through the YouTube Data API v3 and OAuth 2.0 integration.</p>
+
+  <h2 id="application-info" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Application Information</h2>
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;"><strong>Application Name:</strong> Our AI Legacy</li>
+      <li style="margin-bottom: 8px;"><strong>Operating Company:</strong> Bezaleel Consulting Group</li>
+      <li style="margin-bottom: 8px;"><strong>Primary Domain:</strong> https://ourailegacy.com</li>
+      <li style="margin-bottom: 8px;"><strong>Contact Email:</strong> support@ourailegacy.com</li>
+      <li style="margin-bottom: 0;"><strong>Jurisdiction:</strong> Illinois, United States</li>
+    </ul>
+  </div>
+
+  <h2 id="integration-purpose" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">YouTube Integration Purpose</h2>
+  <p style="margin-bottom: 15px; line-height: 1.6;">Our platform serves ministry and educational communities by enabling content creators to:</p>
+  <ol style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Import Their Own Video Content:</strong> Users connect their YouTube channels to access their uploaded videos</li>
+    <li style="margin-bottom: 8px;"><strong>Generate Educational Materials:</strong> Transform video transcripts into study guides, discussion questions, blog posts, and quizzes</li>
+    <li style="margin-bottom: 8px;"><strong>Organize Content Libraries:</strong> Manage and categorize video content for ministry and educational use</li>
+    <li style="margin-bottom: 8px;"><strong>Create Accessible Resources:</strong> Convert video content into multiple formats for broader accessibility</li>
+  </ol>
+
+  <h2 id="oauth-scopes" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">OAuth Scopes Requested</h2>
+  
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Primary Scopes</h3>
+  
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">1. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube.readonly</code></h4>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Read-only access to user's YouTube account data</li>
+      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Retrieve channel information, video metadata, playlists, and video lists</li>
+      <li style="margin-bottom: 0;"><strong>Data Accessed:</strong> Channel details, video titles, descriptions, thumbnails, upload dates, durations</li>
+    </ul>
+  </div>
+
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">2. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube.force-ssl</code></h4>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Force SSL connections for secure data transmission</li>
+      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Ensure all YouTube API communications are encrypted</li>
+      <li style="margin-bottom: 0;"><strong>Security Benefit:</strong> Protects user data during transmission</li>
+    </ul>
+  </div>
+
+  <h2 id="data-access" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Detailed Data Access and Usage</h2>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">1. Channel Information</h3>
+  
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Retrieved:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">Channel ID, name, and description</li>
+    <li style="margin-bottom: 8px;">Channel thumbnails and profile images</li>
+    <li style="margin-bottom: 8px;">Subscriber count and video count statistics</li>
+    <li style="margin-bottom: 8px;">Channel creation date and custom URL</li>
+    <li style="margin-bottom: 8px;">Branding settings and channel metadata</li>
+  </ul>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Purpose:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">Display channel information in user dashboard</li>
+    <li style="margin-bottom: 8px;">Associate imported videos with correct channel ownership</li>
+    <li style="margin-bottom: 8px;">Provide channel statistics for content organization</li>
+    <li style="margin-bottom: 8px;">Enable channel-specific content management</li>
+  </ul>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">2. Video Metadata</h3>
+  
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Retrieved:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">Video ID, title, and description</li>
+    <li style="margin-bottom: 8px;">Upload date and duration</li>
+    <li style="margin-bottom: 8px;">Video thumbnails (multiple resolutions)</li>
+    <li style="margin-bottom: 8px;">Privacy status and category</li>
+    <li style="margin-bottom: 8px;">View count and engagement statistics</li>
+    <li style="margin-bottom: 8px;">Video tags and metadata</li>
+  </ul>
+
+  <h2 id="data-storage" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Data Storage and Security</h2>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Storage Architecture</h3>
+  
+  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">PostgreSQL Database System:</h4>
+    <p style="margin-bottom: 0; line-height: 1.6;">All YouTube data is securely stored in our PostgreSQL database with comprehensive security measures including encryption at rest, access controls, and regular security audits.</p>
+  </div>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Categories Stored:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">OAuth tokens (encrypted with AES-256-CBC)</li>
+    <li style="margin-bottom: 8px;">Channel information and statistics</li>
+    <li style="margin-bottom: 8px;">Video metadata and thumbnails</li>
+    <li style="margin-bottom: 8px;">Generated educational content</li>
+    <li style="margin-bottom: 8px;">User preferences and settings</li>
+  </ul>
+
+  <h2 id="user-control" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">User Control and Consent</h2>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Explicit Consent Process</h3>
+  <ol style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>OAuth Authorization:</strong> Users must explicitly authorize YouTube access</li>
+    <li style="margin-bottom: 8px;"><strong>Scope Disclosure:</strong> Clear explanation of requested permissions</li>
+    <li style="margin-bottom: 8px;"><strong>Data Usage Transparency:</strong> Detailed privacy policy and terms of service</li>
+    <li style="margin-bottom: 8px;"><strong>Ongoing Control:</strong> Users can disconnect YouTube access at any time</li>
+  </ol>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">User Rights</h3>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Access:</strong> View all stored YouTube data</li>
+    <li style="margin-bottom: 8px;"><strong>Modification:</strong> Update preferences and settings</li>
+    <li style="margin-bottom: 8px;"><strong>Deletion:</strong> Remove YouTube connection and delete associated data</li>
+    <li style="margin-bottom: 8px;"><strong>Portability:</strong> Export personal data and generated content</li>
+    <li style="margin-bottom: 8px;"><strong>Revocation:</strong> Disconnect YouTube authorization through Google account</li>
+  </ul>
+
+  <h2 id="contact" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Contact Information and Support</h2>
+
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
+    <h3 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">Primary Contact</h3>
+    <p style="margin-bottom: 15px;"><strong>Bezaleel Consulting Group</strong><br>
+    <strong>Platform:</strong> Our AI Legacy<br>
+    <strong>Email:</strong> <a href="mailto:support@ourailegacy.com" style="color: #27200e;">support@ourailegacy.com</a><br>
+    <strong>Location:</strong> Illinois, United States</p>
+
+    <h3 style="color: #27200e; margin-top: 25px; margin-bottom: 15px;">Data Protection Inquiries</h3>
+    <p style="margin-bottom: 15px; line-height: 1.6;">For questions specifically related to YouTube data usage, privacy concerns, or data protection rights:</p>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;"><strong>Subject Line:</strong> "YouTube Data Usage Inquiry"</li>
+      <li style="margin-bottom: 8px;"><strong>Response Time:</strong> Within 48 hours for privacy-related questions</li>
+      <li style="margin-bottom: 0;"><strong>Escalation:</strong> Direct escalation to data protection officer for complex issues</li>
+    </ul>
+  </div>
+
+  <h2 style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Conclusion</h2>
+  <p style="margin-bottom: 20px; line-height: 1.6;">Our AI Legacy platform is designed with user privacy, data security, and transparency as core principles. We access YouTube data solely to provide valuable educational content generation services to ministry and educational communities. Our PostgreSQL database architecture, comprehensive security measures, and user control options ensure responsible stewardship of user data while delivering powerful AI-driven content creation capabilities.</p>
+
+  <p style="margin-bottom: 20px; line-height: 1.6;">This document serves as our commitment to transparent data practices and responsible YouTube API usage. We regularly review and update our data handling procedures to maintain the highest standards of user privacy and data protection.</p>
+
+  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0; text-align: center; font-style: italic; font-size: 0.9em; color: #666;">
+    <p style="margin-bottom: 0;"><strong>Document Version:</strong> 1.0<br>
+    <strong>Last Updated:</strong> September 6, 2025<br>
+    <strong>Next Review Date:</strong> March 6, 2026<br>
+    <strong>Approved By:</strong> Bezaleel Consulting Group Data Protection Team</p>
+  </div>
+
+</div>
+
+{{/layouts/main}}

@@ -55,7 +55,7 @@ router.post('/auth/logout', authMiddleware, require('../controllers/auth.control
 router.get('/user/profile', authMiddleware, async (req, res) => {
   try {
     const user = await authService.findUserById(req.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -63,10 +63,10 @@ router.get('/user/profile', authMiddleware, async (req, res) => {
         error: 'USER_NOT_FOUND'
       });
     }
-    
+
     // Remove sensitive information
     const { password, emailVerificationToken, ...safeUser } = user;
-    
+
     res.json({
       success: true,
       data: {
@@ -91,11 +91,11 @@ router.put('/user/profile', authMiddleware, [
   try {
     const { firstName, lastName, email } = req.body;
     const updateData = {};
-    
+
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
     if (email) updateData.email = email;
-    
+
     // Check if email is already taken (if email is being updated)
     if (email) {
       const existingUser = await authService.findUserByEmail(email);
@@ -108,12 +108,12 @@ router.put('/user/profile', authMiddleware, [
         });
       }
     }
-    
+
     const updatedUser = await authService.updateUser(req.userId, updateData);
-    
+
     // Remove sensitive information
     const { password, emailVerificationToken, ...safeUser } = updatedUser;
-    
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
@@ -140,7 +140,7 @@ router.put('/user/password', authMiddleware, [
   try {
     const { currentPassword, newPassword } = req.body;
     const bcrypt = require('bcryptjs');
-    
+
     // Get current user
     const user = await authService.findUserById(req.userId);
     if (!user) {
@@ -150,7 +150,7 @@ router.put('/user/password', authMiddleware, [
         error: 'USER_NOT_FOUND'
       });
     }
-    
+
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
@@ -161,18 +161,18 @@ router.put('/user/password', authMiddleware, [
         field: 'currentPassword'
       });
     }
-    
+
     // Hash new password
     const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-    
+
     // Update password
     await authService.updateUser(req.userId, {
       password: hashedNewPassword
     });
-    
+
     logger.info(`Password changed for user: ${req.userId}`);
-    
+
     res.json({
       success: true,
       message: 'Password changed successfully'
@@ -195,7 +195,7 @@ router.delete('/user/account', authMiddleware, [
   try {
     const { password } = req.body;
     const bcrypt = require('bcryptjs');
-    
+
     // Get current user
     const user = await authService.findUserById(req.userId);
     if (!user) {
@@ -205,7 +205,7 @@ router.delete('/user/account', authMiddleware, [
         error: 'USER_NOT_FOUND'
       });
     }
-    
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -216,15 +216,15 @@ router.delete('/user/account', authMiddleware, [
         field: 'password'
       });
     }
-    
+
     // Soft delete user
     await authService.deleteUser(req.userId);
-    
+
     logger.info(`Account deleted for user: ${req.userId}`);
-    
+
     // Clear auth cookie
     res.clearCookie('auth_token');
-    
+
     res.json({
       success: true,
       message: 'Account deleted successfully'
@@ -253,7 +253,7 @@ router.get('/admin/stats', authMiddleware, async (req, res) => {
   try {
     // TODO: Add admin role check middleware
     const stats = await authService.getUserStats();
-    
+
     res.json({
       success: true,
       data: {
@@ -276,7 +276,7 @@ if (process.env.NODE_ENV === 'development') {
     try {
       const connectionTest = await airtableService.testConnection();
       const baseInfo = airtableService.getBaseInfo();
-      
+
       res.json({
         success: true,
         data: {
@@ -301,7 +301,7 @@ router.post('/auth/resend-verification', [
 ], validationMiddleware, async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     // Find user
     const user = await authService.findUserByEmail(email);
     if (!user) {
@@ -311,7 +311,7 @@ router.post('/auth/resend-verification', [
         message: 'If the email address exists, a verification email has been sent.'
       });
     }
-    
+
     // Check if already verified
     if (user.emailVerified) {
       return res.status(400).json({
@@ -320,10 +320,10 @@ router.post('/auth/resend-verification', [
         error: 'ALREADY_VERIFIED'
       });
     }
-    
+
     // TODO: Generate new verification token and send email
     // For now, just return success
-    
+
     res.json({
       success: true,
       message: 'Verification email sent successfully'
@@ -357,7 +357,7 @@ router.get('/preferences', authMiddleware, async (req, res) => {
   try {
     // Only get preferences, don't create them on GET requests
     const preferences = await preferencesService.getUserPreferences(req.user.email);
-    
+
     res.json({
       success: true,
       data: preferences || null // Return null if no preferences exist
@@ -382,18 +382,18 @@ router.post('/preferences/theme', [
 ], async (req, res) => {
   try {
     const { themeMode } = req.body;
-    
+
     const preferences = await preferencesService.updateUserPreferences(req.user.email, {
       themeMode
     });
-    
+
     res.json({
       success: true,
       data: preferences
     });
   } catch (error) {
     logger.error('Error updating theme preference:', error);
-    
+
     // Handle specific Airtable errors
     if (error.statusCode === 404) {
       return res.status(503).json({
@@ -402,7 +402,7 @@ router.post('/preferences/theme', [
         error: 'User_Preferences table not found'
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: 'Failed to update theme preference',
@@ -434,14 +434,14 @@ router.put('/preferences', [
 ], async (req, res) => {
   try {
     const updates = {};
-    
+
     if (req.body.themeMode !== undefined) updates.themeMode = req.body.themeMode;
     if (req.body.emailNotifications !== undefined) updates.emailNotifications = req.body.emailNotifications;
     if (req.body.marketingCommunications !== undefined) updates.marketingCommunications = req.body.marketingCommunications;
     if (req.body.weeklyDigest !== undefined) updates.weeklyDigest = req.body.weeklyDigest;
-    
+
     const preferences = await preferencesService.updateUserPreferences(req.user.email, updates);
-    
+
     res.json({
       success: true,
       data: preferences

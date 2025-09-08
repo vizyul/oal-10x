@@ -14,13 +14,13 @@ const securityMiddleware = [
   helmet({
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://js.stripe.com"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https://api.stripe.com"],
-        frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"]
+        defaultSrc: ['\'self\''],
+        styleSrc: ['\'self\'', '\'unsafe-inline\'', 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+        fontSrc: ['\'self\'', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com'],
+        imgSrc: ['\'self\'', 'data:', 'https:'],
+        connectSrc: ['\'self\'', 'https://api.stripe.com'],
+        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com']
       }
     },
     crossOriginEmbedderPolicy: false
@@ -66,7 +66,7 @@ const securityMiddleware = [
 // Validation middleware
 const validationMiddleware = (req, res, next) => {
   const errors = validationResult(req);
-  
+
   if (!errors.isEmpty()) {
     const formattedErrors = errors.array().map(error => ({
       field: error.path || error.param,
@@ -112,7 +112,7 @@ const setCachedUser = (userId, user) => {
     user,
     timestamp: Date.now()
   });
-  
+
   // Clean up old cache entries periodically
   if (userCache.size > 1000) {
     const now = Date.now();
@@ -138,7 +138,7 @@ const authMiddleware = async (req, res, next) => {
     if (req.cookies && req.cookies.auth_token) {
       token = req.cookies.auth_token;
     }
-    
+
     // Fallback to Authorization header
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;
@@ -153,18 +153,18 @@ const authMiddleware = async (req, res, next) => {
 
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Use JWT data if available (for newer tokens), otherwise fall back to database
     let user;
     let needsTokenRefresh = false;
-    
+
     if (decoded.firstName && decoded.emailVerified !== undefined) {
       // JWT contains user data - check if subscription fields are missing
       if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
         // Old token format - needs refresh with subscription data
         needsTokenRefresh = true;
       }
-      
+
       // Use JWT data for now
       user = {
         id: decoded.userId,
@@ -182,7 +182,7 @@ const authMiddleware = async (req, res, next) => {
       // Fallback to cache/database for older tokens
       needsTokenRefresh = true;
       user = getCachedUser(decoded.userId);
-      
+
       if (!user) {
         // Get user from database only if not in cache
         user = await authService.findUserById(decoded.userId);
@@ -191,7 +191,7 @@ const authMiddleware = async (req, res, next) => {
         }
       }
     }
-    
+
     // Auto-refresh token if needed
     if (needsTokenRefresh && user) {
       try {
@@ -200,18 +200,18 @@ const authMiddleware = async (req, res, next) => {
         if (freshUser) {
           // Generate new token with fresh data
           const newToken = require('../services/auth.service').generateToken(freshUser.id, freshUser.email, freshUser);
-          
+
           // Set new token in response header for the current request
           res.cookie('auth_token', newToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
           });
-          
+
           // Update user object with fresh data
           user = freshUser;
           setCachedUser(user.id, user);
-          
+
           logger.info('Auto-refreshed JWT token for user:', user.email);
         }
       } catch (error) {
@@ -219,7 +219,7 @@ const authMiddleware = async (req, res, next) => {
         // Continue with existing user data - don't fail the request
       }
     }
-    
+
     if (!user) {
       return handleAuthError(req, res, 'User not found');
     }
@@ -270,18 +270,18 @@ const optionalAuthMiddleware = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Use JWT data if available (for newer tokens), otherwise fall back to database
     let user;
     let needsTokenRefresh = false;
-    
+
     if (decoded.firstName && decoded.emailVerified !== undefined) {
       // JWT contains user data - check if subscription fields are missing
       if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
         // Old token format - needs refresh with subscription data
         needsTokenRefresh = true;
       }
-      
+
       // Use JWT data for now
       user = {
         id: decoded.userId,
@@ -299,7 +299,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
       // Fallback to cache/database for older tokens
       needsTokenRefresh = true;
       user = getCachedUser(decoded.userId);
-      
+
       if (!user) {
         // Get user from database only if not in cache
         user = await authService.findUserById(decoded.userId);
@@ -308,7 +308,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
         }
       }
     }
-    
+
     // Auto-refresh token if needed
     if (needsTokenRefresh && user) {
       try {
@@ -317,18 +317,18 @@ const optionalAuthMiddleware = async (req, res, next) => {
         if (freshUser) {
           // Generate new token with fresh data
           const newToken = require('../services/auth.service').generateToken(freshUser.id, freshUser.email, freshUser);
-          
+
           // Set new token in response header for the current request
           res.cookie('auth_token', newToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
           });
-          
+
           // Update user object with fresh data
           user = freshUser;
           setCachedUser(user.id, user);
-          
+
           logger.info('Auto-refreshed JWT token for user:', user.email);
         }
       } catch (error) {
@@ -336,7 +336,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
         // Continue with existing user data - don't fail the request
       }
     }
-    
+
     if (user && user.emailVerified && user.status === 'active') {
       req.user = user;
       req.userId = user.id;
@@ -361,12 +361,12 @@ const guestOnlyMiddleware = (req, res, next) => {
         error: 'ALREADY_AUTHENTICATED'
       });
     }
-    
+
     // For web requests
     const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
     return res.redirect(getPostAuthRedirectUrl(req.user));
   }
-  
+
   next();
 };
 
@@ -421,10 +421,10 @@ const errorMiddleware = (error, req, res, next) => {
 // Helper function for authentication errors
 const handleAuthError = (req, res, message) => {
   logger.warn(`Authentication failed: ${message} - ${req.ip}`);
-  
+
   // Clear invalid token
   res.clearCookie('auth_token');
-  
+
   // For API requests
   if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
     return res.status(401).json({
@@ -433,7 +433,7 @@ const handleAuthError = (req, res, message) => {
       error: 'UNAUTHORIZED'
     });
   }
-  
+
   // For web requests, redirect to login
   try {
     if (req.flash && typeof req.flash === 'function') {
@@ -442,7 +442,7 @@ const handleAuthError = (req, res, message) => {
   } catch (flashError) {
     logger.debug('Flash not available:', flashError.message);
   }
-  
+
   return res.redirect('/auth/sign-in');
 };
 

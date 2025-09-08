@@ -37,11 +37,11 @@ router.get('/', (req, res) => {
 router.get('/upgrade', (req, res) => {
   try {
     const currentTier = req.user.subscription_tier || 'free';
-    
+
     // Handle case where Stripe isn't fully configured yet
     let tiers = [];
     let publishableKey = '';
-    
+
     try {
       tiers = stripeConfig.getAllTiers().filter(tier => tier.key !== 'free');
       publishableKey = stripeConfig.getPublishableKey();
@@ -54,7 +54,7 @@ router.get('/upgrade', (req, res) => {
         { key: 'enterprise', name: 'Enterprise', priceId: '', features: ['16 videos/month', 'Priority processing', 'API access', 'Dedicated support'] }
       ];
     }
-    
+
     res.render('subscription/upgrade', {
       title: 'Upgrade Subscription - Our AI Legacy',
       description: 'Choose the perfect plan for your needs',
@@ -113,7 +113,7 @@ router.get('/manage', (req, res) => {
  */
 router.get('/success', (req, res) => {
   const sessionId = req.query.session_id;
-  
+
   res.render('subscription/success', {
     title: 'Subscription Successful - Our AI Legacy',
     description: 'Welcome to your new subscription!',

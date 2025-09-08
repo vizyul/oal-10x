@@ -1,6 +1,5 @@
 const { logger } = require('../utils');
-const airtable = require('../services/airtable.service');
-const databaseService = require('../services/database.service');
+const database = require('../services/database.service');
 const { validationResult } = require('express-validator');
 
 class VideosController {
@@ -16,188 +15,136 @@ class VideosController {
 
       logger.info(`Fetching videos for user ${userId}`, { page, limit, status, search, category });
 
-      // Build filter options - use user_id linked field
-      let filterFormula = '';
-      
-      try {
-        // Temporarily disable filtering to get the query working first, then filter manually
-        filterFormula = ''; // No filter for now
-        logger.info(`Getting all videos, will filter manually for user ID: ${userId}`);
-      } catch (error) {
-        logger.warn('Error building user filter, returning all videos:', error);
-        filterFormula = '';
-      }
-      
-      if (status && filterFormula) {
-        filterFormula += ` AND {status} = "${status}"`;
-      } else if (status) {
-        filterFormula = `{status} = "${status}"`;
-      }
-      
-      if (category && filterFormula) {
-        filterFormula += ` AND {category} = "${category}"`;
-      } else if (category) {
-        filterFormula = `{category} = "${category}"`;
-      }
-      
-      if (search && filterFormula) {
-        filterFormula += ` AND (FIND(LOWER("${search}"), LOWER({video_title})) > 0)`;
-      } else if (search) {
-        filterFormula = `FIND(LOWER("${search}"), LOWER({video_title})) > 0`;
-      }
-
-      // Proper query with filtering, sorting, and pagination
-      const options = {
-        maxRecords: parseInt(limit) * parseInt(page),
-        sort: [{ field: 'created_at', direction: 'desc' }]
-      };
-
-      if (filterFormula) {
-        options.filterByFormula = filterFormula;
-      }
-
-      logger.info('Querying Videos with options:', options);
-
-      // Implement timeout wrapper for the Airtable query
-      const queryWithTimeout = (query, timeoutMs = 5000) => {
-        return Promise.race([
-          query,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Query timeout after ${timeoutMs}ms`)), timeoutMs)
-          )
-        ]);
-      };
-
-      try {
-        logger.info('Starting Airtable query with timeout protection...');
-        
-        // Very simple query - get only a small batch with minimal options
-        const simpleOptions = {
-          maxRecords: 50,  // Reduce to 50 records max
-          // Remove sorting to speed up the query
-        };
-        
-        logger.info('Executing minimal Airtable query with options:', simpleOptions);
-        
-        // Try direct Airtable base query instead of service method
-        logger.info('Attempting direct Airtable base query...');
-        
-        const records = await queryWithTimeout(
-          new Promise((resolve, reject) => {
-            const recordsList = [];
-            if (!airtable.base) {
-              reject(new Error('Airtable not configured'));
-              return;
-            }
-            
-            airtable.base('Videos').select({
-              maxRecords: 20, // Even smaller batch
-              pageSize: 10    // Small page size
-            }).eachPage((pageRecords, fetchNextPage) => {
-              recordsList.push(...pageRecords);
-              // Only fetch first page to keep it fast
-              resolve(recordsList);
-            }).catch(reject);
-          }),
-          4000 // 4 second timeout
-        );
-        
-        logger.info(`Query completed successfully. Found ${records.length} records`);
-        
-        // Manual filtering by user_id
-        const userFilteredRecords = records.filter(record => {
-          const userIds = record.fields.user_id || [];
-          const hasUser = userIds.includes(userId);
-          if (hasUser) {
-            logger.info(`Match found: Record ${record.id} belongs to user ${userId}`);
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
           }
-          return hasUser;
-        });
-        
-        logger.info(`After filtering: ${userFilteredRecords.length} records for user ${userId}`);
-        
-        // Apply pagination to filtered results
-        const startIndex = (parseInt(page) - 1) * parseInt(limit);
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedRecords = userFilteredRecords.slice(startIndex, endIndex);
-        
-        logger.info(`After pagination: ${paginatedRecords.length} records (page ${page}, limit ${limit})`);
-
-        // Format the videos using arrow function
-        const videos = paginatedRecords.map((record) => {
-          try {
-            return this.formatVideoResponse(record);
-          } catch (formatError) {
-            logger.error(`Error formatting video record ${record.id}:`, formatError.message);
-            
-            // Return basic video object if formatting fails
-            return {
-              id: record.id,
-              video_title: record.fields.video_title || 'Untitled Video',
-              channel_name: record.fields.channel_name || 'Unknown Channel',
-              status: record.fields.status || 'completed',
-              created_at: record.createdTime,
-              ...record.fields
-            };
-          }
-        });
-
-        logger.info(`Successfully formatted ${videos.length} videos for response`);
-
-        res.json({
-          success: true,
-          data: {
-            videos,
-            pagination: {
-              page: parseInt(page),
-              limit: parseInt(limit),
-              total: userFilteredRecords.length,
-              hasMore: endIndex < userFilteredRecords.length
-            }
-          }
-        });
-        
-      } catch (queryError) {
-        logger.error('Airtable query failed:', queryError);
-        
-        if (queryError.message && queryError.message.includes('timeout')) {
-          logger.error('Query timed out - returning empty result');
-          return res.json({
-            success: true,
-            data: {
-              videos: [],
-              pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total: 0,
-                hasMore: false
-              }
-            },
-            warning: 'Query timed out - there may be too many records to process'
-          });
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
         }
-        
-        throw queryError; // Re-throw other errors to be caught by outer catch
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
       }
+
+      // Build WHERE conditions for PostgreSQL
+      const whereConditions = [];
+      const queryParams = [];
+      let paramIndex = 1;
+
+      // Always filter by user
+      whereConditions.push(`users_id = $${paramIndex}`);
+      queryParams.push(actualUserId);
+      paramIndex++;
+
+      // Add status filter
+      if (status) {
+        whereConditions.push(`status = $${paramIndex}`);
+        queryParams.push(status);
+        paramIndex++;
+      }
+
+      // Add category filter
+      if (category) {
+        whereConditions.push(`category = $${paramIndex}`);
+        queryParams.push(category);
+        paramIndex++;
+      }
+
+      // Add search filter (case-insensitive search in video_title)
+      if (search) {
+        whereConditions.push(`LOWER(video_title) LIKE LOWER($${paramIndex})`);
+        queryParams.push(`%${search}%`);
+        paramIndex++;
+      }
+
+      // Build the base query
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+      // Get total count for pagination
+      const countQuery = `SELECT COUNT(*) as total FROM videos ${whereClause}`;
+      const countResult = await database.query(countQuery, queryParams);
+      const totalRecords = parseInt(countResult.rows[0].total);
+
+      // Calculate pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
+      const hasMore = offset + limitNum < totalRecords;
+
+      // Build main query with pagination and sorting
+      const mainQuery = `
+        SELECT * FROM videos 
+        ${whereClause}
+        ORDER BY created_at DESC 
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+      queryParams.push(limitNum, offset);
+
+      logger.info('Executing PostgreSQL query:', { query: mainQuery, params: queryParams });
+
+      const result = await database.query(mainQuery, queryParams);
+      const records = result.rows;
+
+      logger.info(`Found ${records.length} videos for user ${actualUserId}`);
+
+      // Format the videos using database service format
+      const videos = records.map((record) => {
+        try {
+          // Create database service formatted record
+          const formattedRecord = database.formatRecord(record);
+          return this.formatVideoResponse(formattedRecord);
+        } catch (formatError) {
+          logger.error(`Error formatting video record ${record.id}:`, formatError.message);
+
+          // Return basic video object if formatting fails
+          return {
+            id: record.id,
+            video_title: record.video_title || 'Untitled Video',
+            channel_name: record.channel_name || 'Unknown Channel',
+            status: record.status || 'completed',
+            created_at: record.created_at || new Date().toISOString(),
+            ...record
+          };
+        }
+      });
+
+      logger.info(`Successfully formatted ${videos.length} videos for response`);
+
+      res.json({
+        success: true,
+        data: {
+          videos,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: totalRecords,
+            hasMore
+          }
+        }
+      });
 
     } catch (error) {
       logger.error('=== ERROR in getVideos method ===');
       logger.error('Error fetching videos:', error);
       logger.error('Error stack:', error.stack);
-      logger.error('Error type:', typeof error);
-      logger.error('Error details:', JSON.stringify(error, null, 2));
-      
+
       // More detailed error information
       const errorResponse = {
         success: false,
         message: 'Failed to fetch videos',
         error: error.message || 'Unknown error'
       };
-      
-      if (error.message && error.message.includes('timeout')) {
-        errorResponse.message = 'Request timed out - there may be too many records to process';
-      }
-      
+
       try {
         res.status(500).json(errorResponse);
       } catch (responseError) {
@@ -217,8 +164,29 @@ class VideosController {
 
       logger.info(`Fetching video ${id} for user ${userId}`);
 
-      const record = await airtable.findById('Videos', id);
-      
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
+      const record = await database.findById('videos', id);
+
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -226,14 +194,15 @@ class VideosController {
         });
       }
 
-      // Check if video belongs to user (when user_id field is available)
-      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
+      // Check if video belongs to user
+      const recordData = record.fields || record;
+      if (recordData.users_id && recordData.users_id !== actualUserId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
         });
       }
-      
+
       const video = this.formatVideoResponse(record);
 
       res.json({
@@ -267,14 +236,14 @@ class VideosController {
       }
 
       const userId = req.user.id;
-      const { 
-        youtube_url, 
-        video_title, 
-        channel_name, 
+      const {
+        youtube_url,
+        video_title,
+        channel_name,
         description,
         category,
         tags,
-        privacy_setting 
+        privacy_setting
       } = req.body;
 
       logger.info(`Creating new video for user ${userId}`, { youtube_url, video_title });
@@ -288,14 +257,36 @@ class VideosController {
         });
       }
 
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
       // Check if video already exists for this user
-      const existingVideos = await airtable.findByField('Videos', 'videoid', videoId);
+      const existingVideos = await database.findByField('videos', 'videoid', videoId);
       if (existingVideos && existingVideos.length > 0) {
         // Check if any belong to current user
-        const userVideo = existingVideos.find(video => 
-          video.fields.user_id && video.fields.user_id[0] === userId
-        );
-        
+        const userVideo = existingVideos.find(video => {
+          const videoData = video.fields || video;
+          return videoData.users_id === actualUserId;
+        });
+
         if (userVideo) {
           return res.status(409).json({
             success: false,
@@ -314,135 +305,77 @@ class VideosController {
         logger.warn('Could not extract metadata:', metadataError.message);
       }
 
-      // Prepare video data for Airtable with all new fields
+      // Prepare video data for PostgreSQL
       const videoData = {
         // Basic video info
         youtube_url,
         videoid: videoId,
         video_title: video_title || metadata?.title || 'Untitled Video',
         channel_name: channel_name || metadata?.channelTitle || 'Unknown Channel',
-        chanel_handle: metadata?.channelHandle || '', // Note: matches Airtable column name
-        
-        // Enhanced fields (will be ignored if fields don't exist yet)
+        channel_handle: metadata?.channelHandle || '', // Now matches corrected column name
+
+        // Enhanced fields
         description: description || metadata?.description || '',
         duration: metadata?.duration || 0,
-        upload_date: metadata?.publishedAt || new Date().toISOString(),
-        thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail
-        
+        upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
+        thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
+
         // Processing status
         status: 'pending',
-        processing_log: JSON.stringify({
-          created: new Date().toISOString(),
-          steps: []
-        }),
-        
+
         // Categorization
         category: category || 'Education',
         privacy_setting: privacy_setting || 'public',
-        
+
         // User association
-        user_id: [userId]
+        users_id: actualUserId, // PostgreSQL uses users_id column name
+        created_at: new Date().toISOString()
       };
 
       // Handle tags (convert array to comma-separated string if needed)
       if (tags && Array.isArray(tags)) {
-        videoData.tags = tags;
+        videoData.tags = tags.join(',');
       } else if (metadata?.tags) {
-        videoData.tags = metadata.tags.slice(0, 10); // Limit to 10 tags
+        videoData.tags = metadata.tags.slice(0, 10).join(','); // Limit to 10 tags
       }
 
-      // Remove fields that don't exist in current table structure
-      const safeVideoData = {};
-      const currentTableFields = await this.getCurrentTableFields('Videos');
-      
-      Object.keys(videoData).forEach(key => {
-        if (currentTableFields.includes(key)) {
-          safeVideoData[key] = videoData[key];
-        }
-      });
-
-      // === DUAL WRITE: Write to both Airtable and PostgreSQL === 
-      let airtableRecord = null;
+      // Write to PostgreSQL
       let postgresRecord = null;
-      let writeErrors = [];
 
-      // 1. Write to Airtable first (existing logic)
-      try {
-        logger.info('Writing video to Airtable...');
-        airtableRecord = await airtable.create('Videos', safeVideoData);
-        logger.info(`✅ Video created in Airtable: ${airtableRecord.id}`);
-      } catch (airtableError) {
-        logger.error('❌ Failed to create video in Airtable:', airtableError);
-        writeErrors.push(`Airtable: ${airtableError.message}`);
-      }
-
-      // 2. Write to PostgreSQL (independent operation)
       try {
         logger.info('Writing video to PostgreSQL...');
-        
-        // Prepare PostgreSQL data (different field mappings)
-        const postgresVideoData = {
-          youtube_url: youtube_url,
-          videoid: videoId,
-          video_title: video_title || metadata?.title || 'Untitled Video',
-          channel_name: channel_name || metadata?.channelTitle || 'Unknown Channel',
-          chanel_handle: metadata?.channelHandle || '', // Channel handle like @prophetdwight
-          description: description || metadata?.description || '',
-          thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
-          users_id: userId, // PostgreSQL uses users_id column name
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          airtable_id: airtableRecord?.id || null // Store Airtable ID if successful
-        };
-
-        // Add other fields if they exist
-        if (metadata?.duration) postgresVideoData.duration = metadata.duration;
-        if (category) postgresVideoData.category = category;
-        if (privacy_setting) postgresVideoData.privacy_setting = privacy_setting;
-        
-        postgresRecord = await databaseService.create('videos', postgresVideoData);
+        postgresRecord = await database.create('videos', videoData);
         logger.info(`✅ Video created in PostgreSQL: ID ${postgresRecord.id}`);
-        
+
       } catch (postgresError) {
         logger.error('❌ Failed to create video in PostgreSQL:', postgresError);
-        writeErrors.push(`PostgreSQL: ${postgresError.message}`);
-      }
-
-      // 3. Determine response based on results
-      if (!airtableRecord && !postgresRecord) {
-        // Both failed
         return res.status(500).json({
           success: false,
-          message: 'Failed to create video in both databases',
-          errors: writeErrors
+          message: 'Failed to create video',
+          error: postgresError.message
         });
       }
 
-      // At least one succeeded - format response using available data
-      const video = airtableRecord ? 
-        this.formatVideoResponse(airtableRecord) :
-        this.formatPostgresVideoResponse(postgresRecord);
+      // Format response using PostgreSQL data
+      const video = this.formatVideoResponse(postgresRecord);
 
-      // 4. Trigger processing if we have metadata and Airtable record
-      if (metadata && airtableRecord) {
+      // Trigger processing if we have metadata and PostgreSQL record
+      if (metadata && postgresRecord) {
         try {
-          await this.triggerVideoProcessing(airtableRecord.id, metadata);
+          const recordData = postgresRecord.fields || postgresRecord;
+          await this.triggerVideoProcessing(recordData.id, metadata);
         } catch (processingError) {
           logger.warn('Could not trigger processing:', processingError.message);
         }
       }
 
-      // 5. Success response with warnings if any database failed
+      // Success response
       const response = {
         success: true,
         message: 'Video created successfully',
         data: { video }
       };
-
-      if (writeErrors.length > 0) {
-        response.warnings = writeErrors;
-        response.message += ` (with ${writeErrors.length} database warning(s))`;
-      }
 
       res.status(201).json(response);
 
@@ -477,8 +410,29 @@ class VideosController {
 
       logger.info(`Updating video ${id} for user ${userId}`, updateData);
 
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
       // Check if video exists and belongs to user
-      const existingRecord = await airtable.findById('Videos', id);
+      const existingRecord = await database.findById('videos', id);
       if (!existingRecord) {
         return res.status(404).json({
           success: false,
@@ -486,8 +440,9 @@ class VideosController {
         });
       }
 
-      // Check ownership (when user_id field is available)
-      if (existingRecord.fields.user_id && existingRecord.fields.user_id[0] !== userId) {
+      // Check ownership
+      const existingData = existingRecord.fields || existingRecord;
+      if (existingData.users_id && existingData.users_id !== actualUserId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -496,54 +451,47 @@ class VideosController {
 
       // Prepare update data
       const safeUpdateData = { ...updateData };
-      
+
       // Remove sensitive fields that shouldn't be updated directly
       delete safeUpdateData.id;
       delete safeUpdateData.videoid;
       delete safeUpdateData.youtube_url; // Prevent URL changes
-      delete safeUpdateData.user_id; // Prevent ownership changes
+      delete safeUpdateData.users_id; // Prevent ownership changes
       delete safeUpdateData.created_at;
-      
-      // Handle processing log updates
+
+      // Handle processing log updates (if applicable)
       if (safeUpdateData.processing_log) {
         try {
-          // Merge with existing log
-          const existingLog = existingRecord.fields.processing_log 
-            ? JSON.parse(existingRecord.fields.processing_log)
+          // Merge with existing log if it exists
+          const existingLog = existingData.processing_log
+            ? (typeof existingData.processing_log === 'string'
+              ? JSON.parse(existingData.processing_log)
+              : existingData.processing_log)
             : { steps: [] };
-          
+
           const newLog = typeof safeUpdateData.processing_log === 'string'
             ? JSON.parse(safeUpdateData.processing_log)
             : safeUpdateData.processing_log;
-          
+
           const mergedLog = {
             ...existingLog,
             ...newLog,
             updated: new Date().toISOString(),
             steps: [...(existingLog.steps || []), ...(newLog.steps || [])]
           };
-          
+
           safeUpdateData.processing_log = JSON.stringify(mergedLog);
         } catch (logError) {
           logger.warn('Error merging processing log:', logError.message);
         }
       }
 
-      // Add updated timestamp if field exists
-      const currentFields = await this.getCurrentTableFields('Videos');
-      if (currentFields.includes('updated_at')) {
-        safeUpdateData.updated_at = new Date().toISOString();
+      // Handle tags conversion if needed (array to comma-separated string)
+      if (safeUpdateData.tags && Array.isArray(safeUpdateData.tags)) {
+        safeUpdateData.tags = safeUpdateData.tags.join(',');
       }
 
-      // Filter out fields that don't exist in current table structure
-      const filteredUpdateData = {};
-      Object.keys(safeUpdateData).forEach(key => {
-        if (currentFields.includes(key)) {
-          filteredUpdateData[key] = safeUpdateData[key];
-        }
-      });
-
-      const record = await airtable.update('Videos', id, filteredUpdateData);
+      const record = await database.update('videos', id, safeUpdateData);
       const video = this.formatVideoResponse(record);
 
       res.json({
@@ -573,7 +521,46 @@ class VideosController {
 
       logger.info(`Deleting video ${id} for user ${userId}`);
 
-      await airtable.delete('Videos', id);
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
+      // Check if video exists and belongs to user before deleting
+      const existingRecord = await database.findById('videos', id);
+      if (!existingRecord) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+
+      // Check ownership
+      const existingData = existingRecord.fields || existingRecord;
+      if (existingData.users_id && existingData.users_id !== actualUserId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
+      await database.delete('videos', id);
 
       res.json({
         success: true,
@@ -601,8 +588,29 @@ class VideosController {
 
       logger.info(`Fetching status for video ${id}`);
 
-      const record = await airtable.findById('Videos', id);
-      
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
+      const record = await database.findById('videos', id);
+
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -610,11 +618,20 @@ class VideosController {
         });
       }
 
+      // Check ownership
+      const recordData = record.fields || record;
+      if (recordData.users_id && recordData.users_id !== actualUserId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+
       const status = {
         video_id: id,
-        status: record.fields.status || 'pending',
-        processing_log: record.fields.processing_log || null,
-        last_updated: record.fields['Last Modified'] || record.createdTime
+        status: recordData.status || 'pending',
+        processing_log: recordData.processing_log || null,
+        last_updated: recordData.updated_at || recordData.created_at || record.createdTime
       };
 
       res.json({
@@ -633,15 +650,16 @@ class VideosController {
   }
 
   /**
-   * Format video record for API response (Airtable)
-   * @param {Object} record - Airtable record
+   * Format video record for API response (PostgreSQL)
+   * @param {Object} record - Database record (either database service formatted or direct PostgreSQL row)
    * @returns {Object} Formatted video object
    */
   formatVideoResponse(record) {
-    
+
     try {
-      // Ensure record and fields exist
-      if (!record || !record.fields) {
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const recordData = record.fields || record;
+      if (!recordData) {
         logger.warn('Invalid record format:', record);
         return {
           id: record?.id || 'unknown',
@@ -652,12 +670,12 @@ class VideosController {
       }
 
       const video = {
-        id: record.id,
-        ...record.fields,
-        created_at: record.createdTime
+        id: recordData.id,
+        ...recordData,
+        created_at: record.createdTime || recordData.created_at
       };
 
-      // Parse JSON fields safely
+      // Parse JSON fields safely (PostgreSQL stores JSON as strings)
       try {
         if (video.processing_log && typeof video.processing_log === 'string') {
           video.processing_log = JSON.parse(video.processing_log);
@@ -692,14 +710,16 @@ class VideosController {
         }
       }
 
-      // Ensure tags is an array
+      // Ensure tags is an array (PostgreSQL stores as comma-separated string)
       if (video.tags && typeof video.tags === 'string') {
         try {
-          video.tags = video.tags.split(',').map(tag => tag.trim());
+          video.tags = video.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
         } catch (e) {
           logger.warn('Error parsing tags:', e);
           video.tags = [];
         }
+      } else if (!video.tags) {
+        video.tags = [];
       }
 
       return video;
@@ -711,57 +731,27 @@ class VideosController {
         recordId: record?.id || 'No record ID',
         recordStructure: record ? Object.keys(record) : 'No record',
         fieldsStructure: record?.fields ? Object.keys(record.fields) : 'No fields',
-        hasVideo: !!record?.fields?.video_title,
-        hasDuration: !!record?.fields?.duration,
+        hasVideo: !!(record?.fields?.video_title || record?.video_title),
+        hasDuration: !!(record?.fields?.duration || record?.duration),
         fullError: JSON.stringify(error, null, 2)
       });
+      const recordData = record?.fields || record;
       return {
-        id: record?.id || 'unknown',
-        video_title: record?.fields?.video_title || 'Unknown Video',
+        id: recordData?.id || 'unknown',
+        video_title: recordData?.video_title || 'Unknown Video',
         status: 'error',
-        created_at: record?.createdTime || new Date().toISOString()
+        created_at: record?.createdTime || recordData?.created_at || new Date().toISOString()
       };
     }
   }
 
   /**
-   * Format PostgreSQL video record for API response
+   * Legacy method - now just calls formatVideoResponse
    * @param {Object} record - PostgreSQL record (from database service)
    * @returns {Object} Formatted video object
    */
   formatPostgresVideoResponse(record) {
-    // PostgreSQL record comes in format: { id, fields, createdTime }
-    const video = {
-      id: record.id,
-      ...record.fields,
-      created_at: record.createdTime || record.fields.created_at
-    };
-
-    // Parse JSON fields safely (PostgreSQL stores JSON as strings)
-    try {
-      if (video.thumbnail && typeof video.thumbnail === 'string') {
-        video.thumbnail = JSON.parse(video.thumbnail);
-      }
-    } catch (e) {
-      logger.warn('Could not parse thumbnail JSON from PostgreSQL');
-    }
-
-    // Format duration to human readable
-    if (video.duration && typeof video.duration === 'number') {
-      try {
-        video.duration_formatted = this.formatDuration(video.duration);
-      } catch (e) {
-        logger.warn('Error formatting duration in PostgreSQL response:', e);
-        video.duration_formatted = '0:00';
-      }
-    }
-
-    // Ensure tags is an array
-    if (video.tags && typeof video.tags === 'string') {
-      video.tags = video.tags.split(',').map(tag => tag.trim());
-    }
-
-    return video;
+    return this.formatVideoResponse(record);
   }
 
   /**
@@ -771,12 +761,12 @@ class VideosController {
    */
   async getCurrentTableFields(tableName) {
     try {
-      const schema = await airtable.getTableSchema(tableName);
+      const schema = await database.getTableSchema(tableName);
       return schema.fields || [];
     } catch (error) {
       logger.warn(`Could not get table schema for ${tableName}:`, error.message);
       // Return common fields as fallback
-      return ['Id', 'youtube_url', 'videoid', 'video_title', 'channel_name', 'Last Modified'];
+      return ['id', 'youtube_url', 'videoid', 'video_title', 'channel_name', 'created_at', 'updated_at'];
     }
   }
 
@@ -788,16 +778,16 @@ class VideosController {
   async triggerVideoProcessing(videoId, metadata) {
     try {
       const processingQueue = require('../services/processing-queue.service');
-      
+
       logger.info(`Video processing triggered for ${videoId}`, {
         hasMetadata: !!metadata,
         hasTranscript: !!metadata?.transcript
       });
 
       // Update video status to pending
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       if (currentFields.includes('status')) {
-        await airtable.update('Videos', videoId, {
+        await database.update('videos', videoId, {
           status: 'pending',
           processing_log: JSON.stringify({
             triggered: new Date().toISOString(),
@@ -816,7 +806,7 @@ class VideosController {
         { task_type: 'generate_titles', priority: 2 },
         { task_type: 'generate_thumbnails', priority: 1 }
       ];
-      
+
       for (const task of processingTasks) {
         try {
           await processingQueue.addToQueue(videoId, task.task_type, task.priority);
@@ -824,7 +814,7 @@ class VideosController {
           logger.warn(`Could not add ${task.task_type} to queue:`, queueError.message);
         }
       }
-      
+
     } catch (error) {
       logger.error('Error triggering video processing:', error);
     }
@@ -841,8 +831,29 @@ class VideosController {
 
       logger.info(`Manual processing triggered for video ${id} by user ${userId}`);
 
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
       // Check if video exists and belongs to user
-      const record = await airtable.findById('Videos', id);
+      const record = await database.findById('videos', id);
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -850,8 +861,9 @@ class VideosController {
         });
       }
 
-      // Check ownership first
-      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
+      // Check ownership
+      const recordData = record.fields || record;
+      if (recordData.users_id && recordData.users_id !== actualUserId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -860,7 +872,7 @@ class VideosController {
 
       // Trigger processing
       const videoProcessing = require('../services/video-processing.service');
-      
+
       // Process in background
       videoProcessing.processVideo(id)
         .then(result => {
@@ -900,8 +912,29 @@ class VideosController {
 
       logger.info(`Processing retry requested for video ${id} by user ${userId}`);
 
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        // This is an Airtable record ID, try to find the PostgreSQL user
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        // This is already a PostgreSQL integer ID
+        actualUserId = parseInt(userId);
+      }
+
       // Check if video exists and belongs to user
-      const record = await airtable.findById('Videos', id);
+      const record = await database.findById('videos', id);
       if (!record) {
         return res.status(404).json({
           success: false,
@@ -909,7 +942,8 @@ class VideosController {
         });
       }
 
-      if (record.fields.user_id && record.fields.user_id[0] !== userId) {
+      const recordData = record.fields || record;
+      if (recordData.users_id && recordData.users_id !== actualUserId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied'
@@ -917,9 +951,9 @@ class VideosController {
       }
 
       // Reset status and trigger processing
-      const currentFields = await this.getCurrentTableFields('Videos');
+      const currentFields = await this.getCurrentTableFields('videos');
       if (currentFields.includes('status')) {
-        await airtable.update('Videos', id, {
+        await database.update('videos', id, {
           status: 'pending',
           processing_log: JSON.stringify({
             retried: new Date().toISOString(),

@@ -76,14 +76,14 @@ class DatabaseService {
     try {
       const query = `SELECT * FROM ${tableName.toLowerCase()} WHERE ${fieldName} = $1`;
       const result = await this.query(query, [fieldValue]);
-      
+
       // Only log if no results found (potential issue) or many results (performance concern)
       if (result.rows.length === 0) {
         logger.debug(`No records found in ${tableName} where ${fieldName} = ${fieldValue}`);
       } else if (result.rows.length > 10) {
         logger.debug(`Found ${result.rows.length} records in ${tableName} where ${fieldName} = ${fieldValue}`);
       }
-      
+
       return this.formatRecords(result.rows);
     } catch (error) {
       logger.error(`Error finding records in ${tableName}:`, error);
@@ -101,12 +101,12 @@ class DatabaseService {
     try {
       const query = `SELECT * FROM ${tableName.toLowerCase()} WHERE id = $1`;
       const result = await this.query(query, [recordId]);
-      
+
       if (result.rows.length === 0) {
         logger.debug(`Record not found in ${tableName} with ID: ${recordId}`);
         return null;
       }
-      
+
       return this.formatRecord(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding record in ${tableName}:`, error);
@@ -123,31 +123,31 @@ class DatabaseService {
   async findAll(tableName, options = {}) {
     try {
       const { maxRecords = 100, sort = [], filterByFormula = null } = options;
-      
+
       logger.info(`Finding all records in ${tableName}`, options);
-      
+
       let query = `SELECT * FROM ${tableName.toLowerCase()}`;
       const params = [];
-      
+
       // Add WHERE clause if filter is provided
       if (filterByFormula) {
         // This is a simplified version - you'd need to parse Airtable formulas
         // For now, we'll skip complex filtering
         logger.warn('Complex filtering not yet implemented in PostgreSQL service');
       }
-      
+
       // Add ORDER BY if sort is specified
       if (sort.length > 0) {
         const sortClauses = sort.map(s => `${s.field} ${s.direction.toUpperCase()}`);
         query += ` ORDER BY ${sortClauses.join(', ')}`;
       }
-      
+
       // Add LIMIT
       query += ` LIMIT $${params.length + 1}`;
       params.push(maxRecords);
-      
+
       const result = await this.query(query, params);
-      
+
       logger.info(`Found ${result.rows.length} records in ${tableName}`);
       return this.formatRecords(result.rows);
     } catch (error) {
@@ -165,23 +165,23 @@ class DatabaseService {
   async create(tableName, fields) {
     try {
       logger.debug(`Creating record in ${tableName}`);
-      
+
       const fieldNames = Object.keys(fields);
       const values = Object.values(fields);
       const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
-      
+
       const query = `
         INSERT INTO ${tableName.toLowerCase()} (${fieldNames.join(', ')}) 
         VALUES (${placeholders}) 
         RETURNING *
       `;
-      
+
       const result = await this.query(query, values);
-      
+
       if (result.rows.length === 0) {
         throw new Error('Failed to create record');
       }
-      
+
       logger.debug(`Record created in ${tableName} with ID ${result.rows[0].id}`);
       return this.formatRecord(result.rows[0]);
     } catch (error) {
@@ -200,24 +200,30 @@ class DatabaseService {
   async update(tableName, recordId, fields) {
     try {
       logger.debug(`Updating record in ${tableName} with ID ${recordId}`);
-      
+
       const fieldNames = Object.keys(fields);
       const values = Object.values(fields);
       const setClauses = fieldNames.map((field, index) => `${field} = $${index + 1}`);
-      
+
+      // Only add updated_at if it's not already in the fields
+      const hasUpdatedAt = fieldNames.some(field => field.toLowerCase() === 'updated_at');
+      const setClause = hasUpdatedAt
+        ? setClauses.join(', ')
+        : `${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP`;
+
       const query = `
         UPDATE ${tableName.toLowerCase()} 
-        SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP
+        SET ${setClause}
         WHERE id = $${values.length + 1} 
         RETURNING *
       `;
-      
+
       const result = await this.query(query, [...values, recordId]);
-      
+
       if (result.rows.length === 0) {
         throw new Error('Record not found or failed to update');
       }
-      
+
       logger.debug(`Record updated in ${tableName}`);
       return this.formatRecord(result.rows[0]);
     } catch (error) {
@@ -235,14 +241,14 @@ class DatabaseService {
   async delete(tableName, recordId) {
     try {
       logger.info(`Deleting record in ${tableName} with ID: ${recordId}`);
-      
+
       const query = `DELETE FROM ${tableName.toLowerCase()} WHERE id = $1 RETURNING *`;
       const result = await this.query(query, [recordId]);
-      
+
       if (result.rows.length === 0) {
         throw new Error('Record not found');
       }
-      
+
       logger.info(`Record deleted successfully in ${tableName}`, { id: recordId });
       return this.formatRecord(result.rows[0]);
     } catch (error) {
@@ -260,25 +266,25 @@ class DatabaseService {
   async findByMultipleFields(tableName, fieldConditions) {
     try {
       logger.info(`Finding records in ${tableName} with conditions:`, fieldConditions);
-      
+
       const conditions = Object.entries(fieldConditions)
         .filter(([key, value]) => value !== null && value !== undefined);
-      
+
       if (conditions.length === 0) {
         logger.warn('No valid conditions provided for findByMultipleFields');
         return [];
       }
-      
+
       const whereClauses = conditions.map(([field, value], index) => `${field} = $${index + 1}`);
       const values = conditions.map(([field, value]) => value);
-      
+
       const query = `
         SELECT * FROM ${tableName.toLowerCase()} 
         WHERE ${whereClauses.join(' AND ')}
       `;
-      
+
       const result = await this.query(query, values);
-      
+
       logger.info(`Found ${result.rows.length} records in ${tableName} matching conditions`);
       return this.formatRecords(result.rows);
     } catch (error) {
@@ -296,30 +302,30 @@ class DatabaseService {
   async createMultiple(tableName, recordsData) {
     try {
       logger.info(`Creating ${recordsData.length} records in ${tableName}`);
-      
+
       const client = await this.pool.connect();
-      
+
       try {
         await client.query('BEGIN');
-        
+
         const results = [];
         for (const record of recordsData) {
           const fieldNames = Object.keys(record.fields);
           const values = Object.values(record.fields);
           const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
-          
+
           const query = `
             INSERT INTO ${tableName.toLowerCase()} (${fieldNames.join(', ')}) 
             VALUES (${placeholders}) 
             RETURNING *
           `;
-          
+
           const result = await client.query(query, values);
           results.push(this.formatRecord(result.rows[0]));
         }
-        
+
         await client.query('COMMIT');
-        
+
         logger.info(`${results.length} records created successfully in ${tableName}`);
         return results;
       } catch (error) {
@@ -363,9 +369,9 @@ class DatabaseService {
         WHERE table_name = $1
         ORDER BY ordinal_position
       `;
-      
+
       const result = await this.query(query, [tableName.toLowerCase()]);
-      
+
       return {
         tableName,
         fields: result.rows.map(row => row.column_name),

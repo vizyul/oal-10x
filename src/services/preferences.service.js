@@ -1,11 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
-const airtableService = require('./airtable.service');
+const database = require('./database.service');
 const { logger } = require('../utils');
 
 class PreferencesService {
   constructor() {
-    this.tableName = 'User_Preferences';
-    this.base = airtableService.base;
+    this.tableName = 'user_preferences'; // PostgreSQL table name
   }
 
   /**
@@ -15,66 +14,46 @@ class PreferencesService {
    */
   async getUserPreferences(userEmail) {
     try {
-      if (!this.base) {
-        throw new Error('Airtable not configured');
+      if (!database.pool) {
+        throw new Error('PostgreSQL not configured');
       }
 
-      // First find the user to get their record ID
+      // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         return null;
       }
 
-      // Try different query approaches for linked fields
-      // Approach 1: Direct string comparison
-      let records = await this.base(this.tableName)
-        .select({
-          filterByFormula: `{User} = '${user.id}'`,
-          maxRecords: 5
-        })
-        .firstPage();
-      
-      if (records.length === 0) {
-        // Approach 2: FIND function for array search
-        records = await this.base(this.tableName)
-          .select({
-            filterByFormula: `FIND('${user.id}', ARRAYJOIN(User, ','))`,
-            maxRecords: 5
-          })
-          .firstPage();
-      }
-      
-      if (records.length === 0) {
-        // Approach 3: No filter, then check manually
-        const allRecords = await this.base(this.tableName).select({ maxRecords: 20 }).firstPage();
-        
-        records = allRecords.filter(record => {
-          const userField = record.fields.User;
-          if (Array.isArray(userField)) {
-            return userField.includes(user.id);
-          }
-          return userField === user.id;
-        });
-      }
-        
+      // Find preferences by users_id foreign key
+      const records = await database.findByField(
+        this.tableName,
+        'users_id',
+        user.id
+      );
+
       if (records.length === 0) {
         return null;
       }
 
       const record = records[0];
+
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const fields = record.fields || record;
+
       return {
-        id: record.id,
-        preferenceKey: record.fields['Preference Key'],
-        userId: record.fields['User'] ? record.fields['User'][0] : user.id,
+        id: record.id || fields.id,
+        preferenceKey: fields.preference_key,
+        userId: fields.users_id,
         userEmail: userEmail,
-        themeMode: record.fields['Theme Mode'] || 'light',
-        emailNotifications: record.fields['Email Notifications'] || false,
-        marketingCommunications: record.fields['Marketing Communications'] || false,
-        weeklyDigest: record.fields['Weekly Digest'] || false,
-        createdAt: record.fields['Created At'],
-        updatedAt: record.fields['Updated At']
+        themeMode: fields.theme_mode || 'light',
+        emailNotifications: fields.email_notifications || false,
+        marketingCommunications: fields.marketing_communications || false,
+        weeklyDigest: fields.weekly_digest || false,
+        aiProvider: fields.llm || 'gemini',
+        createdAt: fields.created_at,
+        updatedAt: fields.updated_at
       };
     } catch (error) {
       logger.error('Error getting user preferences:', error);
@@ -89,24 +68,24 @@ class PreferencesService {
    */
   async createDefaultPreferences(userEmail) {
     try {
-      if (!this.base) {
-        throw new Error('Airtable not configured');
+      if (!database.pool) {
+        throw new Error('PostgreSQL not configured');
       }
 
       // Add stack trace to see WHERE this is being called from
       const stack = new Error().stack;
       logger.warn(`🚨 CREATING DEFAULT PREFERENCES for user: ${userEmail}`);
-      logger.warn(`🚨 Call stack:`, stack);
+      logger.warn('🚨 Call stack:', stack);
 
-      // First find the user to get their record ID
+      // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         logger.error(`User not found when creating preferences: ${userEmail}`);
         throw new Error(`User not found: ${userEmail}`);
       }
-      
+
       logger.info(`Found user for preferences: ${user.id}`);
 
       const preferenceKey = uuidv4();
@@ -115,42 +94,44 @@ class PreferencesService {
       logger.info(`Creating default preferences for user: ${userEmail}`);
 
       const fields = {
-        'Preference Key': preferenceKey,
-        'User': [user.id], // Link to Users table record
-        'Theme Mode': 'light',
-        'Email Notifications': true,
-        'Marketing Communications': false,
-        'Weekly Digest': true,
-        'AI Provider': 'gemini', // Default AI provider
-        'Created At': now,
-        'Updated At': now
+        preference_key: preferenceKey,
+        users_id: user.id, // Foreign key to users table
+        theme_mode: 'light',
+        email_notifications: true,
+        marketing_communications: false,
+        weekly_digest: true,
+        llm: 'gemini', // Default LLM provider
+        created_at: now,
+        updated_at: now
       };
 
-      logger.info(`Attempting to create preferences record with fields:`, fields);
-      
-      const records = await this.base(this.tableName).create([{ fields }]);
-      
-      logger.info(`Successfully created preferences record:`, records.length > 0 ? records[0].id : 'none');
+      logger.info('Attempting to create preferences record with fields:', fields);
 
-      if (records.length === 0) {
+      const record = await database.create(this.tableName, fields);
+
+      logger.info('Successfully created preferences record:', record.id);
+
+      if (!record) {
         throw new Error('Failed to create user preferences');
       }
 
-      const record = records[0];
       logger.info(`Created preferences for user ${userEmail} with key: ${preferenceKey}`);
 
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const recordFields = record.fields || record;
+
       return {
-        id: record.id,
-        preferenceKey: record.fields['Preference Key'],
-        userId: record.fields['User'] ? record.fields['User'][0] : user.id,
+        id: record.id || recordFields.id,
+        preferenceKey: recordFields.preference_key,
+        userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: record.fields['Theme Mode'],
-        emailNotifications: record.fields['Email Notifications'],
-        marketingCommunications: record.fields['Marketing Communications'],
-        weeklyDigest: record.fields['Weekly Digest'],
-        aiProvider: record.fields['AI Provider'] || 'gemini',
-        createdAt: record.fields['Created At'],
-        updatedAt: record.fields['Updated At']
+        themeMode: recordFields.theme_mode,
+        emailNotifications: recordFields.email_notifications,
+        marketingCommunications: recordFields.marketing_communications,
+        weeklyDigest: recordFields.weekly_digest,
+        aiProvider: recordFields.ai_provider || 'gemini',
+        createdAt: recordFields.created_at,
+        updatedAt: recordFields.updated_at
       };
     } catch (error) {
       logger.error('Error creating default preferences:', error);
@@ -160,22 +141,22 @@ class PreferencesService {
 
   /**
    * Create preferences with specific updates applied
-   * @param {string} userEmail - User's email address 
+   * @param {string} userEmail - User's email address
    * @param {Object} updates - Updates to apply to defaults
    * @returns {Promise<Object>} Created preferences
    */
   async createPreferencesWithUpdates(userEmail, updates) {
     try {
-      if (!this.base) {
-        throw new Error('Airtable not configured');
+      if (!database.pool) {
+        throw new Error('PostgreSQL not configured');
       }
 
       logger.info(`Creating preferences with updates for user: ${userEmail}`, updates);
 
-      // First find the user to get their record ID
+      // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
-      
+
       if (!user) {
         logger.error(`User not found when creating preferences: ${userEmail}`);
         throw new Error(`User not found: ${userEmail}`);
@@ -186,53 +167,59 @@ class PreferencesService {
 
       // Start with default values
       const fields = {
-        'Preference Key': preferenceKey,
-        'User': [user.id],
-        'Theme Mode': 'light',
-        'Email Notifications': true,
-        'Marketing Communications': false,
-        'Weekly Digest': true,
-        'Created At': now,
-        'Updated At': now
+        preference_key: preferenceKey,
+        users_id: user.id,
+        theme_mode: 'light',
+        email_notifications: true,
+        marketing_communications: false,
+        weekly_digest: true,
+        llm: 'gemini',
+        created_at: now,
+        updated_at: now
       };
 
       // Apply updates to defaults
       if (updates.themeMode !== undefined) {
-        fields['Theme Mode'] = updates.themeMode;
+        fields.theme_mode = updates.themeMode;
       }
       if (updates.emailNotifications !== undefined) {
-        fields['Email Notifications'] = updates.emailNotifications;
+        fields.email_notifications = updates.emailNotifications;
       }
       if (updates.marketingCommunications !== undefined) {
-        fields['Marketing Communications'] = updates.marketingCommunications;
+        fields.marketing_communications = updates.marketingCommunications;
       }
       if (updates.weeklyDigest !== undefined) {
-        fields['Weekly Digest'] = updates.weeklyDigest;
+        fields.weekly_digest = updates.weeklyDigest;
+      }
+      if (updates.aiProvider !== undefined) {
+        fields.llm = updates.aiProvider;
       }
 
-      logger.info(`Creating preferences record with fields:`, fields);
-      
-      const records = await this.base(this.tableName).create([{ fields }]);
-      
-      if (records.length === 0) {
+      logger.info('Creating preferences record with fields:', fields);
+
+      const record = await database.create(this.tableName, fields);
+
+      if (!record) {
         throw new Error('Failed to create user preferences');
       }
 
-      const record = records[0];
       logger.info(`Created preferences for user ${userEmail} with key: ${preferenceKey}`);
 
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const recordFields = record.fields || record;
+
       return {
-        id: record.id,
-        preferenceKey: record.fields['Preference Key'],
-        userId: record.fields['User'] ? record.fields['User'][0] : user.id,
+        id: record.id || recordFields.id,
+        preferenceKey: recordFields.preference_key,
+        userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: record.fields['Theme Mode'],
-        emailNotifications: record.fields['Email Notifications'],
-        marketingCommunications: record.fields['Marketing Communications'],
-        weeklyDigest: record.fields['Weekly Digest'],
-        aiProvider: record.fields['AI Provider'] || 'gemini',
-        createdAt: record.fields['Created At'],
-        updatedAt: record.fields['Updated At']
+        themeMode: recordFields.theme_mode,
+        emailNotifications: recordFields.email_notifications,
+        marketingCommunications: recordFields.marketing_communications,
+        weeklyDigest: recordFields.weekly_digest,
+        aiProvider: recordFields.ai_provider || 'gemini',
+        createdAt: recordFields.created_at,
+        updatedAt: recordFields.updated_at
       };
     } catch (error) {
       logger.error('Error creating preferences with updates:', error);
@@ -248,15 +235,15 @@ class PreferencesService {
    */
   async updateUserPreferences(userEmail, updates) {
     try {
-      if (!this.base) {
-        throw new Error('Airtable not configured');
+      if (!database.pool) {
+        throw new Error('PostgreSQL not configured');
       }
 
       // Update preferences for user
 
       // First, get the existing record
       const existingPrefs = await this.getUserPreferences(userEmail);
-      
+
       if (!existingPrefs) {
         // Create preferences with the updates applied directly
         logger.info(`No existing preferences found for ${userEmail}, creating with updates`);
@@ -264,49 +251,49 @@ class PreferencesService {
       }
 
       const fields = {
-        'Updated At': new Date().toISOString()
+        updated_at: new Date().toISOString()
       };
 
-      // Map update fields to Airtable field names
+      // Map update fields to PostgreSQL column names
       if (updates.themeMode !== undefined) {
-        fields['Theme Mode'] = updates.themeMode;
+        fields.theme_mode = updates.themeMode;
       }
       if (updates.emailNotifications !== undefined) {
-        fields['Email Notifications'] = updates.emailNotifications;
+        fields.email_notifications = updates.emailNotifications;
       }
       if (updates.marketingCommunications !== undefined) {
-        fields['Marketing Communications'] = updates.marketingCommunications;
+        fields.marketing_communications = updates.marketingCommunications;
       }
       if (updates.weeklyDigest !== undefined) {
-        fields['Weekly Digest'] = updates.weeklyDigest;
+        fields.weekly_digest = updates.weeklyDigest;
+      }
+      if (updates.aiProvider !== undefined) {
+        fields.llm = updates.aiProvider;
       }
 
-      const records = await this.base(this.tableName).update([
-        {
-          id: existingPrefs.id,
-          fields
-        }
-      ]);
+      const record = await database.update(this.tableName, existingPrefs.id, fields);
 
-      if (records.length === 0) {
+      if (!record) {
         throw new Error('Failed to update preferences');
       }
 
-      const record = records[0];
       // Preferences updated successfully
 
+      // Handle both database service formatted records and direct PostgreSQL rows
+      const recordFields = record.fields || record;
+
       return {
-        id: record.id,
-        preferenceKey: record.fields['Preference Key'],
-        userId: record.fields['user'] ? record.fields['user'][0] : null,
+        id: record.id || recordFields.id,
+        preferenceKey: recordFields.preference_key,
+        userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: record.fields['Theme Mode'],
-        emailNotifications: record.fields['Email Notifications'],
-        marketingCommunications: record.fields['Marketing Communications'],
-        weeklyDigest: record.fields['Weekly Digest'],
-        aiProvider: record.fields['AI Provider'] || 'gemini',
-        createdAt: record.fields['Created At'],
-        updatedAt: record.fields['Updated At']
+        themeMode: recordFields.theme_mode,
+        emailNotifications: recordFields.email_notifications,
+        marketingCommunications: recordFields.marketing_communications,
+        weeklyDigest: recordFields.weekly_digest,
+        aiProvider: recordFields.ai_provider || 'gemini',
+        createdAt: recordFields.created_at,
+        updatedAt: recordFields.updated_at
       };
     } catch (error) {
       logger.error('Error updating user preferences:', error);
@@ -322,12 +309,12 @@ class PreferencesService {
   async getOrCreateUserPreferences(userEmail) {
     try {
       let preferences = await this.getUserPreferences(userEmail);
-      
+
       if (!preferences) {
         logger.info(`No preferences found, creating defaults for: ${userEmail}`);
         preferences = await this.createDefaultPreferences(userEmail);
       }
-      
+
       return preferences;
     } catch (error) {
       logger.error('Error getting or creating user preferences:', error);

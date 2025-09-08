@@ -36,13 +36,13 @@ router.get('/socket-token', (req, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
-  
+
   // Return the existing token from httpOnly cookie
   const token = req.cookies?.auth_token;
   if (!token) {
     return res.status(401).json({ error: 'No auth token found' });
   }
-  
+
   res.json({ token });
 });
 
@@ -51,7 +51,7 @@ router.get('/socket-token', (req, res) => {
  * @desc    Video upload page
  * @access  Private - Requires Basic subscription
  */
-router.get('/upload', 
+router.get('/upload',
   subscriptionMiddleware.requireSubscription('basic'),
   (req, res) => {
     res.render('videos/upload', {
@@ -155,7 +155,7 @@ router.get('/analytics',
  */
 router.get('/:id', (req, res) => {
   const videoId = req.params.id;
-  
+
   res.render('videos/details', {
     title: 'Video Details - Our AI Legacy',
     description: 'View and edit video details and AI-generated content',
@@ -176,7 +176,7 @@ router.get('/:id', (req, res) => {
  */
 router.get('/:id/edit', (req, res) => {
   const videoId = req.params.id;
-  
+
   res.render('videos/edit', {
     title: 'Edit Video - Our AI Legacy',
     description: 'Edit video information and AI-generated content',

@@ -1,7 +1,35 @@
 const stripeService = require('../services/stripe.service');
 const stripeConfig = require('../config/stripe.config');
-const airtable = require('../services/airtable.service');
+const database = require('../services/database.service');
 const { logger } = require('../utils');
+
+/**
+ * Resolve user ID - handle both PostgreSQL integer IDs and Airtable record IDs
+ * @param {*} userId - User ID (can be Airtable record ID or integer)
+ * @returns {Promise<number>} PostgreSQL integer user ID
+ */
+async function resolveUserId(userId) {
+  if (!userId || userId === 'undefined' || userId === 'null') {
+    throw new Error('Invalid user ID: user ID is null or undefined');
+  }
+
+  // If it's already an integer, return it
+  const parsed = parseInt(userId);
+  if (!isNaN(parsed) && userId.toString() === parsed.toString()) {
+    return parsed;
+  }
+
+  // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
+  if (userId.toString().startsWith('rec')) {
+    const records = await database.findByField('users', 'airtable_id', userId);
+    if (!records || records.length === 0) {
+      throw new Error(`No PostgreSQL user found for Airtable ID: ${userId}`);
+    }
+    return records[0].fields.id;
+  }
+
+  throw new Error(`Invalid user ID format: ${userId}`);
+}
 
 const subscriptionController = {
   /**
@@ -12,20 +40,20 @@ const subscriptionController = {
       const { priceId } = req.body;
       const user = req.user;
 
-      logger.info('Creating checkout session:', { 
-        userId: user.id, 
-        priceId, 
-        email: user.email 
+      logger.info('Creating checkout session:', {
+        userId: user.id,
+        priceId,
+        email: user.email
       });
 
       // Validate price ID exists in our configuration
       const allTiers = stripeConfig.getAllTiers();
       const validPriceId = allTiers.some(tier => {
         // Check both monthly and yearly price IDs for each tier
-        return (tier.monthly && tier.monthly.priceId === priceId) || 
+        return (tier.monthly && tier.monthly.priceId === priceId) ||
                (tier.yearly && tier.yearly.priceId === priceId);
       });
-      
+
       if (!validPriceId) {
         return res.status(400).json({
           success: false,
@@ -36,8 +64,8 @@ const subscriptionController = {
 
       // Create checkout session
       const session = await stripeService.createCheckoutSession(
-        user.id, 
-        priceId, 
+        user.id,
+        priceId,
         user.email
       );
 
@@ -108,11 +136,11 @@ const subscriptionController = {
       const subscription = await stripeService.getUserSubscription(user.id);
       const userTier = user.subscription_tier || 'free';
       const tierConfig = stripeConfig.getTierConfig(userTier);
-      
+
       // Get current usage
       const subscriptionService = require('../services/subscription.service');
       const currentUsage = await subscriptionService.getCurrentUsage(user.id);
-      
+
       const videoLimit = tierConfig?.videoLimit || 0;
       const remainingVideos = Math.max(0, videoLimit - currentUsage.videos);
 
@@ -216,7 +244,7 @@ const subscriptionController = {
    */
   async handleWebhook(req, res) {
     let event;
-    
+
     console.log('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
     logger.info('🚀 SUBSCRIPTION CONTROLLER WEBHOOK HIT!');
 
@@ -246,24 +274,24 @@ const subscriptionController = {
       const stripe = require('stripe')(stripeConfig.getSecretKey());
       event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
 
-      logger.info('Received webhook event:', { 
-        type: event.type, 
-        id: event.id 
+      logger.info('Received webhook event:', {
+        type: event.type,
+        id: event.id
       });
 
       // Process the event
       const result = await stripeService.handleWebhookEvent(event);
-      
-      logger.info('Webhook processed successfully:', { 
-        eventId: event.id, 
-        result 
+
+      logger.info('Webhook processed successfully:', {
+        eventId: event.id,
+        result
       });
 
       res.json({ received: true });
 
     } catch (error) {
       logger.error('Webhook error:', error);
-      
+
       if (error.type === 'StripeSignatureVerificationError') {
         return res.status(400).json({ error: 'Invalid signature' });
       }
@@ -298,14 +326,15 @@ const subscriptionController = {
         // Get the subscription from the session
         if (session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
-          
+
           // Manually trigger subscription sync as backup to webhooks
           await stripeService.handleSubscriptionCreated(subscription);
-          
-          // Log the manual sync event to Subscription_Events table
-          await airtable.create('Subscription_Events', {
+
+          // Log the manual sync event to subscription_events table
+          const resolvedUserId = await resolveUserId(user.id);
+          await database.create('subscription_events', {
             stripe_event_id: `manual_sync_${session_id}`,
-            user_id: [user.id],
+            user_id: resolvedUserId,
             event_type: 'manual.subscription.sync',
             stripe_subscription_id: subscription.id,
             event_data: JSON.stringify({
@@ -316,17 +345,18 @@ const subscriptionController = {
             }, null, 2),
             processed_successfully: true
           });
-          
-          logger.info('Manual subscription sync completed:', { 
-            sessionId: session_id, 
+
+          logger.info('Manual subscription sync completed:', {
+            sessionId: session_id,
             subscriptionId: subscription.id,
-            userId: user.id 
+            userId: user.id
           });
         }
 
         // Update user's Stripe customer ID if not already set
         if (!user.stripe_customer_id) {
-          await airtable.update('Users', user.id, {
+          const resolvedUserId = await resolveUserId(user.id);
+          await database.update('users', resolvedUserId, {
             stripe_customer_id: session.customer
           });
         }

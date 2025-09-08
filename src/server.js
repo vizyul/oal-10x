@@ -16,23 +16,23 @@ const server = http.createServer(app);
 // Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    methods: ['GET', 'POST']
   }
 });
 
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  
+
   if (!token) {
     return next(new Error('Authentication required'));
   }
-  
+
   try {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Try both userId and id fields
     socket.userId = decoded.userId || decoded.id;
     next();
@@ -46,16 +46,16 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   const userId = socket.userId;
   logger.info(`User ${userId} connected via Socket.IO`);
-  
+
   // Register user session for status updates
   processingStatusService.registerUserSession(userId, socket);
-  
+
   // Handle disconnect
   socket.on('disconnect', () => {
     logger.info(`User ${userId} disconnected from Socket.IO`);
     processingStatusService.unregisterUserSession(userId, socket);
   });
-  
+
   // Handle status request
   socket.on('request-status', () => {
     const processingVideos = processingStatusService.getUserProcessingVideos(userId);
@@ -78,13 +78,13 @@ const startServer = () => {
 // Handle graceful shutdown
 const gracefulShutdown = (signal) => {
   logger.info(`📴 ${signal} received. Starting graceful shutdown...`);
-  
+
   server.close((err) => {
     if (err) {
       logger.error('❌ Error during server shutdown:', err);
       process.exit(1);
     }
-    
+
     logger.info('✅ Server closed successfully');
     process.exit(0);
   });

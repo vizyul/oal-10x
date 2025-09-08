@@ -34,11 +34,11 @@ class EmailService {
         logger.warn('  Graph API: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_EMAIL_ADDRESS');
         logger.warn('  Or SMTP: AZURE_EMAIL_ADDRESS, AZURE_EMAIL_PASSWORD');
       }
-      
+
       this.initialized = true;
     } catch (error) {
       logger.error('Failed to initialize email service:', error);
-      
+
       // Fall back to development mode if authentication fails
       this.transporter = null;
       this.useGraphAPI = false;
@@ -58,10 +58,10 @@ class EmailService {
       };
 
       this.msalInstance = new ConfidentialClientApplication(msalConfig);
-      
+
       // Get initial access token
       await this.getAccessToken();
-      
+
       this.useGraphAPI = true;
       logger.info('Email service initialized successfully with Microsoft Graph API');
     } catch (error) {
@@ -82,10 +82,10 @@ class EmailService {
       };
 
       this.msalInstance = new ConfidentialClientApplication(msalConfig);
-      
+
       // Get access token for SMTP OAuth2
       const accessToken = await this.getAccessToken();
-      
+
       this.transporter = nodemailer.createTransport({
         host: 'smtp.office365.com',
         port: 25,
@@ -106,7 +106,7 @@ class EmailService {
         greetingTimeout: 10000,
         socketTimeout: 10000
       });
-      
+
       this.useGraphAPI = false;
       logger.info('Email service initialized with OAuth2 SMTP');
     } catch (error) {
@@ -144,7 +144,7 @@ class EmailService {
           socketTimeout: 10000
         });
       }
-      
+
       // Verify the connection (non-blocking)
       const verified = await this.verifyConnection();
       if (verified) {
@@ -152,7 +152,7 @@ class EmailService {
       } else {
         logger.warn('Email service initialized but SMTP verification failed');
       }
-      
+
       this.useGraphAPI = false;
     } catch (error) {
       logger.error('Failed to initialize SMTP:', error);
@@ -172,10 +172,10 @@ class EmailService {
       };
 
       const response = await this.msalInstance.acquireTokenSilent(clientCredentialRequest);
-      
+
       this.accessToken = response.accessToken;
       this.tokenExpiry = response.expiresOn.getTime();
-      
+
       return this.accessToken;
     } catch (error) {
       // If silent token acquisition fails, try to acquire token
@@ -183,10 +183,10 @@ class EmailService {
         const response = await this.msalInstance.acquireTokenByClientCredential({
           scopes: ['https://graph.microsoft.com/.default']
         });
-        
+
         this.accessToken = response.accessToken;
         this.tokenExpiry = response.expiresOn.getTime();
-        
+
         return this.accessToken;
       } catch (clientError) {
         logger.error('Failed to acquire access token:', clientError);
@@ -218,7 +218,7 @@ class EmailService {
   async sendVerificationCode(email, verificationCode) {
     try {
       await this.ensureInitialized();
-      
+
       if (this.useGraphAPI) {
         return await this.sendEmailViaGraph(email, verificationCode);
       } else if (this.transporter) {
@@ -240,7 +240,7 @@ class EmailService {
   async sendEmailViaGraph(email, verificationCode) {
     try {
       const accessToken = await this.getAccessToken();
-      
+
       const emailMessage = {
         message: {
           subject: 'Verify Your Email - Our AI Legacy',
@@ -266,7 +266,7 @@ class EmailService {
 
       // Use user-specific endpoint directly (works with application permissions)
       const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-      
+
       const response = await axios.post(
         endpoint,
         emailMessage,
@@ -305,11 +305,11 @@ class EmailService {
       };
 
       const info = await this.transporter.sendMail(mailOptions);
-      
+
       if (process.env.NODE_ENV !== 'production') {
         logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
       }
-      
+
       logger.info(`Verification email sent via SMTP to ${email}`, {
         messageId: info.messageId,
         response: info.response
@@ -387,7 +387,7 @@ This is an automated email, please do not reply.
   async sendWelcomeEmail(email, firstName) {
     try {
       await this.ensureInitialized();
-      
+
       if (this.useGraphAPI) {
         return await this.sendWelcomeEmailViaGraph(email, firstName);
       } else if (this.transporter) {
@@ -408,7 +408,7 @@ This is an automated email, please do not reply.
   async sendWelcomeEmailViaGraph(email, firstName) {
     try {
       const accessToken = await this.getAccessToken();
-      
+
       const emailMessage = {
         message: {
           subject: 'Welcome to Our AI Legacy!',
@@ -434,7 +434,7 @@ This is an automated email, please do not reply.
 
       // Use user-specific endpoint directly (works with application permissions)
       const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-      
+
       const response = await axios.post(
         endpoint,
         emailMessage,
@@ -472,11 +472,11 @@ This is an automated email, please do not reply.
       };
 
       const info = await this.transporter.sendMail(mailOptions);
-      
+
       if (process.env.NODE_ENV !== 'production') {
         logger.info('Welcome email preview URL:', nodemailer.getTestMessageUrl(info));
       }
-      
+
       logger.info(`Welcome email sent via SMTP to ${email}`, {
         messageId: info.messageId
       });
@@ -551,7 +551,7 @@ The Our AI Legacy Team
   async sendEmail(to, subject, htmlContent, textContent = null) {
     try {
       await this.ensureInitialized();
-      
+
       if (this.useGraphAPI) {
         return await this.sendEmailViaGraphGeneric(to, subject, htmlContent);
       } else if (this.transporter) {
@@ -576,7 +576,7 @@ The Our AI Legacy Team
   async sendEmailViaGraphGeneric(to, subject, htmlContent) {
     try {
       const accessToken = await this.getAccessToken();
-      
+
       const emailMessage = {
         message: {
           subject: subject,
@@ -602,7 +602,7 @@ The Our AI Legacy Team
 
       // Use user-specific endpoint directly (works with application permissions)
       const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-      
+
       const response = await axios.post(
         endpoint,
         emailMessage,
@@ -644,11 +644,11 @@ The Our AI Legacy Team
       }
 
       const info = await this.transporter.sendMail(mailOptions);
-      
+
       if (process.env.NODE_ENV !== 'production') {
         logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
       }
-      
+
       logger.info(`Email sent via SMTP to ${to}`, {
         messageId: info.messageId,
         response: info.response
