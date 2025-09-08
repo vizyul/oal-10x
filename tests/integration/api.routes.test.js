@@ -1,7 +1,7 @@
 const request = require('supertest');
 const app = require('../../src/app');
 const authService = require('../../src/services/auth.service');
-const airtableService = require('../../src/services/airtable.service');
+const database = require('../../src/services/database.service');
 const youtubeMetadataService = require('../../src/services/youtube-metadata.service');
 
 // Mock services

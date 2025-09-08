@@ -4,10 +4,31 @@ const authService = require('../../src/services/auth.service');
 const sessionService = require('../../src/services/session.service');
 const emailService = require('../../src/services/email.service');
 
-// Mock services
-jest.mock('../../src/services/auth.service');
-jest.mock('../../src/services/session.service'); 
-jest.mock('../../src/services/email.service');
+// Mock services - these are singleton instances, not classes
+jest.mock('../../src/services/auth.service', () => ({
+  findUserByEmail: jest.fn(),
+  createUser: jest.fn(),
+  verifyPassword: jest.fn(),
+  generateTokens: jest.fn(),
+  updateUser: jest.fn(),
+  deleteUser: jest.fn(),
+  verifyEmailToken: jest.fn(),
+  hashPassword: jest.fn()
+}));
+
+jest.mock('../../src/services/session.service', () => ({
+  createSession: jest.fn(),
+  getSession: jest.fn(),
+  deleteSession: jest.fn(),
+  updateSession: jest.fn()
+}));
+
+jest.mock('../../src/services/email.service', () => ({
+  sendVerificationEmail: jest.fn(),
+  sendPasswordResetEmail: jest.fn(),
+  sendEmail: jest.fn()
+}));
+
 jest.mock('../../src/utils', () => ({
   logger: {
     info: jest.fn(),
