@@ -47,7 +47,7 @@ class PreferencesService {
         preferenceKey: fields.preference_key,
         userId: fields.users_id,
         userEmail: userEmail,
-        themeMode: fields.theme_mode || 'light',
+        themeMode: fields.theme || 'light',
         emailNotifications: fields.email_notifications || false,
         marketingCommunications: fields.marketing_communications || false,
         weeklyDigest: fields.weekly_digest || false,
@@ -96,7 +96,7 @@ class PreferencesService {
       const fields = {
         preference_key: preferenceKey,
         users_id: user.id, // Foreign key to users table
-        theme_mode: 'light',
+        theme: 'light',
         email_notifications: true,
         marketing_communications: false,
         weekly_digest: true,
@@ -125,7 +125,7 @@ class PreferencesService {
         preferenceKey: recordFields.preference_key,
         userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: recordFields.theme_mode,
+        themeMode: recordFields.theme,
         emailNotifications: recordFields.email_notifications,
         marketingCommunications: recordFields.marketing_communications,
         weeklyDigest: recordFields.weekly_digest,
@@ -169,7 +169,7 @@ class PreferencesService {
       const fields = {
         preference_key: preferenceKey,
         users_id: user.id,
-        theme_mode: 'light',
+        theme: 'light',
         email_notifications: true,
         marketing_communications: false,
         weekly_digest: true,
@@ -180,7 +180,7 @@ class PreferencesService {
 
       // Apply updates to defaults
       if (updates.themeMode !== undefined) {
-        fields.theme_mode = updates.themeMode;
+        fields.theme = updates.themeMode;
       }
       if (updates.emailNotifications !== undefined) {
         fields.email_notifications = updates.emailNotifications;
@@ -213,7 +213,7 @@ class PreferencesService {
         preferenceKey: recordFields.preference_key,
         userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: recordFields.theme_mode,
+        themeMode: recordFields.theme,
         emailNotifications: recordFields.email_notifications,
         marketingCommunications: recordFields.marketing_communications,
         weeklyDigest: recordFields.weekly_digest,
@@ -256,7 +256,7 @@ class PreferencesService {
 
       // Map update fields to PostgreSQL column names
       if (updates.themeMode !== undefined) {
-        fields.theme_mode = updates.themeMode;
+        fields.theme = updates.themeMode;
       }
       if (updates.emailNotifications !== undefined) {
         fields.email_notifications = updates.emailNotifications;
@@ -287,7 +287,7 @@ class PreferencesService {
         preferenceKey: recordFields.preference_key,
         userId: recordFields.users_id,
         userEmail: userEmail,
-        themeMode: recordFields.theme_mode,
+        themeMode: recordFields.theme,
         emailNotifications: recordFields.email_notifications,
         marketingCommunications: recordFields.marketing_communications,
         weeklyDigest: recordFields.weekly_digest,

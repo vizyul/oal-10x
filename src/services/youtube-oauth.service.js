@@ -632,12 +632,12 @@ class YouTubeOAuthService {
 
       // Check if tokens already exist for this user and channel
       const existingRecords = await database.query(
-        'SELECT id FROM youtube_oauth_tokens WHERE user_id = $1 AND channel_id = $2',
+        'SELECT id FROM youtube_oauth_tokens WHERE users_id = $1 AND channel_id = $2',
         [resolvedUserId, channelData.id]
       );
 
       const tokenData = {
-        user_id: resolvedUserId,
+        users_id: resolvedUserId,
         encrypted_tokens: encryptedTokens.encrypted_tokens,
         encryption_iv: encryptedTokens.iv,
         encryption_algorithm: encryptedTokens.algorithm,
@@ -683,7 +683,7 @@ class YouTubeOAuthService {
       const existingChannels = await database.findByField('user_youtube_channels', 'channel_id', channelData.id);
 
       const channelRecord = {
-        user_id: resolvedUserId,
+        users_id: resolvedUserId,
         channel_id: channelData.id,
         channel_name: channelData.name,
         channel_description: channelData.description || '',
@@ -722,7 +722,7 @@ class YouTubeOAuthService {
     try {
       // Get tokens from PostgreSQL
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
+      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
 
       if (!records || records.length === 0) {
         return null;
@@ -748,7 +748,7 @@ class YouTubeOAuthService {
   async updateUserTokens(userId, encryptedTokens) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
+      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
 
       if (!records || records.length === 0) {
         throw new Error('No tokens found to update');
@@ -776,7 +776,7 @@ class YouTubeOAuthService {
   async deactivateUserTokens(userId) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'user_id', resolvedUserId);
+      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
 
       for (const record of records) {
         await database.update('youtube_oauth_tokens', record.id, {

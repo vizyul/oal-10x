@@ -547,6 +547,21 @@ class AuthController {
         });
       }
 
+      // Check if user has a password
+      if (!user.password) {
+        // Check if this is a social login user or a data integrity issue
+        const hasOauthProvider = user.oauthProvider && user.oauthId;
+        const errorMessage = hasOauthProvider 
+          ? 'This account was created using social login. Please sign in with your social provider.'
+          : 'This account appears to have no password set. Please contact support or try resetting your password.';
+        
+        return res.status(401).json({
+          success: false,
+          message: errorMessage,
+          error: 'NO_PASSWORD_SET'
+        });
+      }
+
       // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
@@ -617,7 +632,13 @@ class AuthController {
       res.redirect(getPostAuthRedirectUrl(user));
 
     } catch (error) {
-      logger.error('Sign in error:', error);
+      logger.error('Sign in error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        detail: error.detail,
+        name: error.name
+      });
 
       const errorMessage = 'Unable to sign in. Please try again.';
 

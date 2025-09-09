@@ -384,16 +384,18 @@ class DatabaseService {
   }
 
   /**
-   * Format a single record to match Airtable structure
+   * Format a single record for PostgreSQL (return raw row data)
    * @param {Object} row - Database row
    * @returns {Object} Formatted record
    */
   formatRecord(row) {
-    return {
-      id: row.id,
-      fields: { ...row },
-      createdTime: row.created_at || new Date().toISOString()
-    };
+    // For PostgreSQL, return the raw row data with proper field names
+    if (!row) {
+      return null;
+    }
+    
+    // Return raw PostgreSQL row data
+    return { ...row };
   }
 
   /**

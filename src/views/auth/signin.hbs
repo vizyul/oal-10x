@@ -45,6 +45,7 @@
     {{#if csrfToken}}
         <input type="hidden" name="_csrf" value="{{csrfToken}}">
     {{/if}}
+    <input type="hidden" name="timezone" id="timezoneField" value="">
     
     <!-- Email Field -->
     <div class="form-group">
@@ -162,6 +163,18 @@
 <script>
 // Initialize signin form functionality
 document.addEventListener('DOMContentLoaded', function() {
+    // Automatically detect and set timezone
+    const timezoneField = document.getElementById('timezoneField');
+    if (timezoneField) {
+        try {
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            timezoneField.value = timezone;
+        } catch (error) {
+            console.log('Unable to detect timezone:', error);
+            // Keep empty value, server will use fallback
+        }
+    }
+    
     if (typeof initSigninForm === 'function') {
         initSigninForm();
     }

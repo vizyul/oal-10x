@@ -405,6 +405,18 @@
   border-color: #dc2626;
 }
 
+/* Field Error Messages */
+.field-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  display: none; /* Hidden by default */
+}
+
+.checkbox-input.error + .checkbox-label .checkbox-custom {
+  border-color: #dc2626;
+}
+
 /* Code Input Styles */
 .code-input-container {
   position: relative;
@@ -919,4 +931,31 @@
 
 [data-theme="dark"] .forgot-password-link {
   color: var(--satin-sheen-gold) !important; /* Gold in dark theme */
+}
+
+/* Success Modal Content Styles */
+.success-modal {
+  text-align: center;
+  background: var(--background-color, #ffffff);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.success-icon {
+  margin-bottom: 1.5rem;
+}
+
+.modal-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+
+.modal-message {
+  color: var(--text-color-muted);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
 }

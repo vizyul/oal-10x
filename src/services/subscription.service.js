@@ -47,7 +47,15 @@ class SubscriptionService {
         pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
       }
 
-      const usageRecords = await database.findByField('subscription_usage', 'users_id', pgUserId);
+      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage
+      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
+      if (userSubscriptions.length === 0) {
+        return;
+      }
+      
+      const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
+      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
+      
       let currentUsage = usageRecords.find(usage => {
         const usageData = usage.fields || usage;
         const usagePeriodStart = new Date(usageData.period_start);
@@ -128,8 +136,15 @@ class SubscriptionService {
 
       logger.info(`Getting current usage for user ${userId} (pgUserId: ${pgUserId})`);
 
-      // Get usage records for this user
-      const usageRecords = await database.findByField('subscription_usage', 'users_id', pgUserId);
+      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage  
+      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
+      if (userSubscriptions.length === 0) {
+        logger.info(`No subscriptions found for user ${pgUserId}`);
+        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+      }
+      
+      const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
+      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
       logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
 
       // Find the current billing period usage record
@@ -219,6 +234,291 @@ class SubscriptionService {
     };
 
     return fieldMap[resource] || 'videos_processed';
+  }
+
+  /**
+   * Get user's current period usage count for a specific resource
+   * Used by middleware for usage limits checking
+   * @param {number} userId - PostgreSQL user ID
+   * @returns {number} Current usage count
+   */
+  async getCurrentPeriodUsage(userId) {
+    try {
+      const database = require('./database.service');
+      
+      // Get user's active subscription
+      const subscription = await this.getUserActiveSubscriptionByPgId(userId);
+      if (!subscription) {
+        return 0;
+      }
+
+      const now = new Date();
+      
+      // Query usage through proper relationship
+      const query = `
+        SELECT su.* FROM subscription_usage su
+        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
+        WHERE us.users_id = $1 
+          AND su.period_start <= $2 
+          AND su.period_end >= $2
+        ORDER BY su.created_at DESC
+        LIMIT 1
+      `;
+      const usageResult = await database.query(query, [userId, now]);
+      const currentUsage = usageResult.rows[0];
+
+      if (!currentUsage) {
+        return 0;
+      }
+
+      return currentUsage.videos_processed || 0;
+    } catch (error) {
+      logger.error('Error getting current period usage:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get detailed usage breakdown for current period
+   * Used by middleware for detailed usage tracking
+   * @param {number} userId - PostgreSQL user ID
+   * @returns {Object} Usage breakdown object
+   */
+  async getCurrentPeriodUsageBreakdown(userId) {
+    try {
+      const database = require('./database.service');
+      
+      const now = new Date();
+      
+      // Query usage through proper relationship
+      const query = `
+        SELECT su.* FROM subscription_usage su
+        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
+        WHERE us.users_id = $1 
+          AND su.period_start <= $2 
+          AND su.period_end >= $2
+        ORDER BY su.created_at DESC
+        LIMIT 1
+      `;
+      const usageResult = await database.query(query, [userId, now]);
+      const currentUsage = usageResult.rows[0];
+
+      if (!currentUsage) {
+        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+      }
+
+      return {
+        videos: currentUsage.videos_processed || 0,
+        api_calls: currentUsage.api_calls_made || 0,
+        storage: currentUsage.storage_used_mb || 0,
+        ai_summaries: currentUsage.ai_summaries_generated || 0
+      };
+    } catch (error) {
+      logger.error('Error getting current period usage breakdown:', error);
+      return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+    }
+  }
+
+  /**
+   * Track usage for a resource (used by middleware)
+   * @param {number} userId - PostgreSQL user ID
+   * @param {string} resource - Resource type
+   * @param {number} increment - Amount to increment
+   */
+  async trackUsage(userId, resource, increment = 1) {
+    try {
+      const database = require('./database.service');
+      
+      // Get user's active subscription
+      const subscription = await this.getUserActiveSubscriptionByPgId(userId);
+      if (!subscription) {
+        logger.debug(`No active subscription found for user ${userId}, skipping usage tracking`);
+        return;
+      }
+
+      const now = new Date();
+      
+      // Find current period usage record
+      const usageQuery = `
+        SELECT su.* FROM subscription_usage su
+        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
+        WHERE us.users_id = $1 
+          AND su.period_start <= $2 
+          AND su.period_end >= $2
+        ORDER BY su.created_at DESC
+        LIMIT 1
+      `;
+      const usageResult = await database.query(usageQuery, [userId, now]);
+      let currentUsage = usageResult.rows[0];
+
+      const fieldName = this.getUsageFieldName(resource);
+
+      if (currentUsage) {
+        // Update existing usage record
+        const newValue = (currentUsage[fieldName] || 0) + increment;
+        const updateQuery = `
+          UPDATE subscription_usage 
+          SET ${fieldName} = $1, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `;
+        await database.query(updateQuery, [newValue, currentUsage.id]);
+      } else {
+        // Create new usage record for current period
+        const subscriptionQuery = `
+          SELECT * FROM user_subscriptions 
+          WHERE users_id = $1 
+            AND status IN ('active', 'trialing', 'paused')
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        const subResult = await database.query(subscriptionQuery, [userId]);
+        const userSubscription = subResult.rows[0];
+
+        if (userSubscription) {
+          const periodStart = new Date(userSubscription.current_period_start);
+          const periodEnd = new Date(userSubscription.current_period_end);
+
+          const insertQuery = `
+            INSERT INTO subscription_usage (
+              user_subscriptions_id, period_start, period_end, ${fieldName}, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `;
+          await database.query(insertQuery, [userSubscription.id, periodStart, periodEnd, increment]);
+        }
+      }
+
+      logger.info(`Tracked ${resource} usage for user ${userId}: +${increment}`);
+    } catch (error) {
+      logger.error(`Error tracking ${resource} usage for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's active subscription by PostgreSQL user ID
+   * @param {number} userId - PostgreSQL user ID 
+   * @returns {Object|null} Active subscription or null
+   */
+  async getUserActiveSubscriptionByPgId(userId) {
+    try {
+      const database = require('./database.service');
+      
+      const query = `
+        SELECT * FROM user_subscriptions 
+        WHERE users_id = $1 
+          AND status IN ('active', 'trialing', 'paused')
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      const result = await database.query(query, [userId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error getting user subscription by PG ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Create a new subscription for a user
+   * @param {Object} subscriptionData - Subscription data
+   * @returns {Promise<Object>} Created subscription
+   */
+  async createSubscription(subscriptionData) {
+    try {
+      const database = require('./database.service');
+      logger.info(`Creating subscription for user ${subscriptionData.users_id}`);
+
+      const fields = {
+        users_id: subscriptionData.users_id,
+        stripe_subscription_id: subscriptionData.stripe_subscription_id,
+        plan_name: subscriptionData.plan_name || 'free',
+        subscription_tier: subscriptionData.subscription_tier || 'free',
+        status: subscriptionData.status || 'active',
+        price_id: subscriptionData.price_id,
+        current_period_start: subscriptionData.current_period_start,
+        current_period_end: subscriptionData.current_period_end,
+        trial_start: subscriptionData.trial_start,
+        trial_end: subscriptionData.trial_end,
+        metadata: subscriptionData.metadata || {}
+      };
+
+      const subscription = await database.create('user_subscriptions', fields);
+      logger.info(`Subscription created: ${subscription.id}`);
+
+      return subscription;
+    } catch (error) {
+      logger.error('Error creating subscription:', error);
+      throw new Error('Failed to create subscription');
+    }
+  }
+
+  /**
+   * Create a usage record for a subscription
+   * @param {Object} usageData - Usage data
+   * @returns {Promise<Object>} Created usage record
+   */
+  async createUsageRecord(usageData) {
+    try {
+      const database = require('./database.service');
+      logger.info(`Creating usage record for subscription ${usageData.user_subscriptions_id}`);
+
+      const fields = {
+        user_subscriptions_id: usageData.user_subscriptions_id,
+        usage_type: usageData.usage_type || 'monthly',
+        usage_count: usageData.usage_count || 0,
+        usage_limit: usageData.usage_limit,
+        videos_processed: usageData.videos_processed || 0,
+        ai_summaries_generated: usageData.ai_summaries_generated || 0,
+        analytics_views: usageData.analytics_views || 0,
+        api_calls_made: usageData.api_calls_made || 0,
+        storage_used_mb: usageData.storage_used_mb || 0,
+        period_start: usageData.period_start,
+        period_end: usageData.period_end,
+        feature_used: usageData.feature_used,
+        ip_address: usageData.ip_address,
+        user_agent: usageData.user_agent,
+        metadata: usageData.metadata || {}
+      };
+
+      const usage = await database.create('subscription_usage', fields);
+      logger.info(`Usage record created: ${usage.id}`);
+
+      return usage;
+    } catch (error) {
+      logger.error('Error creating usage record:', error);
+      throw new Error('Failed to create usage record');
+    }
+  }
+
+  /**
+   * Check if user can process another video based on subscription limits
+   * @param {string|number} userId - User ID
+   * @returns {Promise<boolean>} Whether user can process video
+   */
+  async canProcessVideo(userId) {
+    try {
+      const usage = await this.getCurrentUsage(userId);
+      
+      if (!usage) {
+        logger.debug(`No usage data found for user ${userId}, assuming they can process`);
+        return true;
+      }
+
+      // For free tier, limit might be 5 videos per month
+      // For premium, might be 100 videos per month
+      // These limits should be configurable based on subscription tier
+      
+      const currentCount = usage.videos_processed || 0;
+      const limit = usage.usage_limit || 5; // Default free tier limit
+      
+      logger.debug(`User ${userId} usage: ${currentCount}/${limit} videos`);
+      
+      return currentCount < limit;
+    } catch (error) {
+      logger.error('Error checking video processing capability:', error);
+      // In case of error, allow processing (fail-safe)
+      return true;
+    }
   }
 
 }

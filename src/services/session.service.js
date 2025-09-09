@@ -66,6 +66,60 @@ class SessionService {
   }
 
   /**
+   * Convert seconds to DECIMAL(5,2) hours.minutes format
+   * @param {number} seconds - Duration in seconds
+   * @returns {number} Duration in hours.minutes format (e.g., 2.30 = 2h 30m)
+   */
+  secondsToDecimalDuration(seconds) {
+    if (!seconds || seconds <= 0) return 0.00;
+    
+    const totalMinutes = Math.floor(seconds / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    // Format as decimal: hours + (minutes/100)
+    // Using /100 to keep minutes in 0-59 range as decimals
+    return parseFloat((hours + (minutes / 100)).toFixed(2));
+  }
+
+  /**
+   * Attempt to get timezone from request (basic detection)
+   * @param {Object} req - Express request object
+   * @returns {string} Detected timezone or empty string
+   */
+  getTimezoneFromRequest(req) {
+    // Try to detect timezone from various sources
+    try {
+      // Check if timezone was sent in headers (would need to be set by frontend)
+      if (req.get('Timezone')) {
+        return req.get('Timezone');
+      }
+
+      // Check if timezone was sent in request body
+      if (req.body && req.body.timezone) {
+        return req.body.timezone;
+      }
+
+      // Basic timezone guessing based on IP geolocation (very rough)
+      const acceptLanguage = req.get('Accept-Language');
+      if (acceptLanguage) {
+        // Very basic timezone guessing based on language preferences
+        if (acceptLanguage.includes('en-US')) return 'America/New_York';
+        if (acceptLanguage.includes('en-GB')) return 'Europe/London';
+        if (acceptLanguage.includes('fr')) return 'Europe/Paris';
+        if (acceptLanguage.includes('de')) return 'Europe/Berlin';
+        if (acceptLanguage.includes('ja')) return 'Asia/Tokyo';
+        // Add more as needed
+      }
+
+      return '';
+    } catch (error) {
+      logger.error('Error detecting timezone:', error);
+      return '';
+    }
+  }
+
+  /**
    * Get device information from request
    * @param {Object} req - Express request object
    * @returns {Object} Device information
@@ -120,33 +174,36 @@ class SessionService {
         return null;
       }
 
-      // Resolve user ID if needed
-      let userId = sessionData.userId;
-      if (!userId && sessionData.userEmail) {
+      // Resolve user ID if needed - handle both camelCase and snake_case
+      let userId = sessionData.userId || sessionData.users_id;
+      const userEmail = sessionData.userEmail || sessionData.user_email;
+      
+      if (!userId && userEmail) {
         const authService = require('./auth.service');
-        const user = await authService.findUserByEmail(sessionData.userEmail);
+        const user = await authService.findUserByEmail(userEmail);
         if (user) {
           userId = user.id;
         }
       }
 
-      // Map session data to PostgreSQL fields
+      // Map session data to PostgreSQL fields (now with all required columns)
       const fields = {
-        session_id: sessionData.sessionId,
-        user_id: userId,
-        user_email: sessionData.userEmail,
-        login_method: this.normalizeLoginMethod(sessionData.loginMethod),
-        ip_address: sessionData.ipAddress,
-        user_agent: sessionData.userAgent,
-        device_type: this.normalizeDeviceType(sessionData.deviceType),
+        session_id: sessionData.sessionId || sessionData.session_id || this.generateSessionId(),
+        users_id: userId,
+        user_email: userEmail,
+        login_method: this.normalizeLoginMethod(sessionData.loginMethod || sessionData.login_method),
+        ip_address: sessionData.ipAddress || sessionData.ip_address,
+        user_agent: sessionData.userAgent || sessionData.user_agent,
+        device_type: this.normalizeDeviceType(sessionData.deviceType || sessionData.device_type),
         browser: sessionData.browser,
         os: sessionData.os,
-        started_at: sessionData.startedAt,
-        last_activity_at: sessionData.lastActivityAt || sessionData.startedAt,
         status: this.normalizeStatus(sessionData.status || 'active'),
+        is_active: true,
+        last_accessed: sessionData.lastActivityAt || sessionData.startedAt,
+        last_activity_at: sessionData.lastActivityAt || sessionData.startedAt,
         location: sessionData.location || '',
         timezone: sessionData.timezone || '',
-        duration: 0 // Initialize duration as 0 for active sessions
+        duration: 0.00 // Initialize duration as 0.00 for active sessions
       };
 
       const record = await database.create(this.tableName, fields);
@@ -244,9 +301,9 @@ class SessionService {
 
       // Find active sessions for the user using SQL query
       const query = `
-        SELECT session_id, started_at 
+        SELECT session_id, created_at 
         FROM ${this.tableName} 
-        WHERE user_id = $1 AND status = 'active'
+        WHERE users_id = $1 AND status = 'active'
       `;
 
       const result = await database.query(query, [userId]);
@@ -257,10 +314,15 @@ class SessionService {
       for (const record of records) {
         const sessionId = record.session_id;
         if (sessionId) {
-          // Calculate duration in seconds between started_at and ended_at
-          const startedAt = new Date(record.started_at);
-          const expiredAtDate = new Date(expiredAt);
-          const duration = Math.round((expiredAtDate - startedAt) / 1000); // seconds
+          // Let the database calculate duration to avoid timezone issues
+          const durationQuery = `
+            SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) as duration_seconds
+            FROM sessions 
+            WHERE session_id = $1
+          `;
+          const durationResult = await database.query(durationQuery, [sessionId]);
+          const durationSeconds = Math.round(Math.abs(durationResult.rows[0].duration_seconds));
+          const duration = this.secondsToDecimalDuration(durationSeconds);
 
           await this.updateSession(sessionId, {
             endedAt: expiredAt,
@@ -303,9 +365,10 @@ class SessionService {
         startedAt: now,
         lastActivityAt: now,
         status: 'active',
-        // Could be enhanced with geolocation data
-        location: '',
-        timezone: req.get('Timezone') || ''
+        // Get location from various possible sources
+        location: req.get('CF-IPCountry') || req.get('X-Country') || req.body.country || req.body.location || '',
+        // Get timezone from various possible sources
+        timezone: req.get('X-Timezone') || req.body.timezone || this.getTimezoneFromRequest(req) || ''
       };
 
       const session = await this.createSession(sessionData);
@@ -352,9 +415,9 @@ class SessionService {
 
       // Find active sessions for the user using SQL query
       const query = `
-        SELECT session_id, started_at 
+        SELECT session_id, created_at 
         FROM ${this.tableName} 
-        WHERE user_id = $1 AND status = 'active'
+        WHERE users_id = $1 AND status = 'active'
       `;
 
       const result = await database.query(query, [userId]);
@@ -365,14 +428,20 @@ class SessionService {
       for (const record of records) {
         const sessionId = record.session_id;
         if (sessionId) {
-          // Calculate duration in seconds between started_at and ended_at
-          const startedAt = new Date(record.started_at);
-          const endedAtDate = new Date(endedAt);
-          const durationMs = endedAtDate - startedAt;
-          const duration = Math.round(durationMs / 1000); // seconds
+          // Let the database calculate duration to avoid timezone issues
+          const durationQuery = `
+            SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) as duration_seconds
+            FROM sessions 
+            WHERE session_id = $1
+          `;
+          const durationResult = await database.query(durationQuery, [sessionId]);
+          const durationSeconds = Math.round(Math.abs(durationResult.rows[0].duration_seconds));
+          const duration = this.secondsToDecimalDuration(durationSeconds);
 
           // Enhanced logging for duration calculation
-          logger.info(`Session ${sessionId} duration calculation: ${durationMs}ms = ${duration} seconds`);
+          const hours = Math.floor(duration);
+          const minutes = Math.round((duration - hours) * 100);
+          logger.info(`Session ${sessionId} duration: ${durationSeconds}s = ${duration} (${hours}h ${minutes}m)`);
 
           await this.updateSession(sessionId, {
             endedAt: endedAt,
@@ -426,7 +495,7 @@ class SessionService {
       deviceType: fields.device_type,
       browser: fields.browser,
       os: fields.os,
-      startedAt: fields.started_at,
+      startedAt: fields.created_at,
       lastActivityAt: fields.last_activity_at,
       endedAt: fields.ended_at,
       status: fields.status,
@@ -449,7 +518,7 @@ class SessionService {
       }
 
       const query = `
-        SELECT status, login_method, started_at 
+        SELECT status, login_method, created_at 
         FROM ${this.tableName}
       `;
 
@@ -470,7 +539,7 @@ class SessionService {
       allSessions.forEach(record => {
         const status = record.status;
         const method = record.login_method;
-        const startedAt = new Date(record.started_at);
+        const startedAt = new Date(record.created_at);
 
         // Count by status
         if (status === 'active') stats.active++;
@@ -492,6 +561,48 @@ class SessionService {
     } catch (error) {
       logger.error('Error getting session stats:', error);
       return { total: 0, active: 0, expired: 0, loggedOut: 0 };
+    }
+  }
+
+  /**
+   * Update session duration for an active session
+   * @param {number|string} sessionId - Session ID
+   * @returns {Promise<Object>} Updated session object
+   */
+  async updateSessionDuration(sessionId) {
+    try {
+      logger.debug(`Updating session duration for session: ${sessionId}`);
+
+      if (!database.pool) {
+        logger.warn('PostgreSQL not configured - cannot update session duration');
+        return null;
+      }
+
+      // Update session with calculated duration from PostgreSQL
+      const query = `
+        UPDATE ${this.tableName}
+        SET 
+          duration = ROUND(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))::numeric / 3600, 2),
+          last_activity_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *
+      `;
+
+      const result = await database.query(query, [sessionId]);
+
+      if (result.rows.length === 0) {
+        logger.warn(`Session not found: ${sessionId}`);
+        return null;
+      }
+
+      const updatedSession = result.rows[0];
+      logger.debug(`Session duration updated: ${updatedSession.duration} hours`);
+
+      return this.formatSessionRecord(updatedSession);
+    } catch (error) {
+      logger.error('Error updating session duration:', error);
+      throw new Error('Failed to update session duration');
     }
   }
 }

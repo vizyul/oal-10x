@@ -16,6 +16,14 @@ class AuthService {
     try {
       logger.info('Creating new user in PostgreSQL');
 
+      // Hash password if provided
+      const bcrypt = require('bcryptjs');
+      let hashedPassword = null;
+      if (userData.password || userData['Password']) {
+        const plainPassword = userData.password || userData['Password'];
+        hashedPassword = await bcrypt.hash(plainPassword, 12);
+      }
+
       // Map fields to PostgreSQL column names
       let fields = {};
 
@@ -23,7 +31,7 @@ class AuthService {
       if (userData['Email']) {
         fields = {
           email: userData['Email'],
-          password: userData['Password'],
+          password: hashedPassword,
           first_name: userData['First Name'],
           last_name: userData['Last Name'],
           email_verified: userData['Email Verified'] || false,
@@ -44,9 +52,9 @@ class AuthService {
         // Regular signup camelCase format
         fields = {
           email: userData.email,
-          password: userData.password,
-          first_name: userData.firstName,
-          last_name: userData.lastName,
+          password: hashedPassword,
+          first_name: userData.firstName || userData.first_name,
+          last_name: userData.lastName || userData.last_name,
           email_verified: userData.emailVerified || false,
           email_verification_token: userData.emailVerificationToken,
           email_verification_expires: userData.emailVerificationExpires,
@@ -100,18 +108,19 @@ class AuthService {
     try {
       logger.info(`Finding user by Apple ID: ${appleId}`);
 
-      const records = await database.findByField(
-        this.tableName,
-        'apple_id',
-        appleId
-      );
+      // Query using the normalized oauth_provider and oauth_id columns
+      const query = `
+        SELECT * FROM ${this.tableName} 
+        WHERE oauth_provider = 'apple' AND oauth_id = $1
+      `;
+      const result = await database.query(query, [appleId]);
 
-      if (records.length === 0) {
+      if (result.rows.length === 0) {
         logger.info(`No user found with Apple ID: ${appleId}`);
         return null;
       }
 
-      const user = this.formatUserRecord(records[0]);
+      const user = this.formatUserRecord(database.formatRecord(result.rows[0]));
       logger.info(`User found by Apple ID: ${user.email}`);
 
       return user;
@@ -132,7 +141,7 @@ class AuthService {
       // Use raw SQL to get Apple users sorted by updated timestamp descending
       const query = `
         SELECT * FROM ${this.tableName} 
-        WHERE registration_method = 'apple' AND status = 'active'
+        WHERE oauth_provider = 'apple' AND status = 'active'
         ORDER BY updated_at DESC 
         LIMIT 1
       `;
@@ -199,7 +208,7 @@ class AuthService {
       if (updateData.emailVerificationToken === null) mappedData.email_verification_token = null;
       if (updateData.emailVerificationExpires === null) mappedData.email_verification_expires = null;
       if (updateData.status) mappedData.status = updateData.status;
-      if (updateData.lastLoginAt) mappedData.last_login_at = updateData.lastLoginAt;
+      if (updateData.lastLoginAt) mappedData.last_login = updateData.lastLoginAt;
       if (updateData.termsAccepted !== undefined) mappedData.terms_accepted = updateData.termsAccepted;
       if (updateData.privacyAccepted !== undefined) mappedData.privacy_accepted = updateData.privacyAccepted;
 
@@ -207,10 +216,19 @@ class AuthService {
       if (updateData['Welcome Email Sent'] !== undefined) mappedData.welcome_email_sent = updateData['Welcome Email Sent'];
       if (updateData['Welcome Email Sent At']) mappedData.welcome_email_sent_at = updateData['Welcome Email Sent At'];
 
-      // Handle OAuth ID fields
-      if (updateData['Google ID']) mappedData.google_id = updateData['Google ID'];
-      if (updateData['Microsoft ID']) mappedData.microsoft_id = updateData['Microsoft ID'];
-      if (updateData['Apple ID']) mappedData.apple_id = updateData['Apple ID'];
+      // Handle OAuth ID fields - map to normalized oauth columns
+      if (updateData['Google ID']) {
+        mappedData.oauth_provider = 'google';
+        mappedData.oauth_id = updateData['Google ID'];
+      }
+      if (updateData['Microsoft ID']) {
+        mappedData.oauth_provider = 'microsoft';
+        mappedData.oauth_id = updateData['Microsoft ID'];
+      }
+      if (updateData['Apple ID']) {
+        mappedData.oauth_provider = 'apple';
+        mappedData.oauth_id = updateData['Apple ID'];
+      }
 
       // Handle subscription fields
       if (updateData.subscription_tier) mappedData.subscription_tier = updateData.subscription_tier;
@@ -320,11 +338,14 @@ class AuthService {
       status: fields.status || 'pending',
       createdAt: fields.created_at,
       updatedAt: fields.updated_at,
-      lastLoginAt: fields.last_login_at,
-      googleId: fields.google_id,
-      appleId: fields.apple_id,
-      microsoftId: fields.microsoft_id,
-      registrationMethod: fields.registration_method,
+      lastLoginAt: fields.last_login, // Use existing last_login column
+      oauthProvider: fields.oauth_provider,
+      oauthId: fields.oauth_id,
+      // Legacy compatibility - derive individual provider IDs from oauth fields
+      googleId: fields.oauth_provider === 'google' ? fields.oauth_id : null,
+      appleId: fields.oauth_provider === 'apple' ? fields.oauth_id : null,
+      microsoftId: fields.oauth_provider === 'microsoft' ? fields.oauth_id : null,
+      registrationMethod: fields.oauth_provider || 'email', // Default to email if no oauth
       welcomeEmailSent: fields.welcome_email_sent || false,
       welcomeEmailSentAt: fields.welcome_email_sent_at,
       subscription_tier: fields.subscription_tier || 'free',
@@ -409,6 +430,116 @@ class AuthService {
     } catch (error) {
       logger.error('Error getting user stats:', error);
       throw new Error('Failed to get user statistics');
+    }
+  }
+
+  /**
+   * Authenticate user with email and password
+   * @param {string} email - User email
+   * @param {string} password - User password (plain text)
+   * @returns {Promise<Object|null>} User object if authentication successful, null otherwise
+   */
+  async authenticateUser(email, password) {
+    try {
+      logger.info(`Authenticating user: ${email}`);
+
+      // Find user by email
+      const user = await this.findUserByEmail(email);
+      if (!user) {
+        logger.info(`User not found: ${email}`);
+        return null;
+      }
+
+      // Check if password is set (for OAuth users, password might be null)
+      if (!user.password) {
+        logger.info(`User ${email} has no password (OAuth user)`);
+        return null;
+      }
+
+      // Verify password using bcrypt
+      const bcrypt = require('bcryptjs');
+      const isValid = await bcrypt.compare(password, user.password);
+      
+      if (!isValid) {
+        logger.info(`Invalid password for user: ${email}`);
+        return null;
+      }
+
+      logger.info(`User authenticated successfully: ${email}`);
+      return user;
+    } catch (error) {
+      logger.error('Error authenticating user:', error);
+      throw new Error('Failed to authenticate user');
+    }
+  }
+
+  /**
+   * Create OAuth user with normalized provider fields
+   * @param {Object} userData - OAuth user data
+   * @returns {Promise<Object>} Created user object
+   */
+  async createOAuthUser(userData) {
+    try {
+      logger.info(`Creating OAuth user: ${userData.email} via ${userData.oauth_provider}`);
+
+      // Ensure we have the required OAuth fields
+      if (!userData.oauth_provider || !userData.oauth_id) {
+        throw new Error('OAuth provider and ID are required');
+      }
+
+      // Prepare user data with OAuth normalization
+      const fields = {
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        oauth_provider: userData.oauth_provider, // Normalized field
+        oauth_id: userData.oauth_id, // Normalized field
+        email_verified: userData.email_verified || true, // OAuth users typically have verified emails
+        status: userData.status || 'active',
+        subscription_tier: userData.subscription_tier || 'free'
+        // Removed registration_method - not in database schema
+      };
+
+      const user = await database.create(this.tableName, fields);
+      logger.info(`OAuth user created successfully: ${user.email}`);
+
+      return this.formatUserRecord(user);
+    } catch (error) {
+      logger.error('Error creating OAuth user:', error);
+      logger.error('OAuth user data was:', userData);
+      logger.error('Database fields were:', fields);
+      throw new Error(`Failed to create OAuth user: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find user by OAuth provider and ID
+   * @param {string} provider - OAuth provider (google, apple, microsoft)
+   * @param {string} oauthId - OAuth ID from provider
+   * @returns {Promise<Object|null>} User object or null if not found
+   */
+  async findUserByOAuth(provider, oauthId) {
+    try {
+      logger.info(`Finding user by OAuth: ${provider}:${oauthId}`);
+
+      const query = `
+        SELECT * FROM ${this.tableName} 
+        WHERE oauth_provider = $1 AND oauth_id = $2
+      `;
+      const result = await database.query(query, [provider, oauthId]);
+
+      if (result.rows.length === 0) {
+        logger.info(`No user found with OAuth ${provider}:${oauthId}`);
+        return null;
+      }
+
+      const user = this.formatUserRecord(result.rows[0]);
+      logger.info(`User found by OAuth: ${user.email}`);
+
+      return user;
+    } catch (error) {
+      logger.error('Error finding user by OAuth:', error);
+      throw new Error('Failed to find user by OAuth credentials');
     }
   }
 }
