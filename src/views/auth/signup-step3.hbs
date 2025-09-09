@@ -22,6 +22,7 @@
   {{/if}}
   <input type="hidden" name="email" value="{{email}}">
   <input type="hidden" name="token" value="{{token}}">
+  <input type="hidden" name="timezone" id="timezoneField" value="">
   
   <!-- Name Fields -->
   <div class="form-row">
@@ -180,28 +181,22 @@
 </div>
 
 <!-- Success Modal -->
-<div class="modal-overlay" id="successModal">
-  <div class="modal-content success-modal">
-    <div class="modal-header">
-      <div class="success-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M9 12l2 2 4-4"></path>
-          <circle cx="12" cy="12" r="10"></circle>
-        </svg>
-      </div>
-      <h3 class="modal-title">Welcome to Our AI Legacy!</h3>
+<div class="loading-overlay" id="successModal">
+  <div class="loading-content success-modal">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 80px; height: 80px; color: #10b981;">
+        <path d="M9 12l2 2 4-4"></path>
+        <circle cx="12" cy="12" r="10"></circle>
+      </svg>
     </div>
-    <div class="modal-body">
-      <p class="modal-message">
-        Your account has been created successfully. You're now ready to explore 
-        the future of AI in ministry with confidence and responsibility.
-      </p>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-primary" onclick="window.location.href='/dashboard'">
-        Get Started
-      </button>
-    </div>
+    <h3 class="modal-title">Welcome to Our AI Legacy!</h3>
+    <p class="modal-message">
+      Your account has been created successfully. You're now ready to explore 
+      the future of AI in ministry with confidence and responsibility.
+    </p>
+    <button type="button" class="btn btn-primary" onclick="window.location.href='/dashboard'">
+      Get Started
+    </button>
   </div>
 </div>
 
@@ -214,6 +209,18 @@ document.addEventListener('DOMContentLoaded', function() {
   const submitBtn = document.getElementById('submitBtn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const successModal = document.getElementById('successModal');
+  const timezoneField = document.getElementById('timezoneField');
+  
+  // Automatically detect and set timezone
+  if (timezoneField) {
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      timezoneField.value = timezone;
+    } catch (error) {
+      console.log('Unable to detect timezone:', error);
+      // Keep empty value, server will use fallback
+    }
+  }
   
   let isSubmitting = false;
 

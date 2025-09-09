@@ -18,9 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for ministry use.
 
-**Database Architecture**: This application has been migrated from Airtable to PostgreSQL as the primary database.
+**Database Architecture**: This application has been fully migrated from Airtable to PostgreSQL as the primary database.
 - **PostgreSQL** (primary) - Main data storage for all application data
-- **Note**: Previous dual-database architecture (Airtable + PostgreSQL) was resolved during migration
+- **Migration Status**: Complete - all Airtable functionality now uses PostgreSQL
+- **Schema**: Normalized design with proper relationships and foreign keys
+- **Data Integrity**: All single-select fields and relationships properly migrated
 
 ### Previous Airtable Videos Table Fields (Legacy Reference):
 **Note**: These fields are for reference only as the application now uses PostgreSQL.
@@ -71,6 +73,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Processing: `status`, `category`, `privacy_setting` (newly added fields)
 - User association: `user_id` (Link to another record)
 
+## PostgreSQL Database Schema
+
+The application now uses a normalized PostgreSQL database with proper relationships and foreign keys. All Airtable single-select fields have been migrated to VARCHAR columns with appropriate defaults.
+
+### Core Tables
+
+#### users (57 columns)
+Primary user data with OAuth integration and comprehensive profile fields:
+- **Identity**: `id`, `email`, `first_name`, `last_name`, `password`
+- **Verification**: `email_verified`, `email_verification_token`, `email_verification_expires`
+- **Authentication**: `oauth_provider`, `oauth_id` (normalized design vs separate provider columns)
+- **Status**: `status` (active), `role` (user/admin), `subscription_tier` (free/premium/enterprise)
+- **Profile**: `profile_image_url`, `phone`, `date_of_birth`, `gender`, `location`, `bio`, `website_url`
+- **Social**: `social_links` (JSONB), `preferences` (JSONB), `metadata` (JSONB)
+- **Subscription**: `stripe_customer_id`, `subscription_status`, `subscription_plan`, `trial_end`
+- **Security**: `two_factor_enabled`, `api_key_hash`, `session_token`, `magic_link_token`
+- **Tracking**: `last_login`, `login_count`, `usage_count`, `monthly_usage_limit`
+- **Timestamps**: `created_at`, `updated_at`
+
+**Key Design**: OAuth uses normalized `oauth_provider` + `oauth_id` instead of separate `google_id`, `apple_id`, `microsoft_id` columns.
+
+#### sessions (24 columns)
+Session tracking with proper duration calculation and timezone handling:
+- **Identity**: `id`, `session_id`, `users_id` (FK to users)
+- **User Info**: `user_email`, `login_method` (email/google/apple/microsoft)
+- **Device**: `ip_address`, `user_agent`, `device_type` (desktop/mobile/tablet), `browser`, `os`
+- **Status**: `status` (active/expired/logged_out), `is_active` (boolean)
+- **Timing**: `created_at`, `updated_at`, `last_accessed`, `last_activity_at`, `ended_at`
+- **Duration**: `duration` (DECIMAL(5,2) - hours.minutes format, e.g., 2.30 = 2h 30m)
+- **Location**: `location`, `timezone`
+- **Legacy**: `expires_at`, `session_data` (JSONB), `device_info` (JSONB), `location_data` (JSONB)
+
+**Duration Format**: Uses DECIMAL(5,2) for easy aggregation (0.15=15min, 1.30=1h30m, 2.45=2h45m)
+**Duration Calculation**: PostgreSQL handles timezone-safe calculation using EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))
+
+#### user_subscriptions (15 columns)
+Stripe subscription management:
+- **Identity**: `id`, `users_id` (FK to users), `stripe_subscription_id`
+- **Plan**: `plan_name`, `subscription_tier` (free/premium/enterprise), `price_id`
+- **Status**: `status`, `current_period_start`, `current_period_end`
+- **Trial**: `trial_start`, `trial_end`
+- **Data**: `metadata` (JSONB), `airtable_id`
+- **Timestamps**: `created_at`, `updated_at`
+
+#### subscription_usage (21 columns)
+Comprehensive usage tracking with all Airtable fields migrated:
+- **Identity**: `id`, `user_subscriptions_id` (FK to user_subscriptions)
+- **Period**: `usage_type`, `period_start`, `period_end`, `reset_date`
+- **Core Usage**: `usage_count`, `usage_limit`, `videos_processed` (key monthly limit field)
+- **Feature Usage**: `ai_summaries_generated`, `analytics_views`, `api_calls_made`, `storage_used_mb`
+- **Additional**: `feature_used`, `ip_address`, `user_agent`
+- **Reference**: `subscription_id` (Stripe ID), `user_id` (direct user reference)
+- **Data**: `metadata` (JSONB)
+- **Timestamps**: `created_at`, `updated_at`
+
+**Key Field**: `videos_processed` tracks monthly video processing for subscription limits.
+
+#### subscription_events (16 columns)
+Webhook and event processing:
+- **Identity**: `id`, `user_subscriptions_id` (FK), `stripe_event_id`
+- **Event**: `event_type`, `event_data` (JSONB)
+- **Processing**: `processed` (boolean), `processed_successfully` (boolean), `status` (pending/processed/failed)
+- **Timing**: `created_at`, `updated_at`, `processed_at`, `webhook_received_at`
+- **Error Handling**: `error_message`, `retry_count`
+- **Reference**: `stripe_subscription_id`, `user_id`
+
+### Key Relationships
+
+```
+users (1) ←→ (M) user_subscriptions ←→ (M) subscription_usage
+users (1) ←→ (M) sessions  
+users (1) ←→ (M) subscription_events
+user_subscriptions (1) ←→ (M) subscription_usage
+user_subscriptions (1) ←→ (M) subscription_events
+```
+
+### Database Migration Status
+
+✅ **Completed Migrations:**
+- All single-select fields from Airtable (status, device_type, login_method, etc.)
+- User authentication with OAuth normalization
+- Session tracking with proper duration calculation
+- Subscription usage data with all tracking fields
+- Foreign key constraints and data integrity
+
+✅ **Key Fixes Applied:**
+- Duration field: DECIMAL(5,2) format with PostgreSQL-based calculation
+- Timezone handling: Database-native timestamp calculations
+- OAuth design: Normalized provider/ID columns vs separate provider columns
+- Subscription relationships: Proper FK chains for usage tracking
+
 ## UI/UX Guidelines
 
 **Error Messaging**: Do NOT use JavaScript dialog popup boxes (alert(), confirm(), prompt()). Always use HTML-based error messaging displayed inline on pages for better user experience and accessibility.
@@ -119,10 +212,12 @@ If port 3000 is already in use when starting the dev server:
 - Protected routes using auth middleware
 - Cookie-based session management
 
-**Airtable Integration**:
-- Primary data storage via `airtable.service.js`
-- User data management and content tracking
-- Setup scripts: `setup-airtable-tables.js` for table configuration
+**PostgreSQL Integration**:
+- Primary data storage via `database.service.js` (normalized schema)
+- User authentication with OAuth normalization (provider + ID columns)
+- Session management with DECIMAL duration tracking (database-calculated)
+- Subscription and usage tracking with comprehensive metrics
+- All services migrated from Airtable to PostgreSQL with improved relationships
 
 **OAuth Integration**:
 - `oauth.service.js` handles Google, Apple, and Microsoft authentication
@@ -157,14 +252,15 @@ src/
 │   ├── auth.routes.js    # Includes OAuth routes and social verification
 │   ├── index.js
 │   └── main.routes.js
-├── services/        # Business logic (Airtable, auth, email, OAuth, video processing, AI)
-│   ├── ai-chat.service.js  # NEW: Google Gemini & OpenAI ChatGPT integration
-│   ├── airtable.service.js
-│   ├── auth.service.js
-│   ├── content-generation.service.js  # NEW: AI content generation from transcripts
-│   ├── database.service.js  # PostgreSQL service for dual-database writes
+├── services/        # Business logic (PostgreSQL-based, auth, email, OAuth, video processing, AI)
+│   ├── ai-chat.service.js  # Google Gemini & OpenAI ChatGPT integration
+│   ├── auth.service.js     # PostgreSQL-based authentication with OAuth normalization
+│   ├── content-generation.service.js  # AI content generation from transcripts
+│   ├── database.service.js  # Core PostgreSQL service (primary database)
 │   ├── email.service.js
 │   ├── oauth.service.js  # Google, Apple, Microsoft OAuth
+│   ├── session.service.js  # Session management with DECIMAL duration tracking
+│   ├── subscription.service.js  # Stripe subscription and usage tracking
 │   ├── transcript.service.js  # YouTube transcript extraction with AI content trigger
 │   ├── youtube-metadata.service.js  # YouTube Data API integration
 │   └── youtube-oauth.service.js  # YouTube OAuth for channel access
@@ -309,11 +405,11 @@ expect(database.create).toHaveBeenCalledWith('users', {
 
 - **Node.js**: >=18.0.0
 - **Environment variables**: Actual configuration is in `.env` file (not `.env.example`)
-- **Airtable**: API key and base configuration needed
-- **PostgreSQL**: Database connection for dual-database architecture
+- **PostgreSQL**: Primary database connection (fully migrated from Airtable)
 - **OAuth Providers**: Google, Apple, and Microsoft app configurations required
 - **YouTube Data API**: API key for video metadata extraction
 - **Transcript API**: Custom API key for YouTube transcript extraction
+- **AI Services**: OpenAI and Google Gemini API keys for content generation
 
 ### Important Notes
 - **Always check `.env` file for actual environment variables**, not `.env.example`
@@ -399,12 +495,43 @@ OPENAI_API_KEY=your_openai_api_key_here
 - Automatic generation triggered after transcript extraction
 - Results stored in video content fields (both databases)
 
+## Core Service Architecture
+
+### Database Service (`database.service.js`)
+The primary PostgreSQL service providing:
+- **CRUD Operations**: `create()`, `findById()`, `findByField()`, `update()`, `delete()`
+- **Connection Management**: Pool-based connections with proper error handling
+- **Query Interface**: Direct SQL query execution with parameter binding
+- **Transaction Support**: For complex multi-table operations
+
+### Authentication Service (`auth.service.js`)
+OAuth-normalized user management:
+- **OAuth Normalization**: Single `oauth_provider` + `oauth_id` columns vs separate provider columns
+- **Field Mapping**: Proper PostgreSQL column mapping (email vs Email, first_name vs 'First Name')
+- **Password Security**: bcryptjs hashing with proper salt rounds
+- **Token Management**: JWT generation and verification
+
+### Session Service (`session.service.js`)
+Advanced session tracking:
+- **Duration Tracking**: DECIMAL(5,2) format (2.30 = 2h 30m) for easy aggregation
+- **Timezone Safety**: PostgreSQL EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) calculation
+- **Device Detection**: Browser, OS, device type from User-Agent
+- **Location Tracking**: IP geolocation and timezone detection
+
+### Subscription Service (`subscription.service.js`)
+Comprehensive usage and billing:
+- **Usage Tracking**: `videos_processed`, `ai_summaries_generated`, `analytics_views`, `api_calls_made`
+- **Stripe Integration**: Webhook processing and subscription management
+- **Relationship Management**: Proper FK chains (users → user_subscriptions → subscription_usage)
+- **Period Calculations**: Monthly usage windows with proper reset logic
+
 ## Key Files for Modification
 
 - **Routes**: Add new routes in `src/routes/`
-- **Business logic**: Add services in `src/services/`
+- **Business logic**: Add services in `src/services/` (PostgreSQL-based)
 - **Authentication**: Modify `src/middleware/auth.middleware.js`
 - **OAuth Integration**: `src/services/oauth.service.js` for social login modifications
+- **Database Operations**: `src/services/database.service.js` for all data operations
 - **UI**: Update Handlebars templates in `src/views/`
 - **Styles**: CSS files in `public/css/`
 

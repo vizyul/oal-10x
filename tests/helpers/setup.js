@@ -1,4 +1,5 @@
 // Test setup and globals
+require('dotenv').config(); // Load .env file FIRST
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
 process.env.JWT_EXPIRES_IN = '1h';

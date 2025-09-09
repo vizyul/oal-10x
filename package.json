@@ -13,11 +13,16 @@
     "test:coverage": "jest --coverage",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
+    "test:database": "jest tests/database",
+    "test:validation": "jest tests/validation",
+    "test:e2e": "jest tests/e2e",
+    "test:all": "jest tests/unit tests/database tests/validation tests/integration tests/e2e",
     "test:ci": "jest --coverage --watchAll=false --passWithNoTests",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "pretest": "npm run lint",
-    "validate": "npm run lint && npm run test:ci"
+    "validate": "npm run lint && npm run test:ci",
+    "test:comprehensive": "node scripts/test-comprehensive.js"
   },
   "keywords": [
     "nodejs",

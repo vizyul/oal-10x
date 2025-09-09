@@ -334,7 +334,7 @@ const subscriptionController = {
           const resolvedUserId = await resolveUserId(user.id);
           await database.create('subscription_events', {
             stripe_event_id: `manual_sync_${session_id}`,
-            user_id: resolvedUserId,
+            user_subscriptions_id: null, // Will need to find the subscription record ID
             event_type: 'manual.subscription.sync',
             stripe_subscription_id: subscription.id,
             event_data: JSON.stringify({

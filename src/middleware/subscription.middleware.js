@@ -292,6 +292,8 @@ function checkFeatureAccess(tierConfig, feature) {
  */
 async function getCurrentUsage(userId, resource) {
   try {
+    const subscriptionService = require('../services/subscription.service');
+    
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -305,35 +307,8 @@ async function getCurrentUsage(userId, resource) {
       resolvedUserId = userData.id;
     }
 
-    // Get current subscription to find billing period
-    const subscription = await getUserActiveSubscription(resolvedUserId);
-    if (!subscription) {
-      // No active subscription, return 0 usage
-      return 0;
-    }
-
-    const periodStart = new Date(subscription.current_period_start);
-    const periodEnd = new Date(subscription.current_period_end);
-    const now = new Date();
-
-    // Find usage record for current period
-    const query = `
-      SELECT * FROM subscription_usage 
-      WHERE users_id = $1 
-        AND period_start <= $2 
-        AND period_end >= $2
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const usageResult = await database.query(query, [resolvedUserId, now]);
-    const currentUsage = usageResult.rows[0];
-
-    if (!currentUsage) {
-      return 0;
-    }
-
-    const fieldName = getUsageFieldName(resource);
-    return currentUsage[fieldName] || 0;
+    // Use subscription service method instead of raw SQL
+    return await subscriptionService.getCurrentPeriodUsage(resolvedUserId);
   } catch (error) {
     logger.error('Error getting current usage:', error);
     return 0;
@@ -345,6 +320,8 @@ async function getCurrentUsage(userId, resource) {
  */
 async function getCurrentUsageAll(userId) {
   try {
+    const subscriptionService = require('../services/subscription.service');
+    
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -352,40 +329,14 @@ async function getCurrentUsageAll(userId) {
       const userRecord = await database.findByField('users', 'airtable_id', userId);
       if (userRecord.length === 0) {
         logger.warn(`No PostgreSQL user found for Airtable ID: ${userId}`);
-        return {
-          videos_processed: 0,
-          api_calls_made: 0,
-          storage_used_mb: 0,
-          ai_summaries_generated: 0,
-          analytics_views: 0
-        };
+        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
       const userData = userRecord[0].fields || userRecord[0];
       resolvedUserId = userData.id;
     }
 
-    const now = new Date();
-    const query = `
-      SELECT * FROM subscription_usage 
-      WHERE users_id = $1 
-        AND period_start <= $2 
-        AND period_end >= $2
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const usageResult = await database.query(query, [resolvedUserId, now]);
-    const currentUsage = usageResult.rows[0];
-
-    if (!currentUsage) {
-      return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-    }
-
-    return {
-      videos: currentUsage.videos_processed || 0,
-      api_calls: currentUsage.api_calls_made || 0,
-      storage: currentUsage.storage_used_mb || 0,
-      ai_summaries: currentUsage.ai_summaries_generated || 0
-    };
+    // Use subscription service method instead of raw SQL
+    return await subscriptionService.getCurrentPeriodUsageBreakdown(resolvedUserId);
   } catch (error) {
     logger.error('Error getting all usage:', error);
     return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
@@ -397,6 +348,8 @@ async function getCurrentUsageAll(userId) {
  */
 async function incrementUserUsage(userId, resource, increment = 1) {
   try {
+    const subscriptionService = require('../services/subscription.service');
+    
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -410,66 +363,8 @@ async function incrementUserUsage(userId, resource, increment = 1) {
       resolvedUserId = userData.id;
     }
 
-    const subscription = await getUserActiveSubscription(resolvedUserId);
-    if (!subscription) {
-      // No active subscription, don't track usage
-      return;
-    }
-
-    const now = new Date();
-    const usageQuery = `
-      SELECT * FROM subscription_usage 
-      WHERE users_id = $1 
-        AND period_start <= $2 
-        AND period_end >= $2
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const usageResult = await database.query(usageQuery, [resolvedUserId, now]);
-    let currentUsage = usageResult.rows[0];
-
-    const fieldName = getUsageFieldName(resource);
-
-    if (currentUsage) {
-      // Update existing usage record
-      const newValue = (currentUsage[fieldName] || 0) + increment;
-      const updateQuery = `
-        UPDATE subscription_usage 
-        SET ${fieldName} = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `;
-      await database.query(updateQuery, [newValue, currentUsage.id]);
-    } else {
-      // Create new usage record for current period
-      const subscriptionQuery = `
-        SELECT id FROM user_subscriptions 
-        WHERE stripe_subscription_id = $1
-        LIMIT 1
-      `;
-      const subscriptionResult = await database.query(subscriptionQuery, [subscription.stripe_subscription_id]);
-      const subscriptionRecord = subscriptionResult.rows[0];
-
-      if (subscriptionRecord) {
-        const insertQuery = `
-          INSERT INTO subscription_usage (
-            users_id, subscription_id, period_start, period_end,
-            videos_processed, api_calls_made, storage_used_mb, 
-            ai_summaries_generated, analytics_views
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        `;
-        await database.query(insertQuery, [
-          resolvedUserId,
-          subscriptionRecord.id,
-          new Date(subscription.current_period_start).toISOString().split('T')[0],
-          new Date(subscription.current_period_end).toISOString().split('T')[0],
-          resource === 'videos' ? increment : 0,
-          resource === 'api_calls' ? increment : 0,
-          resource === 'storage' ? increment : 0,
-          resource === 'ai_summaries' ? increment : 0,
-          resource === 'analytics' ? increment : 0
-        ]);
-      }
-    }
+    // Use subscription service method instead of raw SQL
+    await subscriptionService.trackUsage(resolvedUserId, resource, increment);
   } catch (error) {
     logger.error('Error incrementing usage:', error);
   }
@@ -480,15 +375,10 @@ async function incrementUserUsage(userId, resource, increment = 1) {
  */
 async function getUserActiveSubscription(userId) {
   try {
-    const query = `
-      SELECT * FROM user_subscriptions 
-      WHERE users_id = $1 
-        AND status IN ('active', 'trialing', 'paused')
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    const result = await database.query(query, [userId]);
-    return result.rows[0] || null;
+    const subscriptionService = require('../services/subscription.service');
+    
+    // Use subscription service method instead of raw SQL
+    return await subscriptionService.getUserActiveSubscriptionByPgId(userId);
   } catch (error) {
     logger.error('Error getting user subscription:', error);
     return null;

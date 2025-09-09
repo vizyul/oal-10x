@@ -333,13 +333,26 @@ async function handleSigninSubmit(e) {
     loadingOverlay.classList.add('show');
     
     try {
+        // Get timezone and basic location info
+        const timezoneData = {
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezoneOffset: new Date().getTimezoneOffset(),
+            language: navigator.language,
+            country: navigator.language.split('-')[1] || ''
+        };
+
+        const signinData = {
+            ...Object.fromEntries(formData),
+            ...timezoneData
+        };
+
         const response = await fetch('/auth/sign-in', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify(Object.fromEntries(formData))
+            body: JSON.stringify(signinData)
         });
         
         const result = await response.json();

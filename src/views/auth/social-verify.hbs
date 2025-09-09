@@ -54,6 +54,7 @@
   {{/if}}
   <input type="hidden" name="email" value="{{email}}">
   <input type="hidden" name="provider" value="{{provider}}">
+  <input type="hidden" name="timezone" id="timezoneField" value="">
   
   <!-- Code Input -->
   <div class="form-group">
@@ -133,7 +134,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const resendTimer = document.getElementById('resendTimer');
   const countdown = document.getElementById('countdown');
   const loadingOverlay = document.getElementById('loadingOverlay');
+  const timezoneField = document.getElementById('timezoneField');
   const email = '{{email}}';
+  
+  // Automatically detect and set timezone
+  if (timezoneField) {
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      timezoneField.value = timezone;
+    } catch (error) {
+      console.log('Unable to detect timezone:', error);
+      // Keep empty value, server will use fallback
+    }
+  }
   
   let isSubmitting = false;
   let resendCountdown = 60;
