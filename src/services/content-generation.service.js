@@ -9,6 +9,41 @@ class ContentGenerationService {
   }
 
   /**
+   * Check if video processing has been cancelled
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<boolean>} True if cancelled, false otherwise
+   */
+  async isVideoCancelled(videoId) {
+    try {
+      // Primary check: processing status service (where cancellation is tracked)
+      const processingStatusService = require('./processing-status.service');
+      const videoStatus = processingStatusService.processingVideos.get(videoId);
+      
+      if (videoStatus && videoStatus.cancelled) {
+        return true;
+      }
+      
+      // Secondary check: if video was deleted from database, consider it cancelled
+      const videos = await databaseService.query(
+        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        [videoId]
+      );
+      
+      // If video doesn't exist in database but we're still processing, it might have been deleted (cancelled)
+      if (!videos.rows || videos.rows.length === 0) {
+        logger.info(`Video ${videoId} not found in database - may have been cancelled and deleted`);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      logger.error('Error checking video cancellation status:', error);
+      // In case of error, assume not cancelled to avoid blocking legitimate processing
+      return false;
+    }
+  }
+
+  /**
    * Get all active prompts from database
    * @param {string} provider - AI provider filter ('gemini' or 'chatgpt')
    * @param {string} contentType - Content type filter
@@ -25,13 +60,8 @@ class ContentGenerationService {
 
       const records = await databaseService.findByMultipleFields('ai_prompts', conditions);
 
-      // Handle both database service formatted records and direct PostgreSQL rows
-      const prompts = records.map(record => {
-        if (record.fields) {
-          return record.fields;
-        }
-        return record;
-      });
+      // PostgreSQL returns records directly
+      const prompts = records;
 
       logger.debug(`Found ${prompts.length} prompts in PostgreSQL`);
       return prompts;
@@ -147,6 +177,12 @@ class ContentGenerationService {
    */
   async generateAllContentForVideo(videoRecordId, videoId, transcript, options = {}) {
     try {
+      // Check if video processing has been cancelled before starting
+      if (await this.isVideoCancelled(videoId)) {
+        logger.info(`Video ${videoId} has been cancelled, skipping content generation`);
+        return { success: false, message: 'Video processing cancelled', results: [] };
+      }
+
       const {
         provider = null, // Will be determined from user preference or default to gemini
         contentTypes = this.supportedContentTypes,
@@ -222,6 +258,12 @@ class ContentGenerationService {
 
       // Process prompts in batches
       for (let i = 0; i < relevantPrompts.length; i += concurrent) {
+        // Check for cancellation before each batch
+        if (await this.isVideoCancelled(videoId)) {
+          logger.info(`Video ${videoId} was cancelled during content generation, stopping at batch ${Math.floor(i / concurrent) + 1}`);
+          break;
+        }
+
         const batch = relevantPrompts.slice(i, i + concurrent);
 
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(relevantPrompts.length / concurrent)}`);
@@ -292,7 +334,7 @@ class ContentGenerationService {
         group_guide_text: ['group_guide_text', 'group_guide_url'],
         social_media_text: ['social_media_text', 'social_media_url'],
         quiz_text: ['quiz_text', 'quiz_url'],
-        chapters_text: ['chapters_text', 'chapters_url']
+        chapters_text: ['chapter_text', 'chapter_url']
       };
 
       // Prepare updates for database
@@ -324,7 +366,7 @@ class ContentGenerationService {
 
           if (records.length > 0) {
             const record = records[0];
-            const recordId = record.fields ? record.fields.id : record.id;
+            const recordId = record.id; // PostgreSQL returns records directly
             await databaseService.update('videos', recordId, updates);
             logger.debug(`Updated video record ${recordId} (found by airtable_id ${videoRecordId}) with generated content`);
           } else {
@@ -369,20 +411,18 @@ class ContentGenerationService {
 
       // Filter videos that have transcripts but missing content
       let videos = allVideos.filter(record => {
-        const fields = record.fields || record;
-
         // Skip if no transcript or transcript too short
-        if (!fields.transcript_text || fields.transcript_text.trim().length < 100) {
+        if (!record.transcript_text || record.transcript_text.trim().length < 100) {
           return false;
         }
 
         // Include if userId filter is specified and matches
-        if (userId && fields.user_id !== userId) {
+        if (userId && record.user_id !== userId) {
           return false;
         }
 
         // Include if missing some content (e.g., blog_text or discussion_guide_text)
-        return !fields.summary_text || !fields.discussion_guide_text || !fields.quiz_text;
+        return !record.summary_text || !record.discussion_guide_text || !record.quiz_text;
       }).slice(0, maxVideos);
 
       logger.info(`Found ${videos.length} videos needing content generation`);
@@ -396,14 +436,13 @@ class ContentGenerationService {
       const results = [];
       for (const video of videos) {
         try {
-          const fields = video.fields || video;
-          const videoRecordId = video.id || fields.id;
-          const videoId = fields.videoid || fields.video_id || fields.youtube_video_id;
+          const videoRecordId = video.id;
+          const videoId = video.videoid || video.video_id || video.youtube_video_id;
 
           const result = await this.generateAllContentForVideo(
             videoRecordId,
             videoId,
-            fields.transcript_text,
+            video.transcript_text,
             { provider, contentTypes, userId }
           );
 
@@ -413,11 +452,10 @@ class ContentGenerationService {
           await new Promise(resolve => setTimeout(resolve, 3000));
 
         } catch (error) {
-          const fields = video.fields || video;
-          logger.error(`Failed to process video ${video.id || fields.id}:`, error.message);
+          logger.error(`Failed to process video ${video.id}:`, error.message);
           results.push({
-            videoId: fields.videoid || fields.video_id || fields.youtube_video_id,
-            videoRecordId: video.id || fields.id,
+            videoId: video.videoid || video.video_id || video.youtube_video_id,
+            videoRecordId: video.id,
             success: false,
             error: error.message
           });
@@ -465,15 +503,13 @@ class ContentGenerationService {
         const allVideos = await databaseService.findAll('videos', { maxRecords: 1000 });
         videoStats.total = allVideos.length;
 
-        // Handle both database service formatted records and direct PostgreSQL rows
+        // PostgreSQL returns records directly
         videoStats.withTranscripts = allVideos.filter(v => {
-          const fields = v.fields || v;
-          return fields.transcript_text?.length > 100;
+          return v.transcript_text?.length > 100;
         }).length;
 
         videoStats.withGeneratedContent = allVideos.filter(v => {
-          const fields = v.fields || v;
-          return fields.summary_text || fields.discussion_guide_text || fields.quiz_text;
+          return v.summary_text || v.discussion_guide_text || v.quiz_text;
         }).length;
       } catch (error) {
         logger.warn('Could not get video statistics from database:', error.message);

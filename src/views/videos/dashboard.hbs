@@ -22,7 +22,6 @@
         {{else}}
         <a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>
         {{/if}}
-        <a href="/videos/library" class="btn btn-secondary">View Library</a>
         {{#if subscription.features.analyticsAccess}}
         <a href="/videos/analytics" class="btn btn-outline">Analytics</a>
         {{/if}}
@@ -39,65 +38,10 @@
     </div>
     
     <div class="status-content" id="status-content">
-      <div class="status-table-container">
-        <table class="status-table" id="status-table">
-          <thead>
-            <tr>
-              <th class="video-col">Video</th>
-              <th class="content-col" data-tooltip="Transcript extraction">
-                <div class="col-header">
-                  <span class="col-icon">📝</span>
-                  <span class="col-label">Transcript</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Summary generation">
-                <div class="col-header">
-                  <span class="col-icon">📄</span>
-                  <span class="col-label">Summary</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Study guide creation">
-                <div class="col-header">
-                  <span class="col-icon">📚</span>
-                  <span class="col-label">Study Guide</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Discussion guide">
-                <div class="col-header">
-                  <span class="col-icon">💬</span>
-                  <span class="col-label">Discussion Guide</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Group activities guide">
-                <div class="col-header">
-                  <span class="col-icon">👥</span>
-                  <span class="col-label">Group Guide</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Social media posts">
-                <div class="col-header">
-                  <span class="col-icon">📱</span>
-                  <span class="col-label">Social Media Posts</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Quiz questions">
-                <div class="col-header">
-                  <span class="col-icon">❓</span>
-                  <span class="col-label">Quiz</span>
-                </div>
-              </th>
-              <th class="content-col" data-tooltip="Video chapters">
-                <div class="col-header">
-                  <span class="col-icon">📖</span>
-                  <span class="col-label">Chapters</span>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="status-table-body">
-            <!-- Dynamic content will be inserted here -->
-          </tbody>
-        </table>
+      <div class="status-accordion-container">
+        <div id="status-accordion-body">
+          <!-- Dynamic accordion content will be inserted here -->
+        </div>
       </div>
     </div>
   </div>
@@ -106,12 +50,38 @@
 
   <div class="recent-videos">
     <div class="section-header">
-      <h2>Recent Videos</h2>
-      <a href="/videos/library" class="view-all-link">View All</a>
+      <h2>All Videos</h2>
+      <div class="library-controls">
+        <select id="status-filter" class="form-input">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="completed">Completed</option>
+          <option value="error">Error</option>
+        </select>
+        <select id="sort-order" class="form-input">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="title">Title A-Z</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
     </div>
     
     <div class="video-grid" id="recent-videos-grid">
-      <div class="loading-placeholder">Loading recent videos...</div>
+      <div class="loading-placeholder">Loading videos...</div>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="pagination-container" id="pagination-container" style="display: none;">
+      <div class="pagination-info">
+        <span id="pagination-info">Showing 1-10 of 0 videos</span>
+      </div>
+      <div class="pagination-controls">
+        <button id="prev-page" class="btn btn-secondary btn-small" disabled>Previous</button>
+        <span id="page-numbers"></span>
+        <button id="next-page" class="btn btn-secondary btn-small" disabled>Next</button>
+      </div>
     </div>
   </div>
 </div>
@@ -143,6 +113,7 @@ class ProcessingStatusManager {
   constructor() {
     this.socket = null;
     this.processingVideos = new Map();
+    this.cancelledVideos = new Set(); // Track cancelled videos to prevent re-adding
     this.isCollapsed = false;
     this.init();
   }
@@ -268,6 +239,12 @@ class ProcessingStatusManager {
 
   handleStatusUpdate(data) {
     const { videoId, status } = data;
+    
+    // Don't add cancelled videos back to processing
+    if (this.cancelledVideos.has(videoId)) {
+      return;
+    }
+    
     this.processingVideos.set(videoId, status);
     this.updateStatusTable();
     this.showProcessingDashboard();
@@ -275,7 +252,10 @@ class ProcessingStatusManager {
 
   handleStatusBatch(videos) {
     videos.forEach(status => {
-      this.processingVideos.set(status.videoId, status);
+      // Don't add cancelled videos back to processing
+      if (!this.cancelledVideos.has(status.videoId)) {
+        this.processingVideos.set(status.videoId, status);
+      }
     });
     
     if (videos.length > 0) {
@@ -304,10 +284,18 @@ class ProcessingStatusManager {
   }
 
   updateStatusTable() {
-    const tbody = document.getElementById('status-table-body');
-    if (!tbody) {
+    const accordionBody = document.getElementById('status-accordion-body');
+    if (!accordionBody) {
       return;
     }
+
+    // Store which accordions are currently expanded before updating
+    const expandedAccordions = new Set();
+    const currentAccordions = accordionBody.querySelectorAll('.accordion-content:not(.hidden)');
+    currentAccordions.forEach(accordion => {
+      const videoId = accordion.id.replace('accordion-', '');
+      expandedAccordions.add(videoId);
+    });
 
     // Convert map to array and sort by start time
     const videos = Array.from(this.processingVideos.values())
@@ -318,8 +306,17 @@ class ProcessingStatusManager {
       this.hideProcessingDashboard();
       return;
     }
-
-    tbody.innerHTML = videos.map(video => this.createVideoRow(video)).join('');
+    if (accordionBody) {
+      accordionBody.innerHTML = videos.map(video => this.createVideoAccordion(video)).join('');
+      
+      // Add event listeners for accordion toggles and cancel buttons
+      this.setupAccordionEventListeners();
+      
+      // Restore expanded state for accordions that were previously expanded
+      expandedAccordions.forEach(videoId => {
+        this.toggleVideoAccordion(videoId, true); // true = force expand
+      });
+    }
 
     // Keep the processing dashboard visible even when completed
     // Users can manually collapse it using the collapse button if desired
@@ -337,25 +334,289 @@ class ProcessingStatusManager {
     }
   }
 
-  createVideoRow(video) {
-    const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+  createVideoAccordion(video) {
+    const contentTypes = [
+      { key: 'transcript', label: 'Transcript', icon: '📝', data: video.transcript },
+      { key: 'summary_text', label: 'Summary', icon: '📄', data: video.content['summary_text'] },
+      { key: 'study_guide_text', label: 'Study Guide', icon: '📚', data: video.content['study_guide_text'] },
+      { key: 'discussion_guide_text', label: 'Discussion Guide', icon: '💬', data: video.content['discussion_guide_text'] },
+      { key: 'group_guide_text', label: 'Group Guide', icon: '👥', data: video.content['group_guide_text'] },
+      { key: 'social_media_text', label: 'Social Media Posts', icon: '📱', data: video.content['social_media_text'] },
+      { key: 'quiz_text', label: 'Quiz', icon: '❓', data: video.content['quiz_text'] },
+      { key: 'chapters_text', label: 'Chapters', icon: '📖', data: video.content['chapters_text'] }
+    ];
+    
+    const videoTitle = video.videoTitle || 'Untitled Video';
+    const videoTime = this.formatTime(video.startTime);
+    const overallProgress = this.calculateProgress(video);
     
     return `
-      <tr data-video-id="${video.videoId}">
-        <td class="video-cell">
-          <div class="video-title">${this.truncateText(video.videoTitle, 40)}</div>
-          <div class="video-time">${this.formatTime(video.startTime)}</div>
-        </td>
-        <td class="status-cell ${this.getStatusClass(video.transcript.status)}">
-          ${this.getStatusIcon(video.transcript.status)}
-        </td>
-        ${contentTypes.map(type => `
-          <td class="status-cell ${this.getStatusClass(video.content[type]?.status)}">
-            ${this.getStatusIcon(video.content[type]?.status)}
-          </td>
-        `).join('')}
-      </tr>
+      <div class="video-accordion" data-video-id="${video.videoId}">
+        <div class="accordion-header-wrapper">
+          <button class="accordion-header" data-accordion-toggle="${video.videoId}">
+            <div class="video-info">
+              <div class="video-title" title="${videoTitle}">${videoTitle}</div>
+              <div class="video-meta">
+                <span class="video-time">${videoTime}</span>
+                <span class="video-progress">${overallProgress.completed}/${overallProgress.total} completed</span>
+              </div>
+            </div>
+            <div class="accordion-chevron">▼</div>
+          </button>
+          <button class="cancel-button" data-cancel-video="${video.videoId}" title="Cancel processing">
+            Cancel
+          </button>
+        </div>
+        <div class="accordion-content hidden" id="accordion-${video.videoId}">
+          <ul class="processing-list">
+            ${contentTypes.map(type => `
+              <li class="processing-item ${this.getStatusClass(type.data?.status)}">
+                <div class="status-indicator">
+                  <div class="status-box ${this.getStatusClass(type.data?.status)}">
+                    ${this.getAccordionStatusIcon(type.data?.status)}
+                  </div>
+                </div>
+                <div class="content-info">
+                  <span class="content-icon">${type.icon}</span>
+                  <span class="content-label">${type.label}</span>
+                </div>
+                ${type.data?.status === 'failed' ? `<div class="error-info" title="${type.data?.error || 'Processing failed'}">⚠️</div>` : ''}
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      </div>
     `;
+  }
+
+  setupAccordionEventListeners() {
+    // Set up accordion toggle listeners
+    const accordionHeaders = document.querySelectorAll('[data-accordion-toggle]');
+    accordionHeaders.forEach(header => {
+      header.addEventListener('click', (e) => {
+        e.preventDefault();
+        const videoId = header.getAttribute('data-accordion-toggle');
+        this.toggleVideoAccordion(videoId);
+      });
+    });
+
+    // Set up cancel button listeners
+    const cancelButtons = document.querySelectorAll('[data-cancel-video]');
+    cancelButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const videoId = button.getAttribute('data-cancel-video');
+        this.cancelVideoProcessing(videoId);
+      });
+    });
+  }
+
+  toggleVideoAccordion(videoId, forceExpand = false) {
+    const accordionContent = document.getElementById(`accordion-${videoId}`);
+    const header = accordionContent?.previousElementSibling?.querySelector('.accordion-header');
+    const chevron = header?.querySelector('.accordion-chevron');
+    
+    if (accordionContent) {
+      const isCurrentlyOpen = !accordionContent.classList.contains('hidden');
+      
+      if (forceExpand || !isCurrentlyOpen) {
+        // Expand
+        accordionContent.classList.remove('hidden');
+        if (chevron) chevron.textContent = '▲';
+        header?.classList.add('expanded');
+      } else if (!forceExpand && isCurrentlyOpen) {
+        // Collapse (only if not forcing expand)
+        accordionContent.classList.add('hidden');
+        if (chevron) chevron.textContent = '▼';
+        header?.classList.remove('expanded');
+      }
+    }
+  }
+
+  async cancelVideoProcessing(videoId) {
+    const video = this.processingVideos.get(videoId);
+    const videoTitle = video?.videoTitle || 'this video';
+    
+    // Show custom confirmation modal instead of alert
+    const confirmed = await this.showConfirmationModal(
+      'Cancel Video Processing',
+      `Are you sure you want to cancel processing for "${videoTitle}"?`,
+      'This action cannot be undone and will permanently stop all content generation for this video.',
+      'Cancel Processing',
+      'Keep Processing'
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      // Find the video record ID from the processing manager
+      const videoRecordId = video?.videoRecordId;
+      
+      if (!videoRecordId) {
+        console.error('Video record ID not found for:', videoId);
+        this.showCancelNotification('Failed to cancel processing - video record not found', 'error');
+        return;
+      }
+      
+      // Show loading state
+      const cancelButton = document.querySelector(`[data-cancel-video="${videoId}"]`);
+      const originalText = cancelButton?.textContent;
+      if (cancelButton) {
+        cancelButton.textContent = 'Canceling...';
+        cancelButton.disabled = true;
+      }
+      
+      // Make API call to cancel processing
+      const response = await fetch(`/api/videos/${videoRecordId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Add to cancelled videos set to prevent re-adding
+        this.cancelledVideos.add(videoId);
+        
+        // Remove the video from processing manager
+        this.processingVideos.delete(videoId);
+        this.updateStatusTable();
+        
+        // If no more processing videos, hide the dashboard
+        if (this.processingVideos.size === 0) {
+          this.hideProcessingDashboard();
+        }
+        
+        this.showCancelNotification('Video processing cancelled successfully', 'success');
+        
+        // Refresh the completed videos to show updated status
+        if (typeof refreshCompletedVideos === 'function') {
+          refreshCompletedVideos();
+        }
+      } else {
+        throw new Error(result.message || 'Failed to cancel video processing');
+      }
+      
+    } catch (error) {
+      console.error('Error canceling video processing:', error);
+      this.showCancelNotification(error.message || 'Failed to cancel video processing', 'error');
+      
+      // Restore button state
+      const cancelButton = document.querySelector(`[data-cancel-video="${videoId}"]`);
+      if (cancelButton) {
+        cancelButton.textContent = 'Cancel';
+        cancelButton.disabled = false;
+      }
+    }
+  }
+
+  showCancelNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `cancel-notification cancel-notification-${type}`;
+    notification.innerHTML = `
+      <div class="cancel-notification-content">
+        <span class="cancel-notification-message">${message}</span>
+        <button class="cancel-notification-close">&times;</button>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Add close functionality
+    const closeBtn = notification.querySelector('.cancel-notification-close');
+    closeBtn.addEventListener('click', () => {
+      notification.remove();
+    });
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 5000);
+    
+    // Animate in
+    setTimeout(() => {
+      notification.classList.add('show');
+    }, 100);
+  }
+
+  showConfirmationModal(title, message, details, confirmText = 'Confirm', cancelText = 'Cancel') {
+    return new Promise((resolve) => {
+      // Create modal backdrop
+      const modalBackdrop = document.createElement('div');
+      modalBackdrop.className = 'confirmation-modal-backdrop';
+      
+      // Create modal content
+      modalBackdrop.innerHTML = `
+        <div class="confirmation-modal">
+          <div class="confirmation-modal-header">
+            <h3>${title}</h3>
+          </div>
+          <div class="confirmation-modal-body">
+            <div class="confirmation-message">${message}</div>
+            ${details ? `<div class="confirmation-details">${details}</div>` : ''}
+          </div>
+          <div class="confirmation-modal-footer">
+            <button class="btn btn-secondary confirmation-cancel">${cancelText}</button>
+            <button class="btn btn-danger confirmation-confirm">${confirmText}</button>
+          </div>
+        </div>
+      `;
+      
+      // Add to page
+      document.body.appendChild(modalBackdrop);
+      
+      // Get buttons
+      const confirmBtn = modalBackdrop.querySelector('.confirmation-confirm');
+      const cancelBtn = modalBackdrop.querySelector('.confirmation-cancel');
+      
+      // Handle confirm
+      confirmBtn.addEventListener('click', () => {
+        modalBackdrop.remove();
+        resolve(true);
+      });
+      
+      // Handle cancel
+      cancelBtn.addEventListener('click', () => {
+        modalBackdrop.remove();
+        resolve(false);
+      });
+      
+      // Handle backdrop click
+      modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) {
+          modalBackdrop.remove();
+          resolve(false);
+        }
+      });
+      
+      // Handle ESC key
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          modalBackdrop.remove();
+          document.removeEventListener('keydown', handleEscape);
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+      
+      // Show modal with animation
+      setTimeout(() => {
+        modalBackdrop.classList.add('show');
+      }, 10);
+      
+      // Focus the cancel button by default (safer option)
+      setTimeout(() => {
+        cancelBtn.focus();
+      }, 100);
+    });
   }
 
   getStatusClass(status) {
@@ -378,6 +639,32 @@ class ProcessingStatusManager {
     }
   }
 
+  getAccordionStatusIcon(status) {
+    switch (status) {
+      case 'completed': return '✓';
+      case 'pending': return '⧗';
+      case 'failed': return '✗';
+      case 'skipped': return '−';
+      default: return '⧗';
+    }
+  }
+
+  calculateProgress(video) {
+    const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+    let completed = 0;
+    let total = contentTypes.length + 1; // +1 for transcript
+    
+    // Check transcript
+    if (video.transcript?.status === 'completed') completed++;
+    
+    // Check content types
+    contentTypes.forEach(type => {
+      if (video.content[type]?.status === 'completed') completed++;
+    });
+    
+    return { completed, total };
+  }
+
   truncateText(text, maxLength) {
     if (!text) return 'Untitled Video';
     if (text.length <= maxLength) return text;
@@ -397,12 +684,25 @@ statusManager = new ProcessingStatusManager();
 setTimeout(() => {
   loadCompletedVideos();
   populateProcessingTable();
+  setupFilteringEventListeners();
 }, 1500);
 }
 
+// Global variables for pagination and filtering
+let currentPage = 1;
+let totalPages = 1;
+let currentFilters = {};
+
 async function loadCompletedVideos() {
   try {
-    const videosResponse = await fetch('/api/videos?limit=6');
+    // Build query parameters for pagination and filtering
+    const params = new URLSearchParams({
+      page: currentPage,
+      limit: 12,
+      ...currentFilters
+    });
+    
+    const videosResponse = await fetch(`/api/videos?${params}`);
     
     if (!videosResponse.ok) {
       throw new Error(`HTTP ${videosResponse.status}: ${videosResponse.statusText}`);
@@ -415,24 +715,32 @@ async function loadCompletedVideos() {
       return;
     }
     
-    if (videosData.success && videosData.data?.videos?.length > 0) {
-      // Filter videos by status: COMPLETED videos show in cards, PENDING videos show in processing table
-      let completedVideos = videosData.data.videos.filter(video => {
-        // Show only completed videos in cards
-        return video.status === 'completed' || video.status === 'processed' || !video.status;
-      });
+    if (videosData.success && videosData.data) {
+      const { videos, pagination } = videosData.data;
       
+      // Update pagination controls
+      updatePagination(pagination);
       
-      if (completedVideos.length > 0) {
-        gridElement.innerHTML = completedVideos.map(video => `
+      if (videos?.length > 0) {
+        // Show all videos (not just completed ones) since we now have filtering
+        let displayVideos = videos.filter(video => {
+          return !statusManager?.cancelledVideos.has(video.id);
+        });
+      
+        if (displayVideos.length > 0) {
+        // Generate HTML for all videos
+        gridElement.innerHTML = displayVideos.map(video => `
           <div class="video-card">
             <div class="video-info">
               <h4 class="video-title">${video.video_title || 'Untitled Video'}</h4>
               <p class="video-channel">${video.channel_name || 'Unknown Channel'}</p>
-              <div class="video-status status-${video.status || 'completed'}">${video.status || 'Completed'}</div>
+              <div class="video-status status-${video.status || 'completed'}">${(video.status || 'completed').toUpperCase()}</div>
             </div>
           </div>
         `).join('');
+        } else {
+          showEmptyState(gridElement);
+        }
       } else {
         showEmptyState(gridElement);
       }
@@ -472,6 +780,100 @@ function showEmptyState(gridElement) {
   `;
 }
 
+// Pagination functions
+function updatePagination(pagination) {
+  if (!pagination) return;
+  
+  totalPages = pagination.totalPages;
+  currentPage = pagination.currentPage;
+  
+  const paginationContainer = document.getElementById('pagination-container');
+  const paginationInfo = document.getElementById('pagination-info');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
+  
+  // Update pagination info
+  paginationInfo.textContent = `Showing ${pagination.startIndex}-${pagination.endIndex} of ${pagination.totalRecords} videos`;
+  
+  // Update navigation buttons
+  prevPageBtn.disabled = currentPage <= 1;
+  nextPageBtn.disabled = currentPage >= totalPages;
+  
+  // Update page numbers
+  renderPageNumbers();
+  
+  // Show/hide pagination
+  paginationContainer.style.display = totalPages > 1 ? 'flex' : 'none';
+}
+
+function renderPageNumbers() {
+  const pageNumbers = document.getElementById('page-numbers');
+  const maxVisible = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+  
+  if (endPage - startPage < maxVisible - 1) {
+    startPage = Math.max(1, endPage - maxVisible + 1);
+  }
+  
+  let pageHTML = '';
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pageHTML += `<button class="page-number ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+  }
+  
+  pageNumbers.innerHTML = pageHTML;
+}
+
+function goToPage(page) {
+  currentPage = page;
+  loadCompletedVideos();
+}
+
+// Setup filtering and pagination event listeners
+function setupFilteringEventListeners() {
+  const statusFilter = document.getElementById('status-filter');
+  const sortOrder = document.getElementById('sort-order');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
+  
+  // Filter event listeners
+  if (statusFilter) {
+    statusFilter.addEventListener('change', function() {
+      currentFilters.status = this.value;
+      currentPage = 1;
+      loadCompletedVideos();
+    });
+  }
+  
+  if (sortOrder) {
+    sortOrder.addEventListener('change', function() {
+      currentFilters.sort = this.value;
+      currentPage = 1;
+      loadCompletedVideos();
+    });
+  }
+  
+  // Pagination event listeners
+  if (prevPageBtn) {
+    prevPageBtn.addEventListener('click', function() {
+      if (currentPage > 1) {
+        currentPage--;
+        loadCompletedVideos();
+      }
+    });
+  }
+  
+  if (nextPageBtn) {
+    nextPageBtn.addEventListener('click', function() {
+      if (currentPage < totalPages) {
+        currentPage++;
+        loadCompletedVideos();
+      }
+    });
+  }
+}
+
 // Refresh completed videos when processing status changes
 function refreshCompletedVideos() {
   loadCompletedVideos();
@@ -496,8 +898,18 @@ async function populateProcessingTable() {
       
       
       if (pendingVideos.length > 0 && statusManager) {
-        // Add pending videos to processing status manager
+        // Add pending videos to processing status manager (but skip cancelled ones)
         pendingVideos.forEach(video => {
+          // Skip videos that have been cancelled
+          if (statusManager.cancelledVideos.has(video.videoid)) {
+            return;
+          }
+          
+          // Also skip if already in processing manager (avoid duplicates)
+          if (statusManager.processingVideos.has(video.videoid)) {
+            return;
+          }
+          
           const mockStatus = {
             videoId: video.videoid,
             videoRecordId: video.id,
@@ -535,5 +947,532 @@ async function populateProcessingTable() {
 }
 
 </script>
+
+<!-- Video Processing Accordion Styles -->
+<style>
+/* Accordion Container */
+.status-accordion-container {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* Individual Video Accordion */
+.video-accordion {
+  border-bottom: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.video-accordion:last-child {
+  border-bottom: none;
+}
+
+/* Accordion Header Wrapper */
+.accordion-header-wrapper {
+  display: flex;
+  background-color: #f8f9fa;
+  border: none;
+}
+
+/* Accordion Header Button */
+.accordion-header {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* Change from center to flex-start for multi-line titles */
+  padding: 15px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+
+.accordion-header:hover {
+  background-color: #e9ecef;
+}
+
+.accordion-header.expanded {
+  background-color: #e9ecef;
+}
+
+/* Video Info */
+.video-info {
+  flex: 0.2;
+  min-width: 0; /* Allow flex item to shrink smaller than its content */
+}
+
+.video-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 1.3;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  /* min-width: max-content; */
+}
+
+.video-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 12px;
+  color: #718096;
+}
+
+.video-time, .video-progress {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Chevron */
+.accordion-chevron {
+  font-size: 14px;
+  color: #718096;
+  margin-left: 15px;
+  margin-top: 2px; /* Add slight top margin to align with first line of title */
+  transition: transform 0.2s ease;
+  flex-shrink: 0; /* Prevent chevron from shrinking */
+}
+
+/* Cancel Button */
+.cancel-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  border-radius: 0;
+}
+
+.cancel-button:hover {
+  background-color: #c82333;
+}
+
+/* Accordion Content */
+.accordion-content {
+  background-color: white;
+  border-top: 1px solid #e2e8f0;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+}
+
+.accordion-content.hidden {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Processing List */
+.processing-list {
+  list-style: none;
+  padding: 0;
+  margin: 15px 20px;
+}
+
+.processing-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.processing-item:last-child {
+  border-bottom: none;
+}
+
+/* Status Indicator */
+.status-indicator {
+  margin-right: 12px;
+}
+
+.status-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  color: white;
+}
+
+.status-box.status-completed {
+  background-color: #28a745;
+}
+
+.status-box.status-pending {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.status-box.status-failed {
+  background-color: #dc3545;
+}
+
+.status-box.status-skipped {
+  background-color: #6c757d;
+}
+
+/* Content Info */
+.content-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-icon {
+  font-size: 16px;
+}
+
+.content-label {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Error Info */
+.error-info {
+  color: #dc3545;
+  font-size: 16px;
+  margin-left: auto;
+  cursor: help;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .accordion-header {
+    padding: 12px 15px;
+  }
+  
+  .video-title {
+    font-size: 13px;
+  }
+  
+  .video-meta {
+    font-size: 11px;
+    gap: 10px;
+  }
+  
+  .cancel-button {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .processing-list {
+    margin: 10px 15px;
+  }
+  
+  .content-label {
+    font-size: 13px;
+  }
+}
+
+/* Override table styles when using accordion */
+.status-table-container {
+  display: none;
+}
+
+/* Cancel Notification Styles */
+.cancel-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  max-width: 400px;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 10001;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.3s ease;
+}
+
+.cancel-notification.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.cancel-notification-success {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.cancel-notification-error {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.cancel-notification-info {
+  background-color: #d1ecf1;
+  border: 1px solid #bee5eb;
+  color: #0c5460;
+}
+
+.cancel-notification-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cancel-notification-message {
+  flex: 1;
+  font-weight: 500;
+}
+
+.cancel-notification-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  margin-left: 10px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.cancel-notification-close:hover {
+  opacity: 1;
+}
+
+/* Loading state for cancel button */
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Confirmation Modal Styles */
+.confirmation-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.confirmation-modal-backdrop.show {
+  opacity: 1;
+}
+
+.confirmation-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.confirmation-modal-backdrop.show .confirmation-modal {
+  transform: scale(1);
+}
+
+.confirmation-modal-header {
+  padding: 24px 24px 0 24px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 20px;
+}
+
+.confirmation-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+}
+
+.confirmation-modal-body {
+  padding: 0 24px 20px 24px;
+}
+
+.confirmation-message {
+  font-size: 1rem;
+  color: #374151;
+  margin-bottom: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.confirmation-details {
+  font-size: 0.875rem;
+  color: #6b7280;
+  background: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid #fbbf24;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.confirmation-modal-footer {
+  padding: 20px 24px 24px 24px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirmation-modal-footer .btn {
+  min-width: 120px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.btn-secondary:focus {
+  outline: none;
+  ring: 2px solid #3b82f6;
+  ring-offset: 2px;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.btn-danger:focus {
+  outline: none;
+  ring: 2px solid #dc2626;
+  ring-offset: 2px;
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 768px) {
+  .confirmation-modal {
+    margin: 20px;
+    max-width: none;
+  }
+  
+  .confirmation-modal-header,
+  .confirmation-modal-body,
+  .confirmation-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .confirmation-modal-footer {
+    flex-direction: column;
+  }
+  
+  .confirmation-modal-footer .btn {
+    width: 100%;
+  }
+}
+
+/* Library Controls */
+.library-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.library-controls .form-input {
+  min-width: 150px;
+}
+
+/* Pagination */
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  padding: 1rem 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagination-info {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.875rem;
+}
+
+#page-numbers {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-number {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.page-number:hover {
+  background: #f8fafc;
+  border-color: var(--accent-color, #C39D43);
+}
+
+.page-number.active {
+  background: var(--accent-color, #C39D43);
+  border-color: var(--accent-color, #C39D43);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .library-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  
+  .pagination-container {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+  }
+  
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+</style>
 
 {{/layouts/main}}

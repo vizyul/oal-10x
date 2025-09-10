@@ -144,6 +144,7 @@ class YouTubeOAuthService {
         name: channel.snippet.title,
         description: channel.snippet.description,
         thumbnail: channel.snippet.thumbnails?.default?.url,
+        handle: channel.snippet.customUrl || null,
         subscriberCount: parseInt(channel.statistics?.subscriberCount) || 0,
         videoCount: parseInt(channel.statistics?.videoCount) || 0
       };
@@ -531,7 +532,7 @@ class YouTubeOAuthService {
       if (!records || records.length === 0) {
         throw new Error(`No PostgreSQL user found for Airtable ID: ${userId}`);
       }
-      return records[0].fields.id;
+      return records[0].id;
     }
 
     throw new Error(`Invalid user ID format: ${userId}`);
@@ -689,6 +690,7 @@ class YouTubeOAuthService {
         channel_name: channelData.name,
         channel_description: channelData.description || '',
         channel_thumbnail: channelData.thumbnail || '',
+        channel_handle: channelData.handle || null,
         subscriber_count: channelData.subscriberCount || 0,
         video_count: channelData.videoCount || 0,
         is_primary: true,
@@ -730,11 +732,12 @@ class YouTubeOAuthService {
       }
 
       // Get the most recent active token
+      // Note: PostgreSQL returns records directly, not wrapped in {fields: ...}
       const activeTokens = records
-        .filter(record => record.fields.is_active)
-        .sort((a, b) => new Date(b.fields.updated_at) - new Date(a.fields.updated_at));
+        .filter(record => record.is_active)
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
-      return activeTokens.length > 0 ? activeTokens[0].fields : null;
+      return activeTokens.length > 0 ? activeTokens[0] : null;
     } catch (error) {
       logger.error('Error getting user tokens:', error);
       return null;

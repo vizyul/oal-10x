@@ -14,6 +14,42 @@ class TranscriptService {
   }
 
   /**
+   * Check if video processing has been cancelled
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<boolean>} True if cancelled, false otherwise
+   */
+  async isVideoCancelled(videoId) {
+    try {
+      // Primary check: processing status service (where cancellation is tracked)
+      const processingStatusService = require('./processing-status.service');
+      const videoStatus = processingStatusService.processingVideos.get(videoId);
+      
+      if (videoStatus && videoStatus.cancelled) {
+        return true;
+      }
+      
+      // Secondary check: if video was deleted from database, consider it cancelled
+      const database = require('./database.service');
+      const videos = await database.query(
+        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        [videoId]
+      );
+      
+      // If video doesn't exist in database but we're still processing, it might have been deleted (cancelled)
+      if (!videos.rows || videos.rows.length === 0) {
+        logger.info(`Video ${videoId} not found in database - may have been cancelled and deleted`);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      logger.error('Error checking video cancellation status:', error);
+      // In case of error, assume not cancelled to avoid blocking legitimate processing
+      return false;
+    }
+  }
+
+  /**
    * Format captions array into timestamped transcript text
    * @param {Array} captions - Array of caption objects with start, end, text
    * @returns {string} Formatted transcript text
@@ -41,6 +77,12 @@ class TranscriptService {
    */
   async extractTranscript(videoId, videoUrl) {
     try {
+      // Check if video processing has been cancelled before starting
+      if (await this.isVideoCancelled(videoId)) {
+        logger.info(`Video ${videoId} has been cancelled, skipping transcript extraction`);
+        return null;
+      }
+
       if (!this.apiKey) {
         logger.warn('Transcript API key not configured, skipping transcript extraction');
         return null;
@@ -61,6 +103,12 @@ class TranscriptService {
           'User-Agent': 'OurAILegacy/1.0'
         }
       });
+
+      // Check again for cancellation after API call (in case cancelled during processing)
+      if (await this.isVideoCancelled(videoId)) {
+        logger.info(`Video ${videoId} was cancelled during transcript extraction, aborting`);
+        return null;
+      }
 
       if (response.status === 200 && response.data) {
         // Handle different response formats

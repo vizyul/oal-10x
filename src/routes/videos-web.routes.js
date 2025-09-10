@@ -71,24 +71,6 @@ router.get('/upload',
   }
 );
 
-/**
- * @route   GET /videos/library
- * @desc    Video library page
- * @access  Private
- */
-router.get('/library', (req, res) => {
-  res.render('videos/library', {
-    title: 'Video Library - Our AI Legacy',
-    description: 'Browse and manage all your videos',
-    user: req.user,
-    subscription: req.subscriptionInfo,
-    showHeader: true,
-    showFooter: true,
-    showNav: true,
-    additionalCSS: ['/css/videos.css'],
-    additionalJS: ['/js/videos.js']
-  });
-});
 
 /**
  * @route   GET /videos/browse

@@ -125,9 +125,11 @@ class VideosController {
         data: {
           videos,
           pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: totalRecords,
+            currentPage: pageNum,
+            totalPages: Math.ceil(totalRecords / limitNum),
+            totalRecords: totalRecords,
+            startIndex: Math.min(offset + 1, totalRecords),
+            endIndex: Math.min(offset + videos.length, totalRecords),
             hasMore
           }
         }
@@ -318,7 +320,6 @@ class VideosController {
         description: description || metadata?.description || '',
         duration: metadata?.duration || 0,
         upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
         thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
 
         // Processing status
@@ -1023,6 +1024,88 @@ class VideosController {
     }
 
     return null;
+  }
+
+  /**
+   * Cancel video processing
+   * POST /api/videos/:id/cancel
+   */
+  async cancelProcessing(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      logger.info(`Canceling processing for video ${id} by user ${userId}`);
+
+      // Validate video ID
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Video ID is required'
+        });
+      }
+
+      // Get the video to verify ownership
+      const video = await database.findById('videos', id);
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found'
+        });
+      }
+
+      // Check ownership
+      if (video.users_id !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only cancel processing for your own videos'
+        });
+      }
+
+      // Delete the video from database (instead of just marking as cancelled)
+      await database.delete('videos', id);
+
+      // Cancel processing status using the service method
+      const processingStatusService = require('../services/processing-status.service');
+      const youtubeVideoId = video.videoid || video.youtube_video_id;
+      
+      // Use the dedicated cancel method
+      const cancelled = processingStatusService.cancelVideoProcessing(youtubeVideoId);
+      
+      if (!cancelled) {
+        logger.warn(`No active processing found for video ${youtubeVideoId}, but database status updated`);
+      }
+
+      // Decrement the videos_processed count in subscription usage
+      try {
+        const subscriptionService = require('../services/subscription.service');
+        await subscriptionService.decrementVideoProcessedCount(userId);
+        logger.info(`Decremented videos_processed count for user ${userId} due to cancellation`);
+      } catch (usageError) {
+        logger.error('Error decrementing videos_processed count:', usageError);
+        // Don't fail the cancellation if usage update fails
+      }
+
+      logger.info(`Successfully cancelled processing for video ${id}`);
+
+      res.json({
+        success: true,
+        message: 'Video processing cancelled successfully',
+        data: {
+          id: video.id,
+          videoId: video.videoid || video.youtube_video_id,
+          status: 'cancelled'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error canceling video processing:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to cancel video processing',
+        error: error.message
+      });
+    }
   }
 }
 
