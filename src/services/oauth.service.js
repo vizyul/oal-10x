@@ -515,7 +515,8 @@ class OAuthService {
       'Privacy Accepted': true,
       'subscription_tier': 'free',
       'subscription_status': 'none',
-      [`${provider.charAt(0).toUpperCase() + provider.slice(1)} ID`]: providerId,
+      'OAuth Provider': provider,
+      'OAuth ID': providerId,
       'Created At': new Date().toISOString(),
       'Updated At': new Date().toISOString()
     };
