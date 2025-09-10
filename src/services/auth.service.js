@@ -61,6 +61,7 @@ class AuthService {
           terms_accepted: userData.termsAccepted || false,
           privacy_accepted: userData.privacyAccepted || false,
           status: userData.status || 'pending',
+          registration_method: userData.registration_method || 'email',
           subscription_tier: userData.subscription_tier || 'free',
           subscription_status: userData.subscription_status || 'none'
         };
@@ -496,8 +497,8 @@ class AuthService {
         oauth_id: userData.oauth_id, // Normalized field
         email_verified: userData.email_verified || true, // OAuth users typically have verified emails
         status: userData.status || 'active',
+        registration_method: userData.oauth_provider, // Set registration method to the OAuth provider
         subscription_tier: userData.subscription_tier || 'free'
-        // Removed registration_method - not in database schema
       };
 
       const user = await database.create(this.tableName, fields);

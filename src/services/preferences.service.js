@@ -1,4 +1,3 @@
-const { v4: uuidv4 } = require('uuid');
 const database = require('./database.service');
 const { logger } = require('../utils');
 
@@ -44,7 +43,7 @@ class PreferencesService {
 
       return {
         id: record.id || fields.id,
-        preferenceKey: fields.preference_key,
+        preferenceKey: record.id || fields.id,
         userId: fields.users_id,
         userEmail: userEmail,
         themeMode: fields.theme || 'light',
@@ -88,13 +87,11 @@ class PreferencesService {
 
       logger.info(`Found user for preferences: ${user.id}`);
 
-      const preferenceKey = uuidv4();
       const now = new Date().toISOString();
 
       logger.info(`Creating default preferences for user: ${userEmail}`);
 
       const fields = {
-        preference_key: preferenceKey,
         users_id: user.id, // Foreign key to users table
         theme: 'light',
         email_notifications: true,
@@ -115,7 +112,7 @@ class PreferencesService {
         throw new Error('Failed to create user preferences');
       }
 
-      logger.info(`Created preferences for user ${userEmail} with key: ${preferenceKey}`);
+      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
 
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
@@ -162,12 +159,10 @@ class PreferencesService {
         throw new Error(`User not found: ${userEmail}`);
       }
 
-      const preferenceKey = uuidv4();
       const now = new Date().toISOString();
 
       // Start with default values
       const fields = {
-        preference_key: preferenceKey,
         users_id: user.id,
         theme: 'light',
         email_notifications: true,
@@ -203,7 +198,7 @@ class PreferencesService {
         throw new Error('Failed to create user preferences');
       }
 
-      logger.info(`Created preferences for user ${userEmail} with key: ${preferenceKey}`);
+      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
 
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
