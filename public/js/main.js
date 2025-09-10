@@ -101,6 +101,7 @@ class ProfileDropdown {
     this.trigger = document.getElementById('profileTrigger');
     this.menu = document.getElementById('profileMenu');
     this.chevron = this.trigger?.querySelector('.dropdown-chevron');
+    this.navLinks = document.querySelector('.nav-links');
     
     if (this.trigger && this.menu) {
       this.init();
@@ -153,6 +154,9 @@ class ProfileDropdown {
     if (this.chevron) {
       this.chevron.style.transform = 'rotate(180deg)';
     }
+    
+    // Expand mobile nav container if needed
+    this.expandMobileNavForProfile();
   }
 
   close() {
@@ -160,10 +164,25 @@ class ProfileDropdown {
     if (this.chevron) {
       this.chevron.style.transform = 'rotate(0deg)';
     }
+    
+    // Collapse mobile nav container
+    this.collapseMobileNavAfterProfile();
   }
 
   isOpen() {
     return this.menu.classList.contains('active');
+  }
+
+  expandMobileNavForProfile() {
+    if (this.navLinks) {
+      this.navLinks.classList.add('profile-expanded');
+    }
+  }
+
+  collapseMobileNavAfterProfile() {
+    if (this.navLinks) {
+      this.navLinks.classList.remove('profile-expanded');
+    }
   }
 }
 
