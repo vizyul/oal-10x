@@ -71,7 +71,8 @@ class StripeService {
       let user;
       try {
         user = await database.findById('users', userId);
-      } catch (recordIdError) {
+      // eslint-disable-next-line no-unused-vars
+      } catch (_recordIdError) {
         logger.info('User ID not found by ID, searching by email:', { userId, email });
         const users = await database.findByField('users', 'email', email);
         user = users && users.length > 0 ? users[0] : null;

@@ -50,7 +50,7 @@ class YouTubeOAuthService {
    * @param {string} redirectUri - Custom redirect URI (optional)
    * @returns {Object} Authorization URL and state
    */
-  async initiateOAuth(userId, redirectUri = null) {
+  async initiateOAuth(userId, _redirectUri = null) {
     try {
       if (!this.oauth2Client) {
         throw new Error('YouTube OAuth not configured');
@@ -494,7 +494,8 @@ class YouTubeOAuthService {
         try {
           await this.refreshAccessToken(userId);
           return { valid: true, refreshed: true };
-        } catch (refreshError) {
+        // eslint-disable-next-line no-unused-vars
+        } catch (_refreshError) {
           return { valid: false, reason: 'Token expired and refresh failed' };
         }
       }

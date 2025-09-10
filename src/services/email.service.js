@@ -177,7 +177,8 @@ class EmailService {
       this.tokenExpiry = response.expiresOn.getTime();
 
       return this.accessToken;
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_error) {
       // If silent token acquisition fails, try to acquire token
       try {
         const response = await this.msalInstance.acquireTokenByClientCredential({

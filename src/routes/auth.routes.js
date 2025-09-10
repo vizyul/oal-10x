@@ -217,7 +217,7 @@ router.get('/google', (req, res, next) => {
   oauthService.authenticateGoogle()(req, res, next);
 });
 
-router.get('/google/callback', (req, res, next) => {
+router.get('/google/callback', (req, res, _next) => {
   const oauthService = require('../services/oauth.service');
   oauthService.handleGoogleCallback()(req, res, async (err) => {
     if (err) {
@@ -255,7 +255,7 @@ router.get('/apple', (req, res, next) => {
 });
 
 // Apple OAuth uses POST for callback, not GET
-router.post('/apple/callback', async (req, res, next) => {
+router.post('/apple/callback', async (req, res, _next) => {
   const oauthService = require('../services/oauth.service');
   logger.info('Apple OAuth callback route hit', {
     query: req.query,
@@ -293,6 +293,11 @@ router.post('/apple/callback', async (req, res, next) => {
       userEmail: req.user?.email,
       userKeys: req.user ? Object.keys(req.user) : []
     });
+
+    if (req.user && req.user.pendingAppleReauth) {
+      logger.info('Apple OAuth requires re-authentication - redirecting with message');
+      return res.redirect('/auth/sign-in?error=apple_reauth_required&message=' + encodeURIComponent(req.user.message));
+    }
 
     if (req.user && req.user.pendingVerification) {
       logger.info(`Redirecting to Apple social verification for email: ${req.user.email}`);
@@ -337,7 +342,7 @@ router.get('/microsoft', (req, res, next) => {
   oauthService.authenticateMicrosoft()(req, res, next);
 });
 
-router.get('/microsoft/callback', (req, res, next) => {
+router.get('/microsoft/callback', (req, res, _next) => {
   const oauthService = require('../services/oauth.service');
   oauthService.handleMicrosoftCallback()(req, res, async (err) => {
     if (err) {

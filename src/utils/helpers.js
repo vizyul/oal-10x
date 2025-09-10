@@ -150,8 +150,8 @@ function slugify(str, separator = '-') {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, separator)           // Replace spaces with separator
-    .replace(/[^\w\-]+/g, '')            // Remove all non-word chars
-    .replace(/\-\-+/g, separator)        // Replace multiple separators with single separator
+    .replace(/[^\w-]+/g, '')            // Remove all non-word chars
+    .replace(/--+/g, separator)        // Replace multiple separators with single separator
     .replace(/^-+/, '')                  // Trim separator from start of text
     .replace(/-+$/, '');                 // Trim separator from end of text
 }
@@ -296,24 +296,27 @@ function maskSensitiveData(value, type = 'email') {
   if (!value || typeof value !== 'string') return '';
 
   switch (type) {
-  case 'email':
+  case 'email': {
     const [username, domain] = value.split('@');
     if (!domain) return value;
     const maskedUsername = username.length > 2
       ? username.substring(0, 2) + '*'.repeat(username.length - 2)
       : '*'.repeat(username.length);
     return `${maskedUsername}@${domain}`;
+  }
 
-  case 'phone':
+  case 'phone': {
     if (value.length <= 4) return value;
     const visibleDigits = 4;
     const masked = '*'.repeat(value.length - visibleDigits);
     return masked + value.slice(-visibleDigits);
+  }
 
-  case 'card':
+  case 'card': {
     if (value.length <= 4) return value;
     const lastFour = value.slice(-4);
     return '*'.repeat(value.length - 4) + lastFour;
+  }
 
   default:
     return value.length > 4

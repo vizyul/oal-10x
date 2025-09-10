@@ -72,11 +72,11 @@ class SessionService {
    */
   secondsToDecimalDuration(seconds) {
     if (!seconds || seconds <= 0) return 0.00;
-    
+
     const totalMinutes = Math.floor(seconds / 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    
+
     // Format as decimal: hours + (minutes/100)
     // Using /100 to keep minutes in 0-59 range as decimals
     return parseFloat((hours + (minutes / 100)).toFixed(2));
@@ -177,7 +177,7 @@ class SessionService {
       // Resolve user ID if needed - handle both camelCase and snake_case
       let userId = sessionData.userId || sessionData.users_id;
       const userEmail = sessionData.userEmail || sessionData.user_email;
-      
+
       if (!userId && userEmail) {
         const authService = require('./auth.service');
         const user = await authService.findUserByEmail(userEmail);

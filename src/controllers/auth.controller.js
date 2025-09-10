@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const { authService, airtableService, emailService } = require('../services');
+const { authService, emailService } = require('../services');
 const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
 const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
@@ -57,11 +57,12 @@ class AuthController {
       const codeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       // Create or update pending user record (if Airtable is configured)
-      let pendingUser;
+      let _pendingUser;
       try {
         if (existingUser && !existingUser.emailVerified) {
           // Update existing pending user
-          pendingUser = await authService.updateUser(existingUser.id, {
+
+          _pendingUser = await authService.updateUser(existingUser.id, {
             emailVerificationToken: verificationCode,
             emailVerificationExpires: codeExpires.toISOString(),
             updatedAt: new Date().toISOString()
@@ -78,17 +79,12 @@ class AuthController {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
-          pendingUser = await authService.createUser(userData);
+          // eslint-disable-next-line no-unused-vars
+          _pendingUser = await authService.createUser(userData);
         }
       } catch (dbError) {
         logger.error('Database operation failed:', dbError.message);
-        // For development/demo purposes, create a temporary user object
-        pendingUser = {
-          id: 'temp_' + Date.now(),
-          email,
-          emailVerificationToken: verificationCode,
-          emailVerificationExpires: codeExpires.toISOString()
-        };
+        // For development/demo purposes, log temporary user creation
         logger.warn('Created temporary user record for demonstration purposes');
       }
 
@@ -551,10 +547,10 @@ class AuthController {
       if (!user.password) {
         // Check if this is a social login user or a data integrity issue
         const hasOauthProvider = user.oauthProvider && user.oauthId;
-        const errorMessage = hasOauthProvider 
+        const errorMessage = hasOauthProvider
           ? 'This account was created using social login. Please sign in with your social provider.'
           : 'This account appears to have no password set. Please contact support or try resetting your password.';
-        
+
         return res.status(401).json({
           success: false,
           message: errorMessage,

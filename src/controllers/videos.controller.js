@@ -680,7 +680,7 @@ class VideosController {
         if (video.processing_log && typeof video.processing_log === 'string') {
           video.processing_log = JSON.parse(video.processing_log);
         }
-      } catch (e) {
+      } catch {
         logger.warn('Could not parse processing_log JSON');
       }
 
@@ -688,7 +688,7 @@ class VideosController {
         if (video.ai_title_suggestions && typeof video.ai_title_suggestions === 'string') {
           video.ai_title_suggestions = JSON.parse(video.ai_title_suggestions);
         }
-      } catch (e) {
+      } catch {
         logger.warn('Could not parse ai_title_suggestions JSON');
       }
 
@@ -696,7 +696,7 @@ class VideosController {
         if (video.ai_thumbnail_suggestions && typeof video.ai_thumbnail_suggestions === 'string') {
           video.ai_thumbnail_suggestions = JSON.parse(video.ai_thumbnail_suggestions);
         }
-      } catch (e) {
+      } catch {
         logger.warn('Could not parse ai_thumbnail_suggestions JSON');
       }
 
@@ -704,8 +704,8 @@ class VideosController {
       if (video.duration && typeof video.duration === 'number') {
         try {
           video.duration_formatted = this.formatDuration(video.duration);
-        } catch (e) {
-          logger.warn('Error formatting duration:', e);
+        } catch (_e) {
+          logger.warn('Error formatting duration:', _e);
           video.duration_formatted = '0:00';
         }
       }
@@ -714,8 +714,8 @@ class VideosController {
       if (video.tags && typeof video.tags === 'string') {
         try {
           video.tags = video.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-        } catch (e) {
-          logger.warn('Error parsing tags:', e);
+        } catch (_e) {
+          logger.warn('Error parsing tags:', _e);
           video.tags = [];
         }
       } else if (!video.tags) {

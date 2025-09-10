@@ -290,10 +290,10 @@ function checkFeatureAccess(tierConfig, feature) {
 /**
  * Get current usage for a resource in current billing period
  */
-async function getCurrentUsage(userId, resource) {
+async function getCurrentUsage(userId, _resource) {
   try {
     const subscriptionService = require('../services/subscription.service');
-    
+
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -321,7 +321,7 @@ async function getCurrentUsage(userId, resource) {
 async function getCurrentUsageAll(userId) {
   try {
     const subscriptionService = require('../services/subscription.service');
-    
+
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -349,7 +349,7 @@ async function getCurrentUsageAll(userId) {
 async function incrementUserUsage(userId, resource, increment = 1) {
   try {
     const subscriptionService = require('../services/subscription.service');
-    
+
     // Resolve user ID if it's an Airtable record ID
     let resolvedUserId = userId;
     if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -373,10 +373,11 @@ async function incrementUserUsage(userId, resource, increment = 1) {
 /**
  * Get active subscription for user
  */
-async function getUserActiveSubscription(userId) {
+// eslint-disable-next-line no-unused-vars
+async function _getUserActiveSubscription(userId) {
   try {
     const subscriptionService = require('../services/subscription.service');
-    
+
     // Use subscription service method instead of raw SQL
     return await subscriptionService.getUserActiveSubscriptionByPgId(userId);
   } catch (error) {
@@ -388,7 +389,8 @@ async function getUserActiveSubscription(userId) {
 /**
  * Map resource name to database field name
  */
-function getUsageFieldName(resource) {
+// eslint-disable-next-line no-unused-vars
+function _getUsageFieldName(resource) {
   const fieldMap = {
     'videos': 'videos_processed',
     'api_calls': 'api_calls_made',

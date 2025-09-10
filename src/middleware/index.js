@@ -345,7 +345,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     // Silently continue without authentication
-    logger.debug('Optional auth failed (continuing):', error.message);
+    logger.info('Optional auth failed (continuing):', error.message);
     next();
   }
 };
@@ -371,7 +371,7 @@ const guestOnlyMiddleware = (req, res, next) => {
 };
 
 // Error handling middleware
-const errorMiddleware = (error, req, res, next) => {
+const errorMiddleware = (error, req, res, _next) => {
   logger.error('Global error handler:', error);
 
   // Default error

@@ -53,7 +53,8 @@ router.get('/profile', require('../middleware').authMiddleware, async (req, res)
 
     try {
       userPreferences = await preferencesService.getUserPreferences(req.user.email);
-    } catch (prefError) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_prefError) {
       // If preferences don't exist, create default ones
       logger.info(`Creating default preferences for user ${req.user.email}`);
       userPreferences = await preferencesService.createDefaultPreferences(req.user.email);

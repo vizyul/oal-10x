@@ -28,7 +28,8 @@ const stripeConfig = {
 
   // Validate configuration
   validate() {
-    const requiredKeys = [
+    // eslint-disable-next-line no-unused-vars
+    const _requiredKeys = [
       this.getPublishableKey() ? 'publishable_key' : null,
       this.getSecretKey() ? 'secret_key' : null,
       this.getWebhookSecret() ? 'webhook_secret' : null,

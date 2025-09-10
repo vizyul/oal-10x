@@ -1,6 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { body, query } = require('express-validator');
+const { body } = require('express-validator');
 
 const { authMiddleware, validationMiddleware } = require('../middleware');
 const { authService, airtableService } = require('../services');
@@ -65,7 +65,8 @@ router.get('/user/profile', authMiddleware, async (req, res) => {
     }
 
     // Remove sensitive information
-    const { password, emailVerificationToken, ...safeUser } = user;
+    // eslint-disable-next-line no-unused-vars
+    const { password: _password, emailVerificationToken: _emailVerificationToken, ...safeUser } = user;
 
     res.json({
       success: true,
@@ -112,7 +113,8 @@ router.put('/user/profile', authMiddleware, [
     const updatedUser = await authService.updateUser(req.userId, updateData);
 
     // Remove sensitive information
-    const { password, emailVerificationToken, ...safeUser } = updatedUser;
+    // eslint-disable-next-line no-unused-vars
+    const { password: _password, emailVerificationToken: _emailVerificationToken, ...safeUser } = updatedUser;
 
     res.json({
       success: true,
