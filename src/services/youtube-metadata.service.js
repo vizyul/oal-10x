@@ -49,7 +49,8 @@ class YouTubeMetadataService {
       const videoData = await this.getVideoDetails(videoId);
 
       // Get additional metadata
-      const thumbnails = await this.getVideoThumbnails(videoId);
+      // eslint-disable-next-line no-unused-vars
+      const _thumbnails = await this.getVideoThumbnails(videoId);
       const stats = await this.getVideoStats(videoId);
 
       // Try to get captions/transcript if available
@@ -227,7 +228,8 @@ class YouTubeMetadataService {
           if (response.status === 200) {
             verifiedThumbnails.push(thumbnail);
           }
-        } catch (error) {
+        // eslint-disable-next-line no-unused-vars
+        } catch (_error) {
           // Thumbnail doesn't exist, skip it
           logger.debug(`Thumbnail ${thumbnail.quality} not available for ${videoId}`);
         }

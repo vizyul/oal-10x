@@ -79,8 +79,8 @@ const subscriptionController = {
       logger.error('Error creating checkout session:', {
         error: error.message,
         stack: error.stack,
-        userId: user.id,
-        userEmail: user.email,
+        userId: req.user?.id,
+        userEmail: req.user?.email,
         priceId: req.body.priceId
       });
       res.status(500).json({
@@ -331,7 +331,8 @@ const subscriptionController = {
           await stripeService.handleSubscriptionCreated(subscription);
 
           // Log the manual sync event to subscription_events table
-          const resolvedUserId = await resolveUserId(user.id);
+          // eslint-disable-next-line no-unused-vars
+          const _resolvedUserId = await resolveUserId(user.id);
           await database.create('subscription_events', {
             stripe_event_id: `manual_sync_${session_id}`,
             user_subscriptions_id: null, // Will need to find the subscription record ID
@@ -355,8 +356,8 @@ const subscriptionController = {
 
         // Update user's Stripe customer ID if not already set
         if (!user.stripe_customer_id) {
-          const resolvedUserId = await resolveUserId(user.id);
-          await database.update('users', resolvedUserId, {
+          const _resolvedUserId = await resolveUserId(user.id);
+          await database.update('users', _resolvedUserId, {
             stripe_customer_id: session.customer
           });
         }
@@ -381,7 +382,8 @@ const subscriptionController = {
 };
 
 // Helper function to get usage (uses subscription service)
-async function getCurrentUsageAll(userId) {
+// eslint-disable-next-line no-unused-vars
+async function _getCurrentUsageAll(userId) {
   const subscriptionService = require('../services/subscription.service');
   return await subscriptionService.getCurrentUsage(userId);
 }

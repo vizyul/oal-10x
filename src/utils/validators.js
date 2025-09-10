@@ -1,4 +1,5 @@
 // Custom validation utilities
+const path = require('path');
 
 /**
  * Validate email address format
@@ -89,7 +90,7 @@ function validatePhoneNumber(phone) {
   }
 
   // Basic format validation (allows various international formats)
-  const phoneRegex = /^[\+]?[1-9][\d]{0,3}[\s\-\(\)]?[\d\s\-\(\)]{7,12}[\d]$/;
+  const phoneRegex = /^[+]?[1-9][\d]{0,3}[\s-()]?[\d\s-()]{7,12}[\d]$/;
   if (!phoneRegex.test(phone)) {
     return { isValid: false, error: 'Please enter a valid phone number' };
   }
@@ -109,7 +110,7 @@ function validateUrl(url, requireHttps = false) {
   }
 
   try {
-    const urlObj = new URL(url);
+    const urlObj = new global.URL(url);
 
     if (requireHttps && urlObj.protocol !== 'https:') {
       return { isValid: false, error: 'URL must use HTTPS' };
@@ -120,7 +121,8 @@ function validateUrl(url, requireHttps = false) {
     }
 
     return { isValid: true, value: url.trim() };
-  } catch (error) {
+  // eslint-disable-next-line no-unused-vars
+  } catch (_error) {
     return { isValid: false, error: 'Please enter a valid URL' };
   }
 }

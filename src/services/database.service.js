@@ -268,15 +268,15 @@ class DatabaseService {
       logger.info(`Finding records in ${tableName} with conditions:`, fieldConditions);
 
       const conditions = Object.entries(fieldConditions)
-        .filter(([key, value]) => value !== null && value !== undefined);
+        .filter(([_key, value]) => value !== null && value !== undefined);
 
       if (conditions.length === 0) {
         logger.warn('No valid conditions provided for findByMultipleFields');
         return [];
       }
 
-      const whereClauses = conditions.map(([field, value], index) => `${field} = $${index + 1}`);
-      const values = conditions.map(([field, value]) => value);
+      const whereClauses = conditions.map(([field, _value], index) => `${field} = $${index + 1}`);
+      const values = conditions.map(([_field, value]) => value);
 
       const query = `
         SELECT * FROM ${tableName.toLowerCase()} 
@@ -393,7 +393,7 @@ class DatabaseService {
     if (!row) {
       return null;
     }
-    
+
     // Return raw PostgreSQL row data
     return { ...row };
   }

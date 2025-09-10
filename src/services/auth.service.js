@@ -40,9 +40,8 @@ class AuthService {
           terms_accepted: userData['Terms Accepted'] || false,
           privacy_accepted: userData['Privacy Accepted'] || false,
           status: userData['Status'] || 'pending',
-          google_id: userData['Google ID'],
-          microsoft_id: userData['Microsoft ID'],
-          apple_id: userData['Apple ID'],
+          oauth_provider: userData['OAuth Provider'],
+          oauth_id: userData['OAuth ID'],
           registration_method: userData['Registration Method'],
           subscription_tier: userData['subscription_tier'] || 'free',
           subscription_status: userData['subscription_status'] || 'none',
@@ -460,7 +459,7 @@ class AuthService {
       // Verify password using bcrypt
       const bcrypt = require('bcryptjs');
       const isValid = await bcrypt.compare(password, user.password);
-      
+
       if (!isValid) {
         logger.info(`Invalid password for user: ${email}`);
         return null;
@@ -480,6 +479,7 @@ class AuthService {
    * @returns {Promise<Object>} Created user object
    */
   async createOAuthUser(userData) {
+    let fields = null;
     try {
       logger.info(`Creating OAuth user: ${userData.email} via ${userData.oauth_provider}`);
 
@@ -489,7 +489,7 @@ class AuthService {
       }
 
       // Prepare user data with OAuth normalization
-      const fields = {
+      fields = {
         email: userData.email,
         first_name: userData.first_name,
         last_name: userData.last_name,
@@ -508,7 +508,9 @@ class AuthService {
     } catch (error) {
       logger.error('Error creating OAuth user:', error);
       logger.error('OAuth user data was:', userData);
-      logger.error('Database fields were:', fields);
+      if (fields) {
+        logger.error('Database fields were:', fields);
+      }
       throw new Error(`Failed to create OAuth user: ${error.message}`);
     }
   }

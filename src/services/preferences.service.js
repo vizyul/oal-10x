@@ -112,10 +112,10 @@ class PreferencesService {
         throw new Error('Failed to create user preferences');
       }
 
-      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
-
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
+
+      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
 
       return {
         id: record.id || recordFields.id,
@@ -198,10 +198,10 @@ class PreferencesService {
         throw new Error('Failed to create user preferences');
       }
 
-      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
-
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
+
+      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
 
       return {
         id: record.id || recordFields.id,

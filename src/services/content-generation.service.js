@@ -71,10 +71,10 @@ class ContentGenerationService {
    * @param {Object} prompt - Prompt configuration
    * @returns {Promise<Object>} Generation result
    */
-  async generateContent(videoId, transcript, prompt, userId = null) {
-    try {
+  async generateContent(videoId, transcript, prompt, _userId = null) {
+    const processingStatusService = require('./processing-status.service');
 
-      const processingStatusService = require('./processing-status.service');
+    try {
 
       // Update content status to pending
       processingStatusService.updateContentStatus(videoId, prompt.content_type, 'pending');
@@ -297,7 +297,8 @@ class ContentGenerationService {
 
       // Prepare updates for database
       Object.entries(generatedContent).forEach(([contentType, data]) => {
-        const [textField, urlField] = fieldMappings[contentType] || [];
+        // eslint-disable-next-line no-unused-vars
+        const [textField, _urlField] = fieldMappings[contentType] || [];
         if (textField && data.content) {
           updates[textField] = data.content;
           // URL field could be used for future implementations (e.g., saving to external storage)

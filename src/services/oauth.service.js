@@ -187,8 +187,15 @@ class OAuthService {
               logger.info(`Using most recent Apple user as fallback: ${recentAppleUser.email}`);
               return done(null, recentAppleUser);
             } else {
-              logger.warn('No Apple users found in database');
-              return done(new Error('No Apple account found. Please sign up first or contact support.'), null);
+              logger.warn('No Apple users found in database - this might be first-time login treated as subsequent');
+              // Instead of throwing error, create a special user object that triggers re-auth flow
+              return done(null, {
+                pendingAppleReauth: true,
+                provider: 'apple',
+                message: 'Apple Sign In requires re-authentication. Please try signing in again.',
+                code: req.body.code || req.query.code,
+                state: req.body.state || req.query.state
+              });
             }
           } catch (fallbackError) {
             logger.error('Fallback Apple user lookup failed:', fallbackError);
@@ -477,14 +484,14 @@ class OAuthService {
       userData.email = profile.emails?.[0]?.value;
       userData.firstName = profile.name?.givenName;
       userData.lastName = profile.name?.familyName;
-      userData.profilePicture = profile.photos?.[0]?.value;
+      userData.profilePicture = profile.photos?.[0]?.value || profile._json?.picture;
       break;
 
     case 'microsoft':
       userData.email = profile.emails?.[0]?.value;
       userData.firstName = profile.name?.givenName;
       userData.lastName = profile.name?.familyName;
-      userData.profilePicture = profile.photos?.[0]?.value;
+      userData.profilePicture = profile.photos?.[0]?.value || profile._json?.picture;
       break;
 
     case 'apple':
@@ -503,28 +510,32 @@ class OAuthService {
     const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     const userFields = {
-      'Email': userData.email,
-      'First Name': userData.firstName,
-      'Last Name': userData.lastName,
-      'Email Verified': false,
-      'Email Verification Token': verificationToken,
-      'Email Verification Expires': verificationExpires.toISOString(),
-      'Status': 'pending_verification',
-      'Registration Method': provider,
-      'Terms Accepted': true,
-      'Privacy Accepted': true,
-      'subscription_tier': 'free',
-      'subscription_status': 'none',
-      [`${provider.charAt(0).toUpperCase() + provider.slice(1)} ID`]: providerId,
-      'Created At': new Date().toISOString(),
-      'Updated At': new Date().toISOString()
+      email: userData.email,
+      first_name: userData.firstName,
+      last_name: userData.lastName,
+      email_verified: false,
+      email_verification_token: verificationToken,
+      email_verification_expires: verificationExpires.toISOString(),
+      status: 'pending_verification',
+      registration_method: provider,
+      terms_accepted: true,
+      privacy_accepted: true,
+      subscription_tier: 'free',
+      subscription_status: 'none',
+      oauth_provider: provider,
+      oauth_id: providerId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     if (userData.profilePicture) {
-      userFields['Profile Picture URL'] = userData.profilePicture;
+      userFields.profile_image_url = userData.profilePicture;
+      logger.info(`📸 Captured profile picture for ${provider} user: ${userData.email}`);
     }
 
-    return await authService.createUser(userFields);
+    // Use database service directly since we're using PostgreSQL field names
+    const database = require('./database.service');
+    return await database.create('users', userFields);
   }
 
   async sendVerificationForSocialUser(user, email) {
@@ -583,6 +594,17 @@ class OAuthService {
 
       await authService.updateUser(user.id, updateFields);
 
+      // Create default preferences for the new social user
+      try {
+        const PreferencesService = require('./preferences.service');
+        const preferencesService = new PreferencesService();
+        await preferencesService.createDefaultPreferences(email);
+        logger.info(`Default preferences created for social user: ${email}`);
+      } catch (prefError) {
+        logger.error('Failed to create preferences for social user:', prefError);
+        // Don't fail the verification if preferences creation fails
+      }
+
       // Send welcome email for new social users and mark as sent
       try {
         const firstName = user['First Name'] || user.firstName || 'there';
@@ -600,14 +622,17 @@ class OAuthService {
         // Don't fail the verification if welcome email fails
       }
 
-      // Generate JWT token
-      const token = authService.generateToken(user.id, email, user);
+      // Refresh user data to get the most current information including the updates
+      const refreshedUser = await authService.findUserByEmail(email);
+
+      // Generate JWT token with refreshed user data
+      const token = authService.generateToken(refreshedUser.id, email, refreshedUser);
 
       logger.info(`Social login user verified and activated: ${email}`);
 
       return {
         success: true,
-        user: user,
+        user: refreshedUser,
         token: token
       };
     } catch (error) {

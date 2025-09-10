@@ -7,7 +7,7 @@ const cookieParser = require('cookie-parser');
 const {
   securityMiddleware,
   errorMiddleware,
-  validationMiddleware
+  // validationMiddleware
 } = require('./middleware');
 
 // Import routes
@@ -109,7 +109,7 @@ app.get('/health', (req, res) => {
 });
 
 // 404 handler
-app.use((req, res, next) => {
+app.use((req, res, _next) => {
   logger.warn(`404 - ${req.method} ${req.url} - ${req.ip}`);
 
   if (req.xhr || req.headers.accept?.indexOf('json') > -1) {

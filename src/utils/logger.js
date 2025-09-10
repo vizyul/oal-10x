@@ -39,7 +39,8 @@ class Logger {
       if (typeof data === 'object') {
         try {
           formattedMessage += ` | Data: ${JSON.stringify(data, null, 2)}`;
-        } catch (error) {
+        // eslint-disable-next-line no-unused-vars
+        } catch (_error) {
           formattedMessage += ' | Data: [Circular or non-serializable object]';
         }
       } else {

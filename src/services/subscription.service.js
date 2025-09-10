@@ -1,5 +1,5 @@
 const { logger } = require('../utils');
-const subscriptionMiddleware = require('../middleware/subscription.middleware');
+// const subscriptionMiddleware = require('../middleware/subscription.middleware'); // Unused - logic reimplemented in service
 
 class SubscriptionService {
   /**
@@ -52,10 +52,10 @@ class SubscriptionService {
       if (userSubscriptions.length === 0) {
         return;
       }
-      
+
       const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
       const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
-      
+
       let currentUsage = usageRecords.find(usage => {
         const usageData = usage.fields || usage;
         const usagePeriodStart = new Date(usageData.period_start);
@@ -136,13 +136,13 @@ class SubscriptionService {
 
       logger.info(`Getting current usage for user ${userId} (pgUserId: ${pgUserId})`);
 
-      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage  
+      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage
       const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
       if (userSubscriptions.length === 0) {
         logger.info(`No subscriptions found for user ${pgUserId}`);
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
-      
+
       const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
       const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
       logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
@@ -245,7 +245,7 @@ class SubscriptionService {
   async getCurrentPeriodUsage(userId) {
     try {
       const database = require('./database.service');
-      
+
       // Get user's active subscription
       const subscription = await this.getUserActiveSubscriptionByPgId(userId);
       if (!subscription) {
@@ -253,7 +253,7 @@ class SubscriptionService {
       }
 
       const now = new Date();
-      
+
       // Query usage through proper relationship
       const query = `
         SELECT su.* FROM subscription_usage su
@@ -287,9 +287,9 @@ class SubscriptionService {
   async getCurrentPeriodUsageBreakdown(userId) {
     try {
       const database = require('./database.service');
-      
+
       const now = new Date();
-      
+
       // Query usage through proper relationship
       const query = `
         SELECT su.* FROM subscription_usage su
@@ -328,7 +328,7 @@ class SubscriptionService {
   async trackUsage(userId, resource, increment = 1) {
     try {
       const database = require('./database.service');
-      
+
       // Get user's active subscription
       const subscription = await this.getUserActiveSubscriptionByPgId(userId);
       if (!subscription) {
@@ -337,7 +337,7 @@ class SubscriptionService {
       }
 
       const now = new Date();
-      
+
       // Find current period usage record
       const usageQuery = `
         SELECT su.* FROM subscription_usage su
@@ -396,13 +396,13 @@ class SubscriptionService {
 
   /**
    * Get user's active subscription by PostgreSQL user ID
-   * @param {number} userId - PostgreSQL user ID 
+   * @param {number} userId - PostgreSQL user ID
    * @returns {Object|null} Active subscription or null
    */
   async getUserActiveSubscriptionByPgId(userId) {
     try {
       const database = require('./database.service');
-      
+
       const query = `
         SELECT * FROM user_subscriptions 
         WHERE users_id = $1 
@@ -498,7 +498,7 @@ class SubscriptionService {
   async canProcessVideo(userId) {
     try {
       const usage = await this.getCurrentUsage(userId);
-      
+
       if (!usage) {
         logger.debug(`No usage data found for user ${userId}, assuming they can process`);
         return true;
@@ -507,12 +507,12 @@ class SubscriptionService {
       // For free tier, limit might be 5 videos per month
       // For premium, might be 100 videos per month
       // These limits should be configurable based on subscription tier
-      
+
       const currentCount = usage.videos_processed || 0;
       const limit = usage.usage_limit || 5; // Default free tier limit
-      
+
       logger.debug(`User ${userId} usage: ${currentCount}/${limit} videos`);
-      
+
       return currentCount < limit;
     } catch (error) {
       logger.error('Error checking video processing capability:', error);
