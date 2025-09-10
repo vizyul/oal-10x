@@ -44,8 +44,13 @@ const videoValidation = {
 
   params: [
     param('id')
-      .matches(/^rec[a-zA-Z0-9]{14}$/)
-      .withMessage('Invalid record ID format')
+      .custom((value) => {
+        // Accept both PostgreSQL integer IDs and Airtable record IDs
+        if (/^\d+$/.test(value) || /^rec[a-zA-Z0-9]{14}$/.test(value)) {
+          return true;
+        }
+        throw new Error('Invalid ID format - must be integer or Airtable record ID');
+      })
   ],
 
   query: [
@@ -153,6 +158,16 @@ router.post('/:id/process',
 router.post('/:id/retry',
   videoValidation.params,
   videosController.retryProcessing.bind(videosController)
+);
+
+/**
+ * @route   POST /api/videos/:id/cancel
+ * @desc    Cancel video processing
+ * @access  Private
+ */
+router.post('/:id/cancel',
+  videoValidation.params,
+  videosController.cancelProcessing.bind(videosController)
 );
 
 module.exports = router;

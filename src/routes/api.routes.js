@@ -11,7 +11,7 @@ const router = express.Router();
 // API rate limiting (more restrictive than web routes)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each IP to 50 requests per windowMs
+  max: process.env.NODE_ENV === 'development' ? 500 : 200, // More generous limits: 500 for dev, 200 for prod
   message: {
     success: false,
     message: 'Too many API requests. Please try again later.',

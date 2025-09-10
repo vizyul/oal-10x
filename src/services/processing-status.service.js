@@ -349,8 +349,7 @@ class ProcessingStatusService extends EventEmitter {
         logger.error(`Failed to update video status in PostgreSQL: ${error.message}`);
       }
 
-      // Deduct from subscription usage
-      await this.deductSubscriptionUsage(userId);
+      // Note: Subscription usage is tracked at video import time in YouTube controller
 
     } catch (error) {
       logger.error(`Error finalizing video processing: ${error.message}`);
@@ -358,21 +357,50 @@ class ProcessingStatusService extends EventEmitter {
   }
 
   /**
-   * Deduct video from subscription usage
-   * @param {string} userId - User ID
+   * Cancel video processing and mark all pending items as cancelled
+   * @param {string} videoId - YouTube video ID
    */
-  async deductSubscriptionUsage(userId) {
-    try {
-      const subscriptionService = require('./subscription.service');
-
-      // Increment video usage count
-      await subscriptionService.incrementUsage(userId, 'videos', 1);
-      logger.info(`Incremented video usage count for user ${userId} (+1 video)`);
-
-    } catch (error) {
-      logger.error(`Failed to increment subscription usage: ${error.message}`);
+  cancelVideoProcessing(videoId) {
+    const videoStatus = this.processingVideos.get(videoId);
+    if (!videoStatus) {
+      logger.warn(`No video status found for ${videoId} when trying to cancel`);
+      return false;
     }
+
+    logger.info(`Canceling processing for video ${videoId}`);
+
+    // Cancel transcript if pending
+    if (videoStatus.transcript.status === 'pending') {
+      videoStatus.transcript.status = 'cancelled';
+      videoStatus.transcript.completedAt = new Date().toISOString();
+    }
+
+    // Cancel all pending content types
+    Object.keys(videoStatus.content).forEach(contentType => {
+      if (videoStatus.content[contentType].status === 'pending') {
+        videoStatus.content[contentType].status = 'cancelled';
+        videoStatus.content[contentType].completedAt = new Date().toISOString();
+      }
+    });
+
+    videoStatus.completed = true;
+    videoStatus.cancelled = true;
+    videoStatus.lastUpdate = new Date().toISOString();
+
+    this.processingVideos.set(videoId, videoStatus);
+
+    // Emit final status update
+    this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
+
+    // Clean up after delay
+    setTimeout(() => {
+      this.processingVideos.delete(videoId);
+      logger.info(`Removed cancelled video ${videoId} from processing status`);
+    }, 5000); // Keep visible for 5 seconds so user can see cancellation
+
+    return true;
   }
+
 }
 
 module.exports = new ProcessingStatusService();

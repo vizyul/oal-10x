@@ -29,22 +29,28 @@ class SubscriptionService {
 
       // Get user's integer ID for PostgreSQL
       let pgUserId;
-      if (typeof userId === 'string' && userId.startsWith('rec')) {
+      if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
+        // This is already a PostgreSQL user ID
+        pgUserId = parseInt(userId);
+      } else if (typeof userId === 'string' && userId.startsWith('rec')) {
         // This is an Airtable record ID
         const pgUsers = await database.findByField('users', 'airtable_id', userId);
         if (pgUsers.length === 0) {
           logger.debug(`No user found with airtable_id ${userId}, skipping usage increment`);
           return;
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
-      } else {
-        // This is likely an email address
+        pgUserId = pgUsers[0].id;
+      } else if (typeof userId === 'string' && userId.includes('@')) {
+        // This is an email address
         const pgUsers = await database.findByField('users', 'email', userId);
         if (pgUsers.length === 0) {
           logger.debug(`No user found with email ${userId}, skipping usage increment`);
           return;
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+        pgUserId = pgUsers[0].id;
+      } else {
+        logger.warn(`Unrecognized userId format: ${userId} (type: ${typeof userId}), skipping usage increment`);
+        return;
       }
 
       // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage
@@ -53,11 +59,11 @@ class SubscriptionService {
         return;
       }
 
-      const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
+      const subscriptionId = userSubscriptions[0].id;
       const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
 
       let currentUsage = usageRecords.find(usage => {
-        const usageData = usage.fields || usage;
+        const usageData = usage;
         const usagePeriodStart = new Date(usageData.period_start);
         const usagePeriodEnd = new Date(usageData.period_end);
         return usagePeriodStart <= now && usagePeriodEnd >= now;
@@ -67,9 +73,9 @@ class SubscriptionService {
 
       if (currentUsage) {
         // Update existing usage record in PostgreSQL
-        const usageData = currentUsage.fields || currentUsage;
+        const usageData = currentUsage;
         const newValue = (usageData[fieldName] || 0) + increment;
-        const usageId = currentUsage.id || currentUsage.fields.id;
+        const usageId = currentUsage.id;
         await database.update('subscription_usage', usageId, {
           [fieldName]: newValue
         });
@@ -80,7 +86,7 @@ class SubscriptionService {
         const subscriptionRecord = subscriptionRecords[0];
 
         if (subscriptionRecord) {
-          const subscriptionData = subscriptionRecord.fields || subscriptionRecord;
+          const subscriptionData = subscriptionRecord;
           const usageData = {
             users_id: pgUserId,
             subscription_id: parseInt(subscriptionData.id),
@@ -121,14 +127,14 @@ class SubscriptionService {
         if (pgUsers.length === 0) {
           return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+        pgUserId = pgUsers[0].id;
       } else if (typeof userId === 'string' && userId.includes('@')) {
         // This is likely an email address
         const pgUsers = await database.findByField('users', 'email', userId);
         if (pgUsers.length === 0) {
           return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+        pgUserId = pgUsers[0].id;
       } else {
         // This is likely already a PostgreSQL user ID
         pgUserId = parseInt(userId);
@@ -143,13 +149,13 @@ class SubscriptionService {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
-      const subscriptionId = userSubscriptions[0].fields ? userSubscriptions[0].fields.id : userSubscriptions[0].id;
+      const subscriptionId = userSubscriptions[0].id;
       const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
       logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
 
       // Find the current billing period usage record
       const currentUsage = usageRecords.find(usage => {
-        const usageData = usage.fields || usage;
+        const usageData = usage;
         const usagePeriodStart = new Date(usageData.period_start);
         const usagePeriodEnd = new Date(usageData.period_end);
         const isCurrentPeriod = usagePeriodStart <= now && usagePeriodEnd >= now;
@@ -163,7 +169,7 @@ class SubscriptionService {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
-      const usageData = currentUsage.fields || currentUsage;
+      const usageData = currentUsage;
       const result = {
         videos: usageData.videos_processed || 0,
         api_calls: usageData.api_calls_made || 0,
@@ -190,29 +196,35 @@ class SubscriptionService {
 
       // Get user's integer ID for PostgreSQL
       let pgUserId;
-      if (typeof userId === 'string' && userId.startsWith('rec')) {
+      if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
+        // This is already a PostgreSQL user ID
+        pgUserId = parseInt(userId);
+      } else if (typeof userId === 'string' && userId.startsWith('rec')) {
         // This is an Airtable record ID
         const pgUsers = await database.findByField('users', 'airtable_id', userId);
         if (pgUsers.length === 0) {
           return null;
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
-      } else {
-        // This is likely an email address
+        pgUserId = pgUsers[0].id;
+      } else if (typeof userId === 'string' && userId.includes('@')) {
+        // This is an email address
         const pgUsers = await database.findByField('users', 'email', userId);
         if (pgUsers.length === 0) {
           return null;
         }
-        pgUserId = pgUsers[0].fields ? pgUsers[0].fields.id : pgUsers[0].id;
+        pgUserId = pgUsers[0].id;
+      } else {
+        logger.warn(`Unrecognized userId format: ${userId} (type: ${typeof userId})`);
+        return null;
       }
 
       const subscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
       const activeSubscription = subscriptions.find(sub => {
-        const subData = sub.fields || sub;
+        const subData = sub;
         return ['active', 'trialing', 'paused'].includes(subData.status);
       });
 
-      return activeSubscription ? (activeSubscription.fields || activeSubscription) : null;
+      return activeSubscription || null;
     } catch (error) {
       logger.error('Error getting user subscription:', error);
       return null;
@@ -518,6 +530,82 @@ class SubscriptionService {
       logger.error('Error checking video processing capability:', error);
       // In case of error, allow processing (fail-safe)
       return true;
+    }
+  }
+
+  /**
+   * Decrement videos_processed count when a video is cancelled
+   * This restores the user's monthly allowance for cancelled videos
+   */
+  async decrementVideoProcessedCount(userId) {
+    try {
+      logger.debug(`Decrementing videos_processed count for user ${userId}`);
+
+      // Get the raw usage record from database (not the transformed one)
+      const database = require('./database.service');
+      
+      // Convert userId to PostgreSQL ID if needed
+      let pgUserId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        const pgUsers = await database.findByField('users', 'airtable_id', userId);
+        if (pgUsers.length === 0) {
+          logger.warn(`User not found for Airtable ID ${userId}`);
+          return false;
+        }
+        pgUserId = pgUsers[0].id;
+      } else {
+        pgUserId = parseInt(userId);
+      }
+
+      // Get user subscription
+      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
+      if (userSubscriptions.length === 0) {
+        logger.warn(`No subscription found for user ${pgUserId} - cannot decrement`);
+        return false;
+      }
+
+      // Get current usage record
+      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', userSubscriptions[0].id);
+      if (usageRecords.length === 0) {
+        logger.warn(`No usage record found for user ${pgUserId} - cannot decrement`);
+        return false;
+      }
+
+      // Find current billing period usage record
+      const now = new Date();
+      const currentUsageRecord = usageRecords.find(usage => {
+        const usagePeriodStart = new Date(usage.period_start);
+        const usagePeriodEnd = new Date(usage.period_end);
+        return usagePeriodStart <= now && usagePeriodEnd >= now;
+      });
+
+      if (!currentUsageRecord) {
+        logger.warn(`No current billing period usage record found for user ${pgUserId} - cannot decrement`);
+        return false;
+      }
+
+      const currentCount = currentUsageRecord.videos_processed || 0;
+      
+      // Don't decrement below 0
+      if (currentCount <= 0) {
+        logger.warn(`videos_processed count already at ${currentCount} for user ${userId} - not decrementing`);
+        return false;
+      }
+
+      const newCount = currentCount - 1;
+
+      // Update the usage record
+      await database.update('subscription_usage', currentUsageRecord.id, {
+        videos_processed: newCount,
+        updated_at: new Date().toISOString()
+      });
+
+      logger.info(`Successfully decremented videos_processed from ${currentCount} to ${newCount} for user ${userId}`);
+      return true;
+
+    } catch (error) {
+      logger.error('Error decrementing videos_processed count:', error);
+      throw error;
     }
   }
 

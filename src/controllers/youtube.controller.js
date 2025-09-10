@@ -2,6 +2,7 @@ const { logger } = require('../utils');
 const youtubeOAuth = require('../services/youtube-oauth.service');
 const { validationResult } = require('express-validator');
 const database = require('../services/database.service');
+const subscriptionService = require('../services/subscription.service');
 
 class YouTubeController {
   /**
@@ -365,7 +366,6 @@ class YouTubeController {
             description: metadata?.description || '',
             duration: metadata?.duration || 0,
             upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            published_at: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString() : null,
             thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // Direct URL for PostgreSQL
 
             // Processing and categorization
@@ -435,7 +435,14 @@ class YouTubeController {
 
           // Record results
           if (postgresRecord) {
-            // Database write succeeded
+            // Database write succeeded - increment subscription usage
+            try {
+              await subscriptionService.incrementUsage(actualUserId, 'videos', 1);
+              logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+            } catch (usageError) {
+              logger.warn(`⚠️  Failed to increment video usage for user ${actualUserId}:`, usageError.message);
+            }
+
             const video = this.formatPostgresVideoResponse(postgresRecord);
 
             importedVideos.push({

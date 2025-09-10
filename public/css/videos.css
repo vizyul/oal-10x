@@ -16,7 +16,7 @@
 }
 
 .dashboard-left {
-  flex: 1;
+  flex: 0.5;
   min-width: 0; /* Prevent flex item from overflowing */
 }
 
