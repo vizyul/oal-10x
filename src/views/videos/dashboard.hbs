@@ -1036,7 +1036,7 @@ async function loadCompletedVideos() {
         if (displayVideos.length > 0) {
         // Generate HTML for all videos
         gridElement.innerHTML = displayVideos.map(video => {
-          const videoId = video.videoid || video.youtube_video_id || video.id;
+          const videoId = video.videoid || video.id;
           const status = video.status || 'completed';
           
           // Content types to check for completed content

@@ -1217,7 +1217,7 @@ class VideosController {
         data: {
           contentType,
           content,
-          videoId: video.videoid || video.youtube_video_id,
+          videoId: video.videoid,
           videoTitle: video.video_title,
           lastUpdated: video.updated_at
         }

@@ -31,7 +31,7 @@ class TranscriptService {
       // Secondary check: if video was deleted from database, consider it cancelled
       const database = require('./database.service');
       const videos = await database.query(
-        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        'SELECT id FROM videos WHERE videoid = $1',
         [videoId]
       );
       

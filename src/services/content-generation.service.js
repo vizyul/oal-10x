@@ -25,7 +25,7 @@ class ContentGenerationService {
       
       // Secondary check: if video was deleted from database, consider it cancelled
       const videos = await databaseService.query(
-        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        'SELECT id FROM videos WHERE videoid = $1',
         [videoId]
       );
       
@@ -437,7 +437,7 @@ class ContentGenerationService {
       for (const video of videos) {
         try {
           const videoRecordId = video.id;
-          const videoId = video.videoid || video.video_id || video.youtube_video_id;
+          const videoId = video.videoid;
 
           const result = await this.generateAllContentForVideo(
             videoRecordId,
@@ -454,7 +454,7 @@ class ContentGenerationService {
         } catch (error) {
           logger.error(`Failed to process video ${video.id}:`, error.message);
           results.push({
-            videoId: video.videoid || video.video_id || video.youtube_video_id,
+            videoId: video.videoid,
             videoRecordId: video.id,
             success: false,
             error: error.message
