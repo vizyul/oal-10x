@@ -45,11 +45,11 @@ const videoValidation = {
   params: [
     param('id')
       .custom((value) => {
-        // Accept both PostgreSQL integer IDs and Airtable record IDs
-        if (/^\d+$/.test(value) || /^rec[a-zA-Z0-9]{14}$/.test(value)) {
+        // Accept PostgreSQL integer IDs, Airtable record IDs, and YouTube video IDs
+        if (/^\d+$/.test(value) || /^rec[a-zA-Z0-9]{14}$/.test(value) || /^[a-zA-Z0-9_-]{11}$/.test(value)) {
           return true;
         }
-        throw new Error('Invalid ID format - must be integer or Airtable record ID');
+        throw new Error('Invalid ID format - must be integer, Airtable record ID, or YouTube video ID');
       })
   ],
 
