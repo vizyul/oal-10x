@@ -23,24 +23,24 @@ class TranscriptService {
       // Primary check: processing status service (where cancellation is tracked)
       const processingStatusService = require('./processing-status.service');
       const videoStatus = processingStatusService.processingVideos.get(videoId);
-      
+
       if (videoStatus && videoStatus.cancelled) {
         return true;
       }
-      
+
       // Secondary check: if video was deleted from database, consider it cancelled
       const database = require('./database.service');
       const videos = await database.query(
-        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        'SELECT id FROM videos WHERE videoid = $1',
         [videoId]
       );
-      
+
       // If video doesn't exist in database but we're still processing, it might have been deleted (cancelled)
       if (!videos.rows || videos.rows.length === 0) {
         logger.info(`Video ${videoId} not found in database - may have been cancelled and deleted`);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       logger.error('Error checking video cancellation status:', error);

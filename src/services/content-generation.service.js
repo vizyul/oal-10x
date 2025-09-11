@@ -18,23 +18,23 @@ class ContentGenerationService {
       // Primary check: processing status service (where cancellation is tracked)
       const processingStatusService = require('./processing-status.service');
       const videoStatus = processingStatusService.processingVideos.get(videoId);
-      
+
       if (videoStatus && videoStatus.cancelled) {
         return true;
       }
-      
+
       // Secondary check: if video was deleted from database, consider it cancelled
       const videos = await databaseService.query(
-        'SELECT id FROM videos WHERE videoid = $1 OR youtube_video_id = $1',
+        'SELECT id FROM videos WHERE videoid = $1',
         [videoId]
       );
-      
+
       // If video doesn't exist in database but we're still processing, it might have been deleted (cancelled)
       if (!videos.rows || videos.rows.length === 0) {
         logger.info(`Video ${videoId} not found in database - may have been cancelled and deleted`);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       logger.error('Error checking video cancellation status:', error);
@@ -101,7 +101,7 @@ class ContentGenerationService {
    * @param {Object} prompt - Prompt configuration
    * @returns {Promise<Object>} Generation result
    */
-  async generateContent(videoId, transcript, prompt, _userId = null) {
+  async generateContent(videoId, videoRecordId, transcript, prompt, _userId = null) {
     const processingStatusService = require('./processing-status.service');
 
     try {
@@ -132,9 +132,29 @@ class ContentGenerationService {
         2 // Max retries
       );
 
+      // Write content to database immediately
+      try {
+        const contentUpdate = {
+          [prompt.content_type]: {
+            content: generatedContent
+          }
+        };
+        await this.updateVideoWithGeneratedContent(videoRecordId, contentUpdate);
+        logger.info(`Successfully saved ${prompt.content_type} content to database for video ${videoId}`);
 
-      // Update content status to completed
-      processingStatusService.updateContentStatus(videoId, prompt.content_type, 'completed');
+        // Update content status to completed ONLY after successful database write
+        processingStatusService.updateContentStatus(videoId, prompt.content_type, 'completed');
+
+      } catch (dbError) {
+        logger.error(`Failed to save ${prompt.content_type} content to database for video ${videoId}:`, dbError.message);
+        processingStatusService.updateContentStatus(videoId, prompt.content_type, 'failed', `Database save failed: ${dbError.message}`);
+
+        return {
+          success: false,
+          error: `Database save failed: ${dbError.message}`,
+          contentType: prompt.content_type
+        };
+      }
 
       return {
         success: true,
@@ -269,7 +289,7 @@ class ContentGenerationService {
         logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(relevantPrompts.length / concurrent)}`);
 
         const batchPromises = batch.map(prompt =>
-          this.generateContent(videoId, transcript, prompt, userId)
+          this.generateContent(videoId, videoRecordId, transcript, prompt, userId)
             .then(result => ({ prompt: prompt.name, result }))
             .catch(error => ({ prompt: prompt.name, result: { success: false, error: error.message } }))
         );
@@ -298,14 +318,8 @@ class ContentGenerationService {
         }
       }
 
-      // Update the video record with generated content
-      try {
-        await this.updateVideoWithGeneratedContent(videoRecordId, results.content);
-        logger.info(`Updated video ${videoRecordId} with generated content`);
-      } catch (updateError) {
-        logger.error(`Failed to update video ${videoRecordId} with generated content:`, updateError.message);
-        results.updateError = updateError.message;
-      }
+      // Note: Database updates now happen individually after each content generation
+      // No batch update needed here since each generateContent call writes to database immediately
 
       logger.info(`Content generation completed for video ${videoId}`, results.summary);
       return results;
@@ -437,7 +451,7 @@ class ContentGenerationService {
       for (const video of videos) {
         try {
           const videoRecordId = video.id;
-          const videoId = video.videoid || video.video_id || video.youtube_video_id;
+          const videoId = video.videoid;
 
           const result = await this.generateAllContentForVideo(
             videoRecordId,
@@ -454,7 +468,7 @@ class ContentGenerationService {
         } catch (error) {
           logger.error(`Failed to process video ${video.id}:`, error.message);
           results.push({
-            videoId: video.videoid || video.video_id || video.youtube_video_id,
+            videoId: video.videoid,
             videoRecordId: video.id,
             success: false,
             error: error.message

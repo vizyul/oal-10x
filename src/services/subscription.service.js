@@ -543,7 +543,7 @@ class SubscriptionService {
 
       // Get the raw usage record from database (not the transformed one)
       const database = require('./database.service');
-      
+
       // Convert userId to PostgreSQL ID if needed
       let pgUserId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
@@ -585,7 +585,7 @@ class SubscriptionService {
       }
 
       const currentCount = currentUsageRecord.videos_processed || 0;
-      
+
       // Don't decrement below 0
       if (currentCount <= 0) {
         logger.warn(`videos_processed count already at ${currentCount} for user ${userId} - not decrementing`);

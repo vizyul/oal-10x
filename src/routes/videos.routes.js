@@ -45,11 +45,11 @@ const videoValidation = {
   params: [
     param('id')
       .custom((value) => {
-        // Accept both PostgreSQL integer IDs and Airtable record IDs
-        if (/^\d+$/.test(value) || /^rec[a-zA-Z0-9]{14}$/.test(value)) {
+        // Accept PostgreSQL integer IDs, Airtable record IDs, and YouTube video IDs
+        if (/^\d+$/.test(value) || /^rec[a-zA-Z0-9]{14}$/.test(value) || /^[a-zA-Z0-9_-]{11}$/.test(value)) {
           return true;
         }
-        throw new Error('Invalid ID format - must be integer or Airtable record ID');
+        throw new Error('Invalid ID format - must be integer, Airtable record ID, or YouTube video ID');
       })
   ],
 
@@ -168,6 +168,19 @@ router.post('/:id/retry',
 router.post('/:id/cancel',
   videoValidation.params,
   videosController.cancelProcessing.bind(videosController)
+);
+
+/**
+ * @route   GET /api/videos/:id/content/:contentType
+ * @desc    Get generated content for a video
+ * @access  Private
+ */
+router.get('/:id/content/:contentType',
+  videoValidation.params,
+  param('contentType')
+    .isIn(['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'])
+    .withMessage('Invalid content type'),
+  videosController.getVideoContent.bind(videosController)
 );
 
 module.exports = router;

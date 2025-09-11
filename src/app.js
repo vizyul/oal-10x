@@ -19,9 +19,12 @@ const { logger } = require('./utils');
 // Create Express app
 const app = express();
 
-// Set trust proxy for Railway deployment
-if (process.env.NODE_ENV === 'production') {
+// Set trust proxy for Railway deployment (development and production)
+// Railway always runs behind a proxy, regardless of NODE_ENV
+const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.CORS_ORIGIN?.includes('dev.ourailegacy.com');
+if (process.env.NODE_ENV === 'production' || isRailway) {
   app.set('trust proxy', 1);
+  logger.info('Trust proxy enabled for Railway deployment');
 }
 
 // View engine setup - Handlebars

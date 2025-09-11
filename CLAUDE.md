@@ -568,6 +568,14 @@ The .gitignore file already includes patterns like:
 
 This ensures debugging scripts are never accidentally committed to the repository.
 
+### User Reset Command
+
+When the user asks to **"reset user X"**, this means:
+1. Delete all videos for that user from the `videos` table
+2. Reset their `videos_processed` count to 0 in the `subscription_usage` table
+
+Use the script: `node adhoc/reset-user-videos.js <userId>`
+
 # Important Instruction Reminders
 
 Do what has been asked; nothing more, nothing less.
