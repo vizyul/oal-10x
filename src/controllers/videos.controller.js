@@ -762,7 +762,7 @@ class VideosController {
    */
   async getCurrentTableFields(tableName) {
     try {
-      const schema = await database.getTableSchema(tableName);
+      await database.getTableSchema(tableName);
       return [];
     } catch (error) {
       logger.warn(`Could not get table schema for ${tableName}:`, error.message);
@@ -1068,10 +1068,10 @@ class VideosController {
       // Cancel processing status using the service method
       const processingStatusService = require('../services/processing-status.service');
       const youtubeVideoId = video.videoid || video.youtube_video_id;
-      
+
       // Use the dedicated cancel method
       const cancelled = processingStatusService.cancelVideoProcessing(youtubeVideoId);
-      
+
       if (!cancelled) {
         logger.warn(`No active processing found for video ${youtubeVideoId}, but database status updated`);
       }
@@ -1150,28 +1150,41 @@ class VideosController {
 
       // Handle video ID - could be videoId or database record ID
       let video;
-      
-      // First try to find by videoid (YouTube video ID)
-      logger.info(`Searching for video with videoid: ${id}`);
-      const videoIdResults = await database.findByField('videos', 'videoid', id);
-      logger.info(`Found ${videoIdResults?.length || 0} videos with videoid ${id}`);
-      
-      if (videoIdResults && videoIdResults.length > 0) {
-        // Log all videos found to debug user ownership
-        videoIdResults.forEach((v, index) => {
-          logger.info(`Video ${index}: videoid=${v.videoid}, users_id=${v.users_id}, video_title="${v.video_title}"`);
-        });
-        
-        // Filter by user ownership
-        const userVideo = videoIdResults.find(v => {
-          return v.users_id === actualUserId;
-        });
-        
-        if (userVideo) {
-          video = userVideo;
-          logger.info(`Found user video: ${userVideo.video_title} (users_id: ${userVideo.users_id})`);
-        } else {
-          logger.warn(`No videos found for user ${actualUserId} among ${videoIdResults.length} videos with ID ${id}`);
+
+      // First try to find by videoid (YouTube video ID) - use direct SQL like main listing
+      logger.info(`Searching for video with videoid: ${id} for user: ${actualUserId}`);
+
+      const directQuery = `SELECT * FROM videos WHERE videoid = $1 AND users_id = $2`;
+      const directResult = await database.query(directQuery, [id, actualUserId]);
+
+      logger.info(`Direct SQL query found ${directResult.rows.length} videos`);
+
+      if (directResult.rows.length > 0) {
+        video = directResult.rows[0];
+        logger.info(`Found video via direct query: ${video.video_title} (users_id: ${video.users_id})`);
+      } else {
+        // Also try the old findByField method for comparison
+        logger.info(`Direct query failed, trying findByField method...`);
+        const videoIdResults = await database.findByField('videos', 'videoid', id);
+        logger.info(`FindByField found ${videoIdResults?.length || 0} total videos with videoid ${id}`);
+
+        if (videoIdResults && videoIdResults.length > 0) {
+          // Log all videos found to debug user ownership
+          videoIdResults.forEach((v, index) => {
+            logger.info(`Video ${index}: videoid=${v.videoid}, users_id=${v.users_id}, video_title="${v.video_title}"`);
+          });
+
+          // Filter by user ownership
+          const userVideo = videoIdResults.find(v => {
+            return v.users_id === actualUserId;
+          });
+
+          if (userVideo) {
+            video = userVideo;
+            logger.info(`Found user video via findByField: ${userVideo.video_title} (users_id: ${userVideo.users_id})`);
+          } else {
+            logger.warn(`No videos found for user ${actualUserId} among ${videoIdResults.length} videos with ID ${id}`);
+          }
         }
       }
 
@@ -1199,13 +1212,13 @@ class VideosController {
       // Map content type to database column
       const contentFieldMap = {
         'transcript': 'transcript_text',
-        'summary_text': 'summary_text', 
+        'summary_text': 'summary_text',
         'study_guide_text': 'study_guide_text',
         'discussion_guide_text': 'discussion_guide_text',
         'group_guide_text': 'group_guide_text',
         'social_media_text': 'social_media_text',
         'quiz_text': 'quiz_text',
-        'chapters_text': 'chapters_text'
+        'chapters_text': 'chapter_text'
       };
 
       const fieldName = contentFieldMap[contentType];
@@ -1217,7 +1230,7 @@ class VideosController {
       }
 
       const content = video[fieldName];
-      
+
       // Detailed content debugging
       logger.info(`Content check for video ${video.videoid} field ${fieldName}:`);
       logger.info(`  - Content exists: ${!!content}`);
@@ -1225,7 +1238,7 @@ class VideosController {
       logger.info(`  - Content length: ${content ? content.length : 0}`);
       logger.info(`  - Content preview: ${content ? content.substring(0, 100) + '...' : 'null'}`);
       logger.info(`  - All video fields: ${Object.keys(video).join(', ')}`);
-      
+
       if (!content || content.trim() === '') {
         logger.warn(`Content field ${fieldName} is empty or missing for video ${video.videoid}`);
         return res.status(404).json({

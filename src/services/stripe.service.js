@@ -193,6 +193,29 @@ class StripeService {
   }
 
   /**
+   * Resolve user ID to PostgreSQL format
+   */
+  async resolveUserId(userId) {
+    if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
+      return parseInt(userId);
+    } else if (typeof userId === 'string' && userId.startsWith('rec')) {
+      const pgUsers = await database.findByField('users', 'airtable_id', userId);
+      if (pgUsers.length === 0) {
+        throw new Error(`No user found with airtable_id ${userId}`);
+      }
+      return pgUsers[0].id;
+    } else if (typeof userId === 'string' && userId.includes('@')) {
+      const pgUsers = await database.findByField('users', 'email', userId);
+      if (pgUsers.length === 0) {
+        throw new Error(`No user found with email ${userId}`);
+      }
+      return pgUsers[0].id;
+    } else {
+      throw new Error(`Unrecognized userId format: ${userId} (type: ${typeof userId})`);
+    }
+  }
+
+  /**
    * Handle subscription created
    */
   async handleSubscriptionCreated(subscription) {
@@ -281,8 +304,9 @@ class StripeService {
       }
     }
 
-    // Update user record
-    await database.update('users', parseInt(userId), {
+    // Update user record with proper ID resolution
+    const pgUserId = await this.resolveUserId(userId);
+    await database.update('users', pgUserId, {
       subscription_tier: tier,
       subscription_status: subscription.status
     });
@@ -330,8 +354,9 @@ class StripeService {
         cancel_at_period_end: subscription.cancel_at_period_end
       });
 
-      // Update user record
-      await database.update('users', parseInt(userId), {
+      // Update user record with proper ID resolution
+      const pgUserId = await this.resolveUserId(userId);
+      await database.update('users', pgUserId, {
         subscription_tier: tier,
         subscription_status: subscription.status
       });
@@ -373,8 +398,9 @@ class StripeService {
       });
     }
 
-    // Update user record
-    await database.update('users', parseInt(userId), {
+    // Update user record with proper ID resolution
+    const pgUserId = await this.resolveUserId(userId);
+    await database.update('users', pgUserId, {
       subscription_tier: 'free',
       subscription_status: 'canceled'
     });
@@ -413,8 +439,9 @@ class StripeService {
       });
     }
 
-    // Update user record - keep tier but mark as paused
-    await database.update('users', parseInt(userId), {
+    // Update user record - keep tier but mark as paused with proper ID resolution
+    const pgUserId = await this.resolveUserId(userId);
+    await database.update('users', pgUserId, {
       subscription_status: 'paused'
     });
 
@@ -455,8 +482,9 @@ class StripeService {
       });
     }
 
-    // Update user record
-    await database.update('users', parseInt(userId), {
+    // Update user record with proper ID resolution
+    const pgUserId = await this.resolveUserId(userId);
+    await database.update('users', pgUserId, {
       subscription_tier: tier,
       subscription_status: 'active'
     });
@@ -507,8 +535,9 @@ class StripeService {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const userId = subscription.metadata.user_id;
 
-      // Update user status
-      await database.update('users', parseInt(userId), {
+      // Update user status with proper ID resolution
+      const pgUserId = await this.resolveUserId(userId);
+      await database.update('users', pgUserId, {
         subscription_status: 'past_due'
       });
 

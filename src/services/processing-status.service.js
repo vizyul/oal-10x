@@ -331,7 +331,7 @@ class ProcessingStatusService extends EventEmitter {
    */
   async finalizeVideoProcessing(videoStatus) {
     try {
-      const { videoId, videoRecordId, userId } = videoStatus;
+      const { videoId, videoRecordId } = videoStatus;
 
       // Update video status to completed in PostgreSQL database
       const databaseService = require('./database.service');
