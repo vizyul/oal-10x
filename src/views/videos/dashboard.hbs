@@ -1060,15 +1060,10 @@ async function loadCompletedVideos() {
             { key: 'chapters_text', label: 'Chapters', icon: '📖' }
           ];
 
-          // Find available content - be more strict about what constitutes "available"
+          // Find available content
           const availableContent = contentTypes.filter(type => {
             const content = video[type.key];
-            return content && 
-                   typeof content === 'string' && 
-                   content.trim() !== '' && 
-                   content.trim() !== 'null' && 
-                   content.trim() !== 'undefined' &&
-                   content.length > 10; // Minimum meaningful content length
+            return content && content.trim() !== '';
           });
 
           return `
