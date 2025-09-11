@@ -1074,7 +1074,7 @@ async function loadCompletedVideos() {
                     ${availableContent.slice(0, 4).map(content => `
                       <button class="view-content-btn-grid" 
                               data-video-id="${videoId}" 
-                              data-content-type="${content.key.replace('_text', '')}" 
+                              data-content-type="${content.key === 'transcript_text' ? 'transcript' : content.key}" 
                               data-content-label="${content.label}"
                               title="View ${content.label}">
                         <span class="content-icon">${content.icon}</span>
