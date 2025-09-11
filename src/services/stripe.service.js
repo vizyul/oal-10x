@@ -240,9 +240,9 @@ class StripeService {
     });
 
     let subscriptionRecord;
-    if (existingSubscription) {
-      // Update existing record
-      subscriptionRecord = existingSubscription;
+    if (existingSubscription && existingSubscription.length > 0) {
+      // Update existing record - findByMultipleFields returns an array
+      subscriptionRecord = existingSubscription[0];
       // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
       const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
       await database.update('user_subscriptions', recordId, {
@@ -601,8 +601,8 @@ class StripeService {
       const subscriptionRecordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
 
       const existingUsage = await database.findByMultipleFields('subscription_usage', {
-        users_id: parseInt(userId),
-        subscription_id: parseInt(subscriptionRecordId)
+        user_id: parseInt(userId),
+        user_subscriptions_id: parseInt(subscriptionRecordId)
       });
 
       if (existingUsage) {
@@ -637,8 +637,8 @@ class StripeService {
       }
 
       const usageRecord = await database.create('subscription_usage', {
-        users_id: parseInt(userId),
-        subscription_id: parseInt(subscriptionRecordId), // Use the user_subscriptions record ID, not Stripe subscription ID
+        user_id: parseInt(userId),
+        user_subscriptions_id: parseInt(subscriptionRecordId), // Use the user_subscriptions record ID, not Stripe subscription ID
         period_start: periodStart,
         period_end: periodEnd,
         videos_processed: 0,
