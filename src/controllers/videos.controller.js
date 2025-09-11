@@ -1177,11 +1177,14 @@ class VideosController {
       }
 
       if (!video) {
+        logger.warn(`Video not found for ID ${id} by user ${actualUserId}`);
         return res.status(404).json({
           success: false,
           message: 'Video not found or access denied'
         });
       }
+
+      logger.info(`Found video ${id} for user ${actualUserId}, checking content type ${contentType}`);
 
       // Map content type to database column
       const contentFieldMap = {
@@ -1205,7 +1208,9 @@ class VideosController {
 
       const content = video[fieldName];
       
-      if (!content) {
+      logger.info(`Content check for ${fieldName}: ${content ? 'exists' : 'missing'} (length: ${content ? content.length : 0})`);
+      
+      if (!content || content.trim() === '') {
         return res.status(404).json({
           success: false,
           message: `${contentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} content not found or not yet generated`

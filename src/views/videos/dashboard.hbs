@@ -475,7 +475,16 @@ class ProcessingStatusManager {
       if (result.success && result.data) {
         this.showContentModal(contentLabel, result.data.content, contentType);
       } else {
-        this.showError(`Failed to load ${contentLabel}: ${result.message || 'Unknown error'}`);
+        // More specific error messages based on response
+        let errorMessage = `Failed to load ${contentLabel}`;
+        if (result.message) {
+          if (result.message.includes('not found') || result.message.includes('not yet generated')) {
+            errorMessage = `${contentLabel} is not available yet. The content may still be generating or failed to generate.`;
+          } else {
+            errorMessage += `: ${result.message}`;
+          }
+        }
+        this.showError(errorMessage);
       }
     } catch (error) {
       console.error(`Error loading content ${contentType}:`, error);
@@ -1051,9 +1060,15 @@ async function loadCompletedVideos() {
             { key: 'chapters_text', label: 'Chapters', icon: '📖' }
           ];
 
-          // Find available content
+          // Find available content - be more strict about what constitutes "available"
           const availableContent = contentTypes.filter(type => {
-            return video[type.key] && video[type.key].trim() !== '';
+            const content = video[type.key];
+            return content && 
+                   typeof content === 'string' && 
+                   content.trim() !== '' && 
+                   content.trim() !== 'null' && 
+                   content.trim() !== 'undefined' &&
+                   content.length > 10; // Minimum meaningful content length
           });
 
           return `
