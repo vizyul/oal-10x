@@ -170,4 +170,17 @@ router.post('/:id/cancel',
   videosController.cancelProcessing.bind(videosController)
 );
 
+/**
+ * @route   GET /api/videos/:id/content/:contentType
+ * @desc    Get generated content for a video
+ * @access  Private
+ */
+router.get('/:id/content/:contentType',
+  videoValidation.params,
+  param('contentType')
+    .isIn(['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'])
+    .withMessage('Invalid content type'),
+  videosController.getVideoContent.bind(videosController)
+);
+
 module.exports = router;

@@ -380,7 +380,21 @@ class ProcessingStatusManager {
                   <span class="content-icon">${type.icon}</span>
                   <span class="content-label">${type.label}</span>
                 </div>
-                ${type.data?.status === 'failed' ? `<div class="error-info" title="${type.data?.error || 'Processing failed'}">⚠️</div>` : ''}
+                <div class="content-actions">
+                  ${type.data?.status === 'completed' ? `
+                    <button class="view-content-btn" 
+                            data-video-id="${video.videoId}" 
+                            data-content-type="${type.key}" 
+                            data-content-label="${type.label}"
+                            title="View ${type.label}">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                      </svg>
+                      View
+                    </button>
+                  ` : ''}
+                  ${type.data?.status === 'failed' ? `<div class="error-info" title="${type.data?.error || 'Processing failed'}">⚠️</div>` : ''}
+                </div>
               </li>
             `).join('')}
           </ul>
@@ -409,6 +423,19 @@ class ProcessingStatusManager {
         this.cancelVideoProcessing(videoId);
       });
     });
+
+    // Set up view content button listeners
+    const viewContentButtons = document.querySelectorAll('.view-content-btn');
+    viewContentButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent accordion toggle
+        const videoId = button.getAttribute('data-video-id');
+        const contentType = button.getAttribute('data-content-type');
+        const contentLabel = button.getAttribute('data-content-label');
+        this.viewContent(videoId, contentType, contentLabel);
+      });
+    });
   }
 
   toggleVideoAccordion(videoId, forceExpand = false) {
@@ -431,6 +458,285 @@ class ProcessingStatusManager {
         header?.classList.remove('expanded');
       }
     }
+  }
+
+  async viewContent(videoId, contentType, contentLabel) {
+    try {
+      // Show loading state
+      const loadingModal = this.showLoadingModal(`Loading ${contentLabel}...`);
+      
+      // Fetch content from API
+      const response = await fetch(`/api/videos/${videoId}/content/${contentType}`);
+      const result = await response.json();
+      
+      // Hide loading modal
+      loadingModal.remove();
+      
+      if (result.success && result.data) {
+        this.showContentModal(contentLabel, result.data.content, contentType);
+      } else {
+        this.showError(`Failed to load ${contentLabel}: ${result.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(`Error loading content ${contentType}:`, error);
+      this.showError(`Failed to load ${contentLabel}. Please try again.`);
+    }
+  }
+
+  showContentModal(title, content, contentType) {
+    // Create modal backdrop
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'content-modal-backdrop';
+    
+    // Format content based on type
+    let formattedContent = content;
+    if (contentType === 'quiz_text') {
+      // Format quiz content with better styling
+      formattedContent = this.formatQuizContent(content);
+    } else if (contentType === 'social_media_text') {
+      // Format social media posts
+      formattedContent = this.formatSocialMediaContent(content);
+    }
+    
+    // Create modal content
+    modalBackdrop.innerHTML = `
+      <div class="content-modal">
+        <div class="content-modal-header">
+          <h3>${title}</h3>
+          <button class="content-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="content-modal-body">
+          <div class="content-display">${formattedContent}</div>
+        </div>
+        <div class="content-modal-footer">
+          <button class="btn btn-secondary copy-content-btn">Copy Content</button>
+          <button class="btn btn-primary content-modal-close-btn">Close</button>
+        </div>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(modalBackdrop);
+    
+    // Get buttons and elements
+    const closeBtn = modalBackdrop.querySelector('.content-modal-close');
+    const closeBtnFooter = modalBackdrop.querySelector('.content-modal-close-btn');
+    const copyBtn = modalBackdrop.querySelector('.copy-content-btn');
+    
+    // Close handlers
+    const closeModal = () => {
+      modalBackdrop.remove();
+      document.body.style.overflow = ''; // Restore scrolling
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    closeBtnFooter.addEventListener('click', closeModal);
+    
+    // Copy content handler
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(content).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy Content';
+        }, 2000);
+      }).catch(() => {
+        this.showError('Failed to copy content to clipboard');
+      });
+    });
+    
+    // Handle backdrop click
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+    
+    // Handle ESC key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+    
+    // Show modal with animation
+    setTimeout(() => {
+      modalBackdrop.classList.add('show');
+    }, 10);
+  }
+
+  formatQuizContent(content) {
+    // Basic quiz formatting - could be enhanced based on actual content structure
+    return content.replace(/Q\d+:/g, '<strong>$&</strong>').replace(/\n/g, '<br>');
+  }
+
+  formatSocialMediaContent(content) {
+    // Format social media posts with hashtags highlighted
+    return content
+      .replace(/#\w+/g, '<span class="hashtag">$&</span>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^\w/, '<p>$&')
+      .replace(/\w$/, '$&</p>');
+  }
+
+  showLoadingModal(message) {
+    const loadingModal = document.createElement('div');
+    loadingModal.className = 'loading-modal-backdrop';
+    loadingModal.innerHTML = `
+      <div class="loading-modal">
+        <div class="loading-spinner"></div>
+        <p>${message}</p>
+      </div>
+    `;
+    document.body.appendChild(loadingModal);
+    
+    setTimeout(() => {
+      loadingModal.classList.add('show');
+    }, 10);
+    
+    return loadingModal;
+  }
+
+  showError(message) {
+    // Reuse existing notification system
+    this.showCancelNotification(message, 'error');
+  }
+
+  async showAllContentModal(videoId, videoTitle) {
+    try {
+      // Show loading
+      const loadingModal = this.showLoadingModal('Loading content list...');
+      
+      // Fetch video data to get all available content
+      const response = await fetch(`/api/videos/${videoId}`);
+      const result = await response.json();
+      
+      loadingModal.remove();
+      
+      if (result.success && result.data) {
+        const video = result.data;
+        
+        // Content types to check
+        const contentTypes = [
+          { key: 'transcript_text', label: 'Transcript', icon: '📝', apiKey: 'transcript' },
+          { key: 'summary_text', label: 'Summary', icon: '📄', apiKey: 'summary_text' },
+          { key: 'study_guide_text', label: 'Study Guide', icon: '📚', apiKey: 'study_guide_text' },
+          { key: 'discussion_guide_text', label: 'Discussion Guide', icon: '💬', apiKey: 'discussion_guide_text' },
+          { key: 'group_guide_text', label: 'Group Guide', icon: '👥', apiKey: 'group_guide_text' },
+          { key: 'social_media_text', label: 'Social Media', icon: '📱', apiKey: 'social_media_text' },
+          { key: 'quiz_text', label: 'Quiz', icon: '❓', apiKey: 'quiz_text' },
+          { key: 'chapters_text', label: 'Chapters', icon: '📖', apiKey: 'chapters_text' }
+        ];
+
+        // Filter available content
+        const availableContent = contentTypes.filter(type => {
+          return video[type.key] && video[type.key].trim() !== '';
+        });
+
+        if (availableContent.length === 0) {
+          this.showError('No content available for this video yet.');
+          return;
+        }
+
+        // Create modal
+        this.showContentListModal(videoTitle, videoId, availableContent);
+      } else {
+        this.showError('Failed to load video content list.');
+      }
+    } catch (error) {
+      console.error('Error loading content list:', error);
+      this.showError('Failed to load content list. Please try again.');
+    }
+  }
+
+  showContentListModal(videoTitle, videoId, availableContent) {
+    // Create modal backdrop
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'content-list-modal-backdrop';
+    
+    modalBackdrop.innerHTML = `
+      <div class="content-list-modal">
+        <div class="content-list-modal-header">
+          <h3>Content for "${videoTitle}"</h3>
+          <button class="content-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="content-list-modal-body">
+          <div class="content-list-grid">
+            ${availableContent.map(content => `
+              <button class="content-list-item" 
+                      data-video-id="${videoId}" 
+                      data-content-type="${content.apiKey}" 
+                      data-content-label="${content.label}">
+                <div class="content-list-icon">${content.icon}</div>
+                <div class="content-list-label">${content.label}</div>
+                <div class="content-list-action">View →</div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="content-list-modal-footer">
+          <button class="btn btn-primary content-modal-close-btn">Close</button>
+        </div>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(modalBackdrop);
+    
+    // Get elements
+    const closeBtn = modalBackdrop.querySelector('.content-modal-close');
+    const closeBtnFooter = modalBackdrop.querySelector('.content-modal-close-btn');
+    const contentItems = modalBackdrop.querySelectorAll('.content-list-item');
+    
+    // Close handlers
+    const closeModal = () => {
+      modalBackdrop.remove();
+      document.body.style.overflow = '';
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    closeBtnFooter.addEventListener('click', closeModal);
+    
+    // Content item handlers
+    contentItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const contentType = item.getAttribute('data-content-type');
+        const contentLabel = item.getAttribute('data-content-label');
+        closeModal();
+        // Small delay to let the modal close first
+        setTimeout(() => {
+          this.viewContent(videoId, contentType, contentLabel);
+        }, 200);
+      });
+    });
+    
+    // Handle backdrop click
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+    
+    // Handle ESC key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    // Show modal with animation
+    setTimeout(() => {
+      modalBackdrop.classList.add('show');
+    }, 10);
   }
 
   async cancelVideoProcessing(videoId) {
@@ -729,15 +1035,70 @@ async function loadCompletedVideos() {
       
         if (displayVideos.length > 0) {
         // Generate HTML for all videos
-        gridElement.innerHTML = displayVideos.map(video => `
-          <div class="video-card">
-            <div class="video-info">
-              <h4 class="video-title">${video.video_title || 'Untitled Video'}</h4>
-              <p class="video-channel">${video.channel_name || 'Unknown Channel'}</p>
-              <div class="video-status status-${video.status || 'completed'}">${(video.status || 'completed').toUpperCase()}</div>
+        gridElement.innerHTML = displayVideos.map(video => {
+          const videoId = video.videoid || video.youtube_video_id || video.id;
+          const status = video.status || 'completed';
+          
+          // Content types to check for completed content
+          const contentTypes = [
+            { key: 'transcript_text', label: 'Transcript', icon: '📝' },
+            { key: 'summary_text', label: 'Summary', icon: '📄' },
+            { key: 'study_guide_text', label: 'Study Guide', icon: '📚' },
+            { key: 'discussion_guide_text', label: 'Discussion Guide', icon: '💬' },
+            { key: 'group_guide_text', label: 'Group Guide', icon: '👥' },
+            { key: 'social_media_text', label: 'Social Media', icon: '📱' },
+            { key: 'quiz_text', label: 'Quiz', icon: '❓' },
+            { key: 'chapters_text', label: 'Chapters', icon: '📖' }
+          ];
+
+          // Find available content
+          const availableContent = contentTypes.filter(type => {
+            return video[type.key] && video[type.key].trim() !== '';
+          });
+
+          return `
+            <div class="video-card" data-video-id="${videoId}">
+              <div class="video-info">
+                <h4 class="video-title">${video.video_title || 'Untitled Video'}</h4>
+                <p class="video-channel">${video.channel_name || 'Unknown Channel'}</p>
+                <div class="video-status status-${status}">${status.toUpperCase()}</div>
+                ${availableContent.length > 0 ? `
+                  <div class="video-content-summary">
+                    <span class="content-count">${availableContent.length} content item(s) available</span>
+                  </div>
+                ` : ''}
+              </div>
+              ${availableContent.length > 0 ? `
+                <div class="video-actions">
+                  <div class="content-buttons-grid">
+                    ${availableContent.slice(0, 4).map(content => `
+                      <button class="view-content-btn-grid" 
+                              data-video-id="${videoId}" 
+                              data-content-type="${content.key.replace('_text', '')}" 
+                              data-content-label="${content.label}"
+                              title="View ${content.label}">
+                        <span class="content-icon">${content.icon}</span>
+                        <span class="content-label">${content.label}</span>
+                      </button>
+                    `).join('')}
+                    ${availableContent.length > 4 ? `
+                      <button class="view-all-content-btn" 
+                              data-video-id="${videoId}" 
+                              data-video-title="${video.video_title || 'Untitled Video'}"
+                              title="View all content">
+                        <span class="content-icon">⋯</span>
+                        <span class="content-label">+${availableContent.length - 4} more</span>
+                      </button>
+                    ` : ''}
+                  </div>
+                </div>
+              ` : ''}
             </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
+        
+        // Set up event listeners for content view buttons
+        setupVideoCardEventListeners();
         } else {
           showEmptyState(gridElement);
         }
@@ -872,6 +1233,40 @@ function setupFilteringEventListeners() {
       }
     });
   }
+}
+
+// Setup event listeners for video card content buttons
+function setupVideoCardEventListeners() {
+  // Content view buttons in video cards
+  const contentViewButtons = document.querySelectorAll('.view-content-btn-grid');
+  contentViewButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const videoId = button.getAttribute('data-video-id');
+      const contentType = button.getAttribute('data-content-type');
+      const contentLabel = button.getAttribute('data-content-label');
+      
+      if (statusManager) {
+        statusManager.viewContent(videoId, contentType, contentLabel);
+      }
+    });
+  });
+
+  // "View All Content" buttons for videos with many content types
+  const viewAllButtons = document.querySelectorAll('.view-all-content-btn');
+  viewAllButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const videoId = button.getAttribute('data-video-id');
+      const videoTitle = button.getAttribute('data-video-title');
+      
+      if (statusManager) {
+        statusManager.showAllContentModal(videoId, videoTitle);
+      }
+    });
+  });
 }
 
 // Refresh completed videos when processing status changes
@@ -1129,6 +1524,14 @@ async function populateProcessingTable() {
   gap: 8px;
 }
 
+/* Content Actions */
+.content-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .content-icon {
   font-size: 16px;
 }
@@ -1139,11 +1542,36 @@ async function populateProcessingTable() {
   font-weight: 500;
 }
 
+/* View Content Button */
+.view-content-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #495057;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-content-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #343a40;
+}
+
+.view-content-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Error Info */
 .error-info {
   color: #dc3545;
   font-size: 16px;
-  margin-left: auto;
   cursor: help;
 }
 
@@ -1471,6 +1899,429 @@ async function populateProcessingTable() {
   .pagination-controls {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+/* Content Modal Styles */
+.content-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2001;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.content-modal-backdrop.show {
+  opacity: 1;
+}
+
+.content-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.content-modal-backdrop.show .content-modal {
+  transform: scale(1);
+}
+
+.content-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.content-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.content-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.content-modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.content-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.content-display {
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.content-display strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.hashtag {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.content-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.content-modal-footer .btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.copy-content-btn {
+  background: #f1f5f9;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.copy-content-btn:hover {
+  background: #e2e8f0;
+}
+
+.content-modal-close-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.content-modal-close-btn:hover {
+  background: #2563eb;
+}
+
+/* Loading Modal Styles */
+.loading-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2002;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.loading-modal-backdrop.show {
+  opacity: 1;
+}
+
+.loading-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-modal p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Video Card Content Buttons */
+.video-content-summary {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.content-count {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+}
+
+.video-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.content-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.view-content-btn-grid {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  min-height: 32px;
+}
+
+.view-content-btn-grid:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.view-content-btn-grid .content-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.view-content-btn-grid .content-label {
+  font-size: 0.7rem;
+  color: #374151;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-all-content-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #e0e7ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #3730a3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+
+.view-all-content-btn:hover {
+  background: #c7d2fe;
+  border-color: #a5b4fc;
+}
+
+/* Content List Modal */
+.content-list-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2001;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.content-list-modal-backdrop.show {
+  opacity: 1;
+}
+
+.content-list-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.content-list-modal-backdrop.show .content-list-modal {
+  transform: scale(1);
+}
+
+.content-list-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.content-list-modal-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.content-list-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.content-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.content-list-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.content-list-item:hover {
+  background: #f1f5f9;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.content-list-icon {
+  font-size: 24px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.content-list-label {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.content-list-action {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.content-list-item:hover .content-list-action {
+  opacity: 1;
+}
+
+.content-list-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* Responsive Content Modal */
+@media (max-width: 768px) {
+  .content-modal {
+    width: 95%;
+    max-height: 95vh;
+  }
+  
+  .content-modal-header,
+  .content-modal-body,
+  .content-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  
+  .content-modal-footer {
+    flex-direction: column;
+  }
+  
+  .content-modal-footer .btn {
+    width: 100%;
+  }
+
+  .content-buttons-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .view-content-btn-grid .content-label {
+    font-size: 0.65rem;
+  }
+  
+  .content-list-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .content-list-modal {
+    width: 95%;
+  }
+  
+  .content-list-modal-header,
+  .content-list-modal-body,
+  .content-list-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 </style>

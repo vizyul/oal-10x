@@ -1107,6 +1107,131 @@ class VideosController {
       });
     }
   }
+
+  /**
+   * Get generated content for a video
+   * GET /api/videos/:id/content/:contentType
+   */
+  async getVideoContent(req, res) {
+    try {
+      // Validate input
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { id, contentType } = req.params;
+      const userId = req.user.id;
+
+      logger.info(`Fetching ${contentType} content for video ${id} by user ${userId}`);
+
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0].fields || userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        actualUserId = parseInt(userId);
+      }
+
+      // Handle video ID - could be videoId or database record ID
+      let video;
+      
+      // First try to find by videoid (YouTube video ID)
+      const videoIdResults = await database.findByField('videos', 'videoid', id);
+      if (videoIdResults && videoIdResults.length > 0) {
+        // Filter by user ownership
+        const userVideo = videoIdResults.find(v => {
+          const videoData = v.fields || v;
+          return videoData.users_id === actualUserId;
+        });
+        if (userVideo) {
+          video = userVideo.fields || userVideo;
+        }
+      }
+
+      // If not found by videoid, try by database record ID
+      if (!video) {
+        const recordResult = await database.findById('videos', id);
+        if (recordResult) {
+          const recordData = recordResult.fields || recordResult;
+          // Check ownership
+          if (recordData.users_id === actualUserId) {
+            video = recordData;
+          }
+        }
+      }
+
+      if (!video) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found or access denied'
+        });
+      }
+
+      // Map content type to database column
+      const contentFieldMap = {
+        'transcript': 'transcript_text',
+        'summary_text': 'summary_text', 
+        'study_guide_text': 'study_guide_text',
+        'discussion_guide_text': 'discussion_guide_text',
+        'group_guide_text': 'group_guide_text',
+        'social_media_text': 'social_media_text',
+        'quiz_text': 'quiz_text',
+        'chapters_text': 'chapters_text'
+      };
+
+      const fieldName = contentFieldMap[contentType];
+      if (!fieldName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid content type'
+        });
+      }
+
+      const content = video[fieldName];
+      
+      if (!content) {
+        return res.status(404).json({
+          success: false,
+          message: `${contentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} content not found or not yet generated`
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          contentType,
+          content,
+          videoId: video.videoid || video.youtube_video_id,
+          videoTitle: video.video_title,
+          lastUpdated: video.updated_at
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error fetching video content:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch video content',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new VideosController();
