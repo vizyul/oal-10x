@@ -1152,14 +1152,26 @@ class VideosController {
       let video;
       
       // First try to find by videoid (YouTube video ID)
+      logger.info(`Searching for video with videoid: ${id}`);
       const videoIdResults = await database.findByField('videos', 'videoid', id);
+      logger.info(`Found ${videoIdResults?.length || 0} videos with videoid ${id}`);
+      
       if (videoIdResults && videoIdResults.length > 0) {
+        // Log all videos found to debug user ownership
+        videoIdResults.forEach((v, index) => {
+          logger.info(`Video ${index}: videoid=${v.videoid}, users_id=${v.users_id}, video_title="${v.video_title}"`);
+        });
+        
         // Filter by user ownership
         const userVideo = videoIdResults.find(v => {
           return v.users_id === actualUserId;
         });
+        
         if (userVideo) {
           video = userVideo;
+          logger.info(`Found user video: ${userVideo.video_title} (users_id: ${userVideo.users_id})`);
+        } else {
+          logger.warn(`No videos found for user ${actualUserId} among ${videoIdResults.length} videos with ID ${id}`);
         }
       }
 
@@ -1206,9 +1218,16 @@ class VideosController {
 
       const content = video[fieldName];
       
-      logger.info(`Content check for ${fieldName}: ${content ? 'exists' : 'missing'} (length: ${content ? content.length : 0})`);
+      // Detailed content debugging
+      logger.info(`Content check for video ${video.videoid} field ${fieldName}:`);
+      logger.info(`  - Content exists: ${!!content}`);
+      logger.info(`  - Content type: ${typeof content}`);
+      logger.info(`  - Content length: ${content ? content.length : 0}`);
+      logger.info(`  - Content preview: ${content ? content.substring(0, 100) + '...' : 'null'}`);
+      logger.info(`  - All video fields: ${Object.keys(video).join(', ')}`);
       
       if (!content || content.trim() === '') {
+        logger.warn(`Content field ${fieldName} is empty or missing for video ${video.videoid}`);
         return res.status(404).json({
           success: false,
           message: `${contentType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} content not found or not yet generated`
