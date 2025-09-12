@@ -96,7 +96,31 @@
   </div>
 </div>
 
+<div id="notification-container" class="notification-container"></div>
+
 <script>
+  // Notification system to replace alerts
+  function showNotification(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-message">${message}</span>
+        <button class="notification-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+      </div>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, duration);
+  }
+
   {{#if sessionId}}
   // Handle receipt viewing
   document.getElementById('view-receipt-link')?.addEventListener('click', async (e) => {
@@ -108,21 +132,31 @@
       if (data.success && data.receiptUrl) {
         window.open(data.receiptUrl, '_blank');
       } else {
-        alert('Receipt not available at this time. Please check your email or contact support.');
+        showNotification('Receipt not available at this time. Please check your email or contact support.', 'warning', 8000);
       }
     } catch (error) {
       console.error('Receipt error:', error);
-      alert('Unable to retrieve receipt. Please check your email or contact support.');
+      showNotification('Unable to retrieve receipt. Please check your email or contact support.', 'error', 8000);
     }
   });
   {{/if}}
 
-  // Auto-redirect to dashboard after 30 seconds
+  // Auto-redirect banner after 25 seconds
   setTimeout(() => {
-    if (confirm('Would you like to go to your dashboard now?')) {
-      window.location.href = '/subscription';
-    }
-  }, 30000);
+    const banner = document.createElement('div');
+    banner.className = 'redirect-banner';
+    banner.innerHTML = `
+      <div class="redirect-banner-content">
+        <span>Ready to explore your dashboard?</span>
+        <div class="redirect-banner-actions">
+          <button onclick="window.location.href='/subscription'" class="btn btn-primary btn-small">Go to Dashboard</button>
+          <button onclick="this.parentElement.parentElement.parentElement.remove()" class="btn btn-secondary btn-small">Stay Here</button>
+        </div>
+      </div>
+    `;
+    
+    document.querySelector('.subscription-success').insertBefore(banner, document.querySelector('.success-container'));
+  }, 25000);
 </script>
 
 {{/layouts/main}}

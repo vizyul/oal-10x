@@ -91,8 +91,7 @@ router.use('/subscription', require('./subscription-web.routes'));
 // Videos routes
 router.use('/videos', require('./videos-web.routes'));
 
-// Webhook routes (must be BEFORE /api routes to bypass auth middleware)
-router.use('/webhook', require('./webhook.routes'));
+// Webhook routes are handled directly in app.js with raw body middleware
 
 // API routes
 router.use('/api', require('./api.routes'));

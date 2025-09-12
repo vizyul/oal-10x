@@ -528,6 +528,338 @@
   box-shadow: 0 8px 15px rgba(16, 185, 129, 0.3);
 }
 
+/* Amplify Videos button - use green color like Upgrade button */
+#amplify-videos-btn.btn-primary {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 2px solid #10b981;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  animation: gentle-glow 2.5s ease-in-out infinite;
+}
+
+#amplify-videos-btn.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s ease;
+}
+
+#amplify-videos-btn.btn-primary:hover::before {
+  left: 100%;
+}
+
+#amplify-videos-btn.btn-primary:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  border-color: #047857;
+  color: white;
+  animation: none;
+  transform: translateY(-1px);
+}
+
+/* Gentle glow animation for Amplify Videos button */
+@keyframes gentle-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+
+/* Upload Page Spacing Optimizations */
+.video-upload-page {
+  padding: 20px 0;
+}
+
+.upload-header {
+  margin-bottom: 20px;
+}
+
+/* Flexbox Layout for Header and Content Selection */
+.upload-main-content {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 32px;
+  align-items: flex-start;
+}
+
+.upload-left-panel {
+  flex: 1;
+  min-width: 280px;
+}
+
+.upload-right-panel {
+  flex: 2;
+  min-width: 400px;
+}
+
+
+/* Responsive breakpoints */
+@media (max-width: 1024px) {
+  .upload-main-content {
+    flex-direction: column;
+    gap: 24px;
+  }
+  
+  .upload-left-panel,
+  .upload-right-panel {
+    min-width: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .upload-main-content {
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+}
+
+.upload-header h1 {
+  margin-bottom: 8px;
+}
+
+.upload-header p {
+  margin-bottom: 16px;
+}
+
+.usage-status {
+  margin-bottom: 24px;
+}
+
+.content-type-selection-container {
+  margin-bottom: 32px;
+}
+
+.content-selection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.content-selection-header .header-left {
+  flex: 1;
+}
+
+.content-selection-header .header-center {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #6b7280;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.content-selection-header .header-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.content-selection-header h3 {
+  margin-bottom: 4px;
+}
+
+.content-selection-header p {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+
+/* Responsive adjustments for header */
+@media (max-width: 768px) {
+  .content-selection-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .content-selection-header .header-center {
+    justify-content: center;
+    order: 2;
+  }
+  
+  .content-selection-header .header-right {
+    justify-content: center;
+    order: 3;
+  }
+}
+
+/* Compact Content Type Selection */
+.content-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 20px 0;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .content-types-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-types-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
+
+.content-type-compact {
+  display: block;
+}
+
+.content-type-compact-label {
+  display: block;
+  cursor: pointer;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  position: relative;
+  height: 100%;
+  min-height: 60px;
+}
+
+.content-type-compact-label:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.content-type-compact-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.content-type-compact-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
+.content-type-compact-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.content-type-compact-text {
+  flex: 1;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.content-type-compact-check {
+  color: #10b981;
+  font-weight: bold;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Checked state */
+.content-type-compact-label:has(input:checked) {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.content-type-compact-label:has(input:checked) .content-type-compact-check {
+  opacity: 1;
+}
+
+.content-type-compact-label:has(input:checked) .content-type-compact-text {
+  color: #065f46;
+}
+
+/* Fallback for browsers without :has() support */
+.content-type-compact-label.checked {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.content-type-compact-label.checked .content-type-compact-check {
+  opacity: 1;
+}
+
+.content-type-compact-label.checked .content-type-compact-text {
+  color: #065f46;
+}
+
+/* Import Sections Spacing */
+.import-section {
+  margin-bottom: 24px;
+}
+
+.import-section:last-child {
+  margin-bottom: 0;
+}
+
+.import-section h3 {
+  margin-bottom: 8px;
+  font-size: 1.1rem;
+}
+
+.import-section p {
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+/* Content selection controls compact spacing */
+.content-selection-controls {
+  margin: 12px 0 16px 0;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.selection-actions {
+  margin-bottom: 8px;
+}
+
+.selection-info {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+/* Error message compact styling */
+.content-type-error {
+  margin: 12px 0;
+}
+
+.content-type-error.hidden {
+  display: none !important;
+}
+
+.content-type-error .error-message {
+  padding: 12px;
+  font-size: 0.9rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #dc2626;
+}
+
 .btn-secondary {
   background-color: #f1f5f9;
   color: var(--text-primary, #1e293b);

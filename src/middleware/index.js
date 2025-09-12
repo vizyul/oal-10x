@@ -129,6 +129,17 @@ const clearCachedUser = (userId) => {
   logger.debug('Cleared cached user data:', { userId });
 };
 
+// Set to track users who need token refresh
+const usersNeedingTokenRefresh = new Set();
+
+const forceTokenRefresh = (userId) => {
+  // Clear the user cache
+  clearCachedUser(userId);
+  // Mark user as needing token refresh
+  usersNeedingTokenRefresh.add(userId.toString());
+  logger.info('Forced token refresh for user:', { userId });
+};
+
 // Authentication middleware
 const authMiddleware = async (req, res, next) => {
   try {
@@ -157,6 +168,14 @@ const authMiddleware = async (req, res, next) => {
     // Use JWT data if available (for newer tokens), otherwise fall back to database
     let user;
     let needsTokenRefresh = false;
+
+    // Check if this user has been marked for forced token refresh
+    const userId = decoded.userId.toString();
+    if (usersNeedingTokenRefresh.has(userId)) {
+      needsTokenRefresh = true;
+      usersNeedingTokenRefresh.delete(userId); // Remove from set after processing
+      logger.info('Processing forced token refresh for user:', { userId });
+    }
 
     if (decoded.firstName && decoded.emailVerified !== undefined) {
       // JWT contains user data - check if subscription fields are missing
@@ -458,5 +477,6 @@ module.exports = {
   errorMiddleware,
   preferencesMiddleware,
   subscriptionMiddleware,
-  clearCachedUser
+  clearCachedUser,
+  forceTokenRefresh
 };

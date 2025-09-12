@@ -6,17 +6,88 @@ class ProcessingStatusService extends EventEmitter {
     super();
     this.processingVideos = new Map(); // videoId -> status object
     this.userSessions = new Map(); // userId -> Set of active sessions
+    this.contentTypesCache = null; // Cache for content types from database
+    this.contentTypesCacheExpiry = null; // Cache expiry time
   }
 
   /**
-   * Initialize processing status for a video
+   * Get available content types from database with caching
+   * @returns {Array} Array of content type strings
+   */
+  async getAvailableContentTypes() {
+    // Check if cache is still valid (cache for 5 minutes)
+    const now = Date.now();
+    if (this.contentTypesCache && this.contentTypesCacheExpiry && now < this.contentTypesCacheExpiry) {
+      return this.contentTypesCache;
+    }
+
+    try {
+      const database = require('./database.service');
+      const result = await database.query(`
+        SELECT DISTINCT content_type 
+        FROM ai_prompts 
+        WHERE is_active = true
+        ORDER BY content_type
+      `);
+
+      this.contentTypesCache = result.rows.map(row => row.content_type);
+      this.contentTypesCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
+
+      logger.info(`Loaded ${this.contentTypesCache.length} content types from database`);
+      return this.contentTypesCache;
+    } catch (error) {
+      logger.error('Error loading content types from database:', error);
+      // Fallback to hardcoded types if database query fails
+      this.contentTypesCache = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+      this.contentTypesCacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
+      return this.contentTypesCache;
+    }
+  }
+
+  /**
+   * Initialize processing status for a video (synchronous version with fallback)
+   * @param {string} videoId - YouTube video ID
+   * @param {Array} contentTypes - Content types to generate
+   */
+  initializeVideoProcessing(videoId, contentTypes = []) {
+    // Use cached content types if available, otherwise use fallback
+    const allContentTypes = this.contentTypesCache || ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+
+    const status = {
+      videoId,
+      startTime: new Date().toISOString(),
+      lastUpdate: new Date().toISOString(),
+      transcript: { status: 'pending', completedAt: null },
+      content: {}
+    };
+
+    allContentTypes.forEach(contentType => {
+      status.content[contentType] = {
+        status: contentTypes.includes(contentType) ? 'pending' : 'skipped',
+        completedAt: null,
+        error: null
+      };
+    });
+
+    this.processingVideos.set(videoId, status);
+
+    logger.info(`Initialized processing status for video ${videoId}`, {
+      contentTypes: contentTypes.length,
+      allAvailableTypes: allContentTypes.length
+    });
+
+    return status;
+  }
+
+  /**
+   * Initialize processing status for a video (async version with database lookup)
    * @param {string} videoId - YouTube video ID
    * @param {string} videoRecordId - PostgreSQL video record ID
    * @param {string} videoTitle - Video title
    * @param {string} userId - User ID
    * @param {Array} contentTypes - Content types to generate
    */
-  initializeVideoProcessing(videoId, videoRecordId, videoTitle, userId, contentTypes = []) {
+  async initializeVideoProcessingAsync(videoId, videoRecordId, videoTitle, userId, contentTypes = []) {
     const status = {
       videoId,
       videoRecordId,
@@ -28,8 +99,8 @@ class ProcessingStatusService extends EventEmitter {
       content: {}
     };
 
-    // Initialize content type statuses
-    const allContentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+    // Initialize content type statuses using database content types
+    const allContentTypes = await this.getAvailableContentTypes();
 
     allContentTypes.forEach(contentType => {
       status.content[contentType] = {
@@ -44,7 +115,8 @@ class ProcessingStatusService extends EventEmitter {
     logger.info(`Initialized processing status for video ${videoId}`, {
       userId,
       contentTypes: contentTypes.length,
-      recordId: videoRecordId
+      recordId: videoRecordId,
+      allAvailableTypes: allContentTypes.length
     });
 
     // Emit status update to connected clients

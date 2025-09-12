@@ -1218,7 +1218,8 @@ class VideosController {
         'group_guide_text': 'group_guide_text',
         'social_media_text': 'social_media_text',
         'quiz_text': 'quiz_text',
-        'chapters_text': 'chapter_text'
+        'chapters_text': 'chapter_text',
+        'ebook_text': 'ebook_text'
       };
 
       const fieldName = contentFieldMap[contentType];
@@ -1263,6 +1264,319 @@ class VideosController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch video content',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Process multiple video URLs (batch processing)
+   * POST /api/videos/batch
+   */
+  async processBatch(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: errors.array()
+        });
+      }
+
+      const userId = req.user.id;
+      const { urls, contentTypes = [] } = req.body;
+
+      logger.info(`Batch processing ${urls?.length || 0} videos for user ${userId} with content types:`, contentTypes);
+
+      if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'URLs array is required and cannot be empty'
+        });
+      }
+
+      // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('rec')) {
+        try {
+          const userResult = await database.findByField('users', 'airtable_id', userId);
+          if (userResult && userResult.length > 0) {
+            const user = userResult[0];
+            actualUserId = user.id;
+            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+          } else {
+            logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+          }
+        } catch (userLookupError) {
+          logger.error('Error looking up PostgreSQL user:', userLookupError);
+        }
+      } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+        actualUserId = parseInt(userId);
+      }
+
+      const processedVideos = [];
+      const failedVideos = [];
+
+      for (const url of urls) {
+        try {
+          // Extract video ID from URL
+          const videoId = this.extractVideoId(url);
+          if (!videoId) {
+            failedVideos.push({
+              url,
+              error: 'Invalid YouTube URL format'
+            });
+            continue;
+          }
+
+          // Check if video already exists for this user
+          const existingVideos = await database.findByField('videos', 'videoid', videoId);
+          if (existingVideos && existingVideos.length > 0) {
+            const userVideo = existingVideos.find(video => video.users_id === actualUserId);
+            if (userVideo) {
+              failedVideos.push({
+                url,
+                error: 'Video already exists in your library'
+              });
+              continue;
+            }
+          }
+
+          // Get metadata from YouTube (if available)
+          let metadata = null;
+          try {
+            const youtubeMetadata = require('../services/youtube-metadata.service');
+            metadata = await youtubeMetadata.extractVideoMetadata(url);
+          } catch (metadataError) {
+            logger.warn(`Could not extract metadata for ${url}:`, metadataError.message);
+          }
+
+          // Prepare video data for PostgreSQL
+          const videoData = {
+            youtube_url: url,
+            videoid: videoId,
+            video_title: metadata?.title || 'Untitled Video',
+            channel_name: metadata?.channelTitle || 'Unknown Channel',
+            channel_handle: metadata?.channelHandle || '',
+            description: metadata?.description || '',
+            duration: metadata?.duration || 0,
+            upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '',
+            status: 'pending',
+            category: 'Education',
+            privacy_setting: 'public',
+            users_id: actualUserId,
+            created_at: new Date().toISOString()
+          };
+
+          // Handle tags
+          if (metadata?.tags) {
+            videoData.tags = metadata.tags.slice(0, 10).join(',');
+          }
+
+          // Create video record in database
+          const postgresRecord = await database.create('videos', videoData);
+          logger.info(`✅ Batch video created in PostgreSQL: ID ${postgresRecord.id} (${videoData.video_title})`);
+
+          // Trigger processing with selected content types
+          if (metadata && postgresRecord) {
+            try {
+              await this.triggerBatchVideoProcessing(postgresRecord.id, metadata, contentTypes);
+            } catch (processingError) {
+              logger.warn(`Could not trigger processing for ${url}:`, processingError.message);
+            }
+          }
+
+          processedVideos.push(this.formatVideoResponse(postgresRecord));
+
+        } catch (videoError) {
+          logger.error(`Error processing video ${url}:`, videoError);
+          failedVideos.push({
+            url,
+            error: videoError.message || 'Failed to process video'
+          });
+        }
+      }
+
+      const response = {
+        success: true,
+        message: `Batch processing completed: ${processedVideos.length} successful, ${failedVideos.length} failed`,
+        data: {
+          processedVideos,
+          failedVideos,
+          summary: {
+            total: urls.length,
+            successful: processedVideos.length,
+            failed: failedVideos.length
+          }
+        }
+      };
+
+      res.status(201).json(response);
+
+    } catch (error) {
+      logger.error('Error in batch video processing:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to process videos',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Trigger video processing with selected content types (batch version)
+   * @param {string} videoId - Video record ID
+   * @param {Object} metadata - Video metadata
+   * @param {Array} selectedContentTypes - Array of selected content types
+   */
+  async triggerBatchVideoProcessing(videoId, metadata, selectedContentTypes = []) {
+    try {
+      logger.info(`Batch video processing triggered for ${videoId}`, {
+        hasMetadata: !!metadata,
+        hasTranscript: !!metadata?.transcript,
+        contentTypes: selectedContentTypes
+      });
+
+      // Use selected content types if provided, otherwise get all available from database
+      let contentTypes = selectedContentTypes && selectedContentTypes.length > 0 
+        ? selectedContentTypes 
+        : null;
+
+      // If no content types selected, get all available from database
+      if (!contentTypes) {
+        try {
+          const database = require('../services/database.service');
+          const result = await database.query(`
+            SELECT DISTINCT content_type 
+            FROM ai_prompts 
+            WHERE is_active = true
+            ORDER BY content_type
+          `);
+          contentTypes = result.rows.map(row => row.content_type);
+          logger.info(`Using all available content types from database: ${contentTypes.length} types`);
+        } catch (dbError) {
+          logger.warn('Could not load content types from database, using fallback:', dbError.message);
+          contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+        }
+      }
+
+      // Initialize processing status for the video with selected content types
+      const processingStatusService = require('../services/processing-status.service');
+      const youtubeVideoId = metadata?.videoId || this.extractVideoId(metadata?.url || '');
+      
+      if (youtubeVideoId) {
+        // Initialize status for selected content types only
+        processingStatusService.initializeVideoProcessing(youtubeVideoId, contentTypes);
+        logger.info(`Initialized processing status for video ${youtubeVideoId} with content types:`, contentTypes);
+      }
+
+      // Update video status to pending
+      const currentFields = await this.getCurrentTableFields('videos');
+      if (currentFields.includes('status')) {
+        await database.update('videos', videoId, {
+          status: 'pending',
+          processing_log: JSON.stringify({
+            triggered: new Date().toISOString(),
+            contentTypes: contentTypes,
+            steps: [{
+              step: 'batch_processing_queued',
+              status: 'pending',
+              timestamp: new Date().toISOString()
+            }]
+          })
+        });
+      }
+
+      // Add processing tasks to queue for each selected content type
+      const processingQueue = require('../services/processing-queue.service');
+      
+      const processingTasks = [
+        { task_type: 'extract_transcript', priority: 5 }, // Always extract transcript first
+        { task_type: 'generate_content', priority: 4, contentTypes }  // Generate selected content types
+      ];
+
+      for (const task of processingTasks) {
+        try {
+          await processingQueue.addToQueue(videoId, task.task_type, task.priority, { contentTypes: task.contentTypes });
+          logger.info(`Added ${task.task_type} to processing queue for video ${videoId}`);
+        } catch (queueError) {
+          logger.warn(`Could not add ${task.task_type} to queue:`, queueError.message);
+        }
+      }
+
+    } catch (error) {
+      logger.error('Error triggering batch video processing:', error);
+    }
+  }
+
+  /**
+   * Get available content types from ai_prompts table
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getAvailableContentTypes(req, res) {
+    try {
+      logger.info('Fetching available content types from ai_prompts table');
+
+      // Get all unique content types from ai_prompts table
+      const contentTypeQuery = await database.query(`
+        SELECT DISTINCT content_type, 
+               COUNT(*) as provider_count,
+               ARRAY_AGG(DISTINCT ai_provider) as providers
+        FROM ai_prompts 
+        WHERE is_active = true
+        GROUP BY content_type
+        ORDER BY content_type
+      `);
+
+      // Define user-friendly labels and icons for each content type
+      const contentTypeDisplayMap = {
+        'summary_text': { label: 'Summary', icon: '📄', description: 'Quick overview of video content' },
+        'study_guide_text': { label: 'Study Guide', icon: '📚', description: 'Educational material and key points' },
+        'discussion_guide_text': { label: 'Discussion Guide', icon: '💬', description: 'Questions for group discussions' },
+        'group_guide_text': { label: 'Group Guide', icon: '👥', description: 'Team and group activities' },
+        'social_media_text': { label: 'Social Media Posts', icon: '📱', description: 'Content for sharing on social platforms' },
+        'quiz_text': { label: 'Quiz', icon: '❓', description: 'Questions to test comprehension' },
+        'chapters_text': { label: 'Chapters', icon: '📖', description: 'Video breakdown and timestamps' },
+        'ebook_text': { label: 'E-Book', icon: '📕', description: 'Comprehensive long-form content' }
+      };
+
+      // Format the response with display information
+      const availableContentTypes = contentTypeQuery.rows.map(row => {
+        const displayInfo = contentTypeDisplayMap[row.content_type] || {
+          label: row.content_type.replace('_text', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          icon: '📄',
+          description: 'AI-generated content'
+        };
+
+        return {
+          key: row.content_type,
+          label: displayInfo.label,
+          icon: displayInfo.icon,
+          description: displayInfo.description,
+          providerCount: parseInt(row.provider_count),
+          providers: row.providers,
+          enabled: true // Default to enabled
+        };
+      });
+
+      logger.info(`Found ${availableContentTypes.length} available content types`);
+
+      res.json({
+        success: true,
+        data: {
+          contentTypes: availableContentTypes,
+          totalTypes: availableContentTypes.length
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error fetching available content types:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch available content types',
         error: error.message
       });
     }

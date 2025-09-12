@@ -18,7 +18,7 @@
 
       <div class="dashboard-actions">
         {{#if (gt subscription.limits.videos 0)}}
-        <a href="/videos/upload" class="btn btn-primary">Amplify Videos</a>
+        <a href="/videos/upload" class="btn btn-primary" id="amplify-videos-btn">Amplify Videos</a>
         {{else}}
         <a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>
         {{/if}}
@@ -343,7 +343,8 @@ class ProcessingStatusManager {
       { key: 'group_guide_text', label: 'Group Guide', icon: '👥', data: video.content['group_guide_text'] },
       { key: 'social_media_text', label: 'Social Media Posts', icon: '📱', data: video.content['social_media_text'] },
       { key: 'quiz_text', label: 'Quiz', icon: '❓', data: video.content['quiz_text'] },
-      { key: 'chapters_text', label: 'Chapters', icon: '📖', data: video.content['chapters_text'] }
+      { key: 'chapters_text', label: 'Chapters', icon: '📖', data: video.content['chapters_text'] },
+      { key: 'ebook_text', label: 'E-Book', icon: '📕', data: video.content['ebook_text'] }
     ];
     
     const videoTitle = video.videoTitle || 'Untitled Video';
@@ -662,51 +663,11 @@ class ProcessingStatusManager {
     this.showCancelNotification(message, 'error');
   }
 
+  // Legacy modal function - no longer used with icon-only approach
   async showAllContentModal(videoId, videoTitle) {
-    try {
-      // Show loading
-      const loadingModal = this.showLoadingModal('Loading content list...');
-      
-      // Fetch video data to get all available content
-      const response = await fetch(`/api/videos/${videoId}`);
-      const result = await response.json();
-      
-      loadingModal.remove();
-      
-      if (result.success && result.data) {
-        const video = result.data;
-        
-        // Content types to check
-        const contentTypes = [
-          { key: 'transcript_text', label: 'Transcript', icon: '📝', apiKey: 'transcript' },
-          { key: 'summary_text', label: 'Summary', icon: '📄', apiKey: 'summary_text' },
-          { key: 'study_guide_text', label: 'Study Guide', icon: '📚', apiKey: 'study_guide_text' },
-          { key: 'discussion_guide_text', label: 'Discussion Guide', icon: '💬', apiKey: 'discussion_guide_text' },
-          { key: 'group_guide_text', label: 'Group Guide', icon: '👥', apiKey: 'group_guide_text' },
-          { key: 'social_media_text', label: 'Social Media', icon: '📱', apiKey: 'social_media_text' },
-          { key: 'quiz_text', label: 'Quiz', icon: '❓', apiKey: 'quiz_text' },
-          { key: 'chapters_text', label: 'Chapters', icon: '📖', apiKey: 'chapters_text' }
-        ];
-
-        // Filter available content
-        const availableContent = contentTypes.filter(type => {
-          return video[type.key] && video[type.key].trim() !== '';
-        });
-
-        if (availableContent.length === 0) {
-          this.showError('No content available for this video yet.');
-          return;
-        }
-
-        // Create modal
-        this.showContentListModal(videoTitle, videoId, availableContent);
-      } else {
-        this.showError('Failed to load video content list.');
-      }
-    } catch (error) {
-      console.error('Error loading content list:', error);
-      this.showError('Failed to load content list. Please try again.');
-    }
+    console.log('showAllContentModal called but no longer needed - icons are displayed directly');
+    // This function is no longer used since we show all content icons directly
+    // Keeping for backward compatibility but not implementing
   }
 
   showContentListModal(videoTitle, videoId, availableContent) {
@@ -1012,7 +973,7 @@ class ProcessingStatusManager {
   }
 
   calculateProgress(video) {
-    const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+    const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
     let completed = 0;
     let total = contentTypes.length + 1; // +1 for transcript
     
@@ -1104,7 +1065,8 @@ async function loadCompletedVideos() {
             { key: 'group_guide_text', label: 'Group Guide', icon: '👥' },
             { key: 'social_media_text', label: 'Social Media', icon: '📱' },
             { key: 'quiz_text', label: 'Quiz', icon: '❓' },
-            { key: 'chapters_text', label: 'Chapters', icon: '📖' }
+            { key: 'chapters_text', label: 'Chapters', icon: '📖' },
+            { key: 'ebook_text', label: 'E-Book', icon: '📕' }
           ];
 
           // Find available content
@@ -1127,26 +1089,20 @@ async function loadCompletedVideos() {
               </div>
               ${availableContent.length > 0 ? `
                 <div class="video-actions">
-                  <div class="content-buttons-grid">
-                    ${availableContent.slice(0, 4).map(content => `
-                      <button class="view-content-btn-grid" 
-                              data-video-id="${videoId}" 
-                              data-content-type="${content.key === 'transcript_text' ? 'transcript' : content.key}" 
-                              data-content-label="${content.label}"
-                              title="View ${content.label}">
-                        <span class="content-icon">${content.icon}</span>
-                        <span class="content-label">${content.label}</span>
-                      </button>
+                  <div class="content-icons-grid" data-content-count="${availableContent.length}">
+                    ${availableContent.map(content => `
+                      <div class="content-icon-wrapper" 
+                           data-video-id="${video.id}" 
+                           data-content-type="${content.key === 'transcript_text' ? 'transcript' : content.key}" 
+                           data-content-label="${content.label}">
+                        <span class="content-icon-large">${content.icon}</span>
+                        <div class="content-tooltip">
+                          <div class="tooltip-arrow"></div>
+                          <div class="tooltip-title">${content.label}</div>
+                          <div class="tooltip-description">Click to view ${content.label.toLowerCase()}</div>
+                        </div>
+                      </div>
                     `).join('')}
-                    ${availableContent.length > 4 ? `
-                      <button class="view-all-content-btn" 
-                              data-video-id="${videoId}" 
-                              data-video-title="${video.video_title || 'Untitled Video'}"
-                              title="View all content">
-                        <span class="content-icon">⋯</span>
-                        <span class="content-label">+${availableContent.length - 4} more</span>
-                      </button>
-                    ` : ''}
                   </div>
                 </div>
               ` : ''}
@@ -1156,6 +1112,9 @@ async function loadCompletedVideos() {
         
         // Set up event listeners for content view buttons
         setupVideoCardEventListeners();
+        
+        // Set up smart tooltip positioning
+        setupSmartTooltips();
         } else {
           showEmptyState(gridElement);
         }
@@ -1294,33 +1253,59 @@ function setupFilteringEventListeners() {
 
 // Setup event listeners for video card content buttons
 function setupVideoCardEventListeners() {
-  // Content view buttons in video cards
-  const contentViewButtons = document.querySelectorAll('.view-content-btn-grid');
-  contentViewButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
+  // Content icon wrappers in video cards
+  const contentIcons = document.querySelectorAll('.content-icon-wrapper');
+  contentIcons.forEach(iconWrapper => {
+    iconWrapper.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const videoId = button.getAttribute('data-video-id');
-      const contentType = button.getAttribute('data-content-type');
-      const contentLabel = button.getAttribute('data-content-label');
+      const videoId = iconWrapper.getAttribute('data-video-id');
+      const contentType = iconWrapper.getAttribute('data-content-type');
+      const contentLabel = iconWrapper.getAttribute('data-content-label');
       
       if (statusManager) {
         statusManager.viewContent(videoId, contentType, contentLabel);
       }
     });
   });
+}
 
-  // "View All Content" buttons for videos with many content types
-  const viewAllButtons = document.querySelectorAll('.view-all-content-btn');
-  viewAllButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const videoId = button.getAttribute('data-video-id');
-      const videoTitle = button.getAttribute('data-video-title');
+function setupSmartTooltips() {
+  const contentIcons = document.querySelectorAll('.content-icon-wrapper');
+  
+  contentIcons.forEach(iconWrapper => {
+    const tooltip = iconWrapper.querySelector('.content-tooltip');
+    if (!tooltip) return;
+    
+    iconWrapper.addEventListener('mouseenter', () => {
+      // Reset any previous positioning classes
+      tooltip.classList.remove('tooltip-left', 'tooltip-right', 'tooltip-center');
       
-      if (statusManager) {
-        statusManager.showAllContentModal(videoId, videoTitle);
+      // Get the video card container
+      const videoCard = iconWrapper.closest('.video-card');
+      if (!videoCard) return;
+      
+      // Get positions
+      const cardRect = videoCard.getBoundingClientRect();
+      const iconRect = iconWrapper.getBoundingClientRect();
+      
+      // Calculate tooltip width (approximate)
+      const tooltipWidth = 140; // max-width from CSS
+      
+      // Calculate potential left and right positions
+      const iconCenter = iconRect.left + (iconRect.width / 2) - cardRect.left;
+      const tooltipHalfWidth = tooltipWidth / 2;
+      
+      // Check if tooltip would extend beyond card boundaries
+      const wouldExtendLeft = iconCenter - tooltipHalfWidth < 8; // 8px padding
+      const wouldExtendRight = iconCenter + tooltipHalfWidth > (cardRect.width - 8); // 8px padding
+      
+      if (wouldExtendLeft) {
+        tooltip.classList.add('tooltip-left');
+      } else if (wouldExtendRight) {
+        tooltip.classList.add('tooltip-right');
+      } else {
+        tooltip.classList.add('tooltip-center');
       }
     });
   });
@@ -2205,7 +2190,7 @@ async function populateProcessingTable() {
   font-size: 0.875rem;
 }
 
-/* Video Card Content Buttons */
+/* Video Card Content Icons */
 .video-content-summary {
   margin-top: 8px;
   font-size: 0.75rem;
@@ -2225,65 +2210,175 @@ async function populateProcessingTable() {
   border-top: 1px solid #f3f4f6;
 }
 
-.content-buttons-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 6px;
-}
-
-.view-content-btn-grid {
+/* Responsive icon grid that adapts to content count */
+.content-icons-grid {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-  min-height: 32px;
+  max-width: 100%;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
-.view-content-btn-grid:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+/* Adjust layout based on content count */
+.content-icons-grid[data-content-count="1"] { justify-content: flex-start; }
+.content-icons-grid[data-content-count="2"] { justify-content: flex-start; }
+.content-icons-grid[data-content-count="3"] { justify-content: flex-start; }
+.content-icons-grid[data-content-count="4"] { justify-content: flex-start; }
+.content-icons-grid[data-content-count="5"] { justify-content: flex-start; }
+
+/* For 6+ icons, ensure proper wrapping */
+@media (max-width: 380px) {
+  .content-icons-grid {
+    gap: 6px;
+  }
 }
 
-.view-content-btn-grid .content-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.view-content-btn-grid .content-label {
-  font-size: 0.7rem;
-  color: #374151;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.view-all-content-btn {
+.content-icon-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 8px;
-  background: #e0e7ff;
-  border: 1px solid #c7d2fe;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  color: #3730a3;
+  width: 36px;
+  height: 36px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 32px;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
-.view-all-content-btn:hover {
-  background: #c7d2fe;
-  border-color: #a5b4fc;
+.content-icon-wrapper:hover {
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.content-icon-large {
+  font-size: 18px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Fancy Tooltips */
+.content-tooltip {
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  max-width: 140px;
+  text-align: center;
+}
+
+/* Smart positioning - keep tooltips within card bounds */
+.video-card {
+  position: relative;
+  overflow: visible;
+}
+
+.content-icon-wrapper {
+  overflow: visible;
+}
+
+/* Default hover state - shows tooltip */
+.content-icon-wrapper:hover .content-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* JavaScript-controlled tooltip positioning classes */
+.content-tooltip.tooltip-center {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.content-icon-wrapper:hover .content-tooltip.tooltip-center {
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.content-tooltip.tooltip-left {
+  left: 0;
+  right: auto;
+  transform: translateX(0);
+}
+
+.content-icon-wrapper:hover .content-tooltip.tooltip-left {
+  transform: translateX(0) translateY(-4px);
+}
+
+.content-tooltip.tooltip-right {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+
+.content-icon-wrapper:hover .content-tooltip.tooltip-right {
+  transform: translateX(0) translateY(-4px);
+}
+
+/* Arrow positioning */
+.tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #1f2937;
+}
+
+/* Arrow positioning for left-aligned tooltips */
+.content-tooltip.tooltip-left .tooltip-arrow {
+  left: 15px;
+  transform: translateX(0);
+}
+
+/* Arrow positioning for right-aligned tooltips */
+.content-tooltip.tooltip-right .tooltip-arrow {
+  left: auto;
+  right: 15px;
+  transform: translateX(0);
+}
+
+/* Arrow positioning for center tooltips (default) */
+.content-tooltip.tooltip-center .tooltip-arrow {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip-title {
+  font-weight: 600;
+  font-size: 0.75rem;
+  margin-bottom: 1px;
+  color: #f9fafb;
+  line-height: 1.2;
+}
+
+.tooltip-description {
+  font-size: 0.65rem;
+  color: #d1d5db;
+  opacity: 0.9;
+  line-height: 1.2;
 }
 
 /* Content List Modal */

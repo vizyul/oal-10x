@@ -568,13 +568,40 @@ The .gitignore file already includes patterns like:
 
 This ensures debugging scripts are never accidentally committed to the repository.
 
-### User Reset Command
+### User Management Commands
 
+#### User Reset Command
 When the user asks to **"reset user X"**, this means:
 1. Delete all videos for that user from the `videos` table
 2. Reset their `videos_processed` count to 0 in the `subscription_usage` table
 
 Use the script: `node adhoc/reset-user-videos.js <userId>`
+
+#### User Deletion Command
+When the user asks to **"delete user XX"** where XX is the user ID, this means:
+**Completely delete the user and ALL related data from the PostgreSQL database.**
+
+Use the script: `node adhoc/delete-user.js <userId> --force`
+
+**What gets deleted:**
+- User record from `users` table (deleted LAST)
+- All foreign key references (deleted FIRST in proper order):
+  - `subscription_events` (user_id)
+  - `subscription_usage` (user_id and via user_subscriptions)
+  - `user_subscriptions` (users_id)
+  - `sessions` (users_id)
+  - `user_preferences` (users_id)
+  - `user_youtube_channels` (users_id)
+  - `youtube_oauth_tokens` (users_id)
+  - `videos` (users_id)
+  - `api_keys` (users_id)
+  - `audit_log` (users_id)
+
+**WARNING**: This action is irreversible and permanently removes ALL user data.
+
+**Usage Examples:**
+- Interactive mode: `node adhoc/delete-user.js 44` (requires confirmation)
+- Force mode: `node adhoc/delete-user.js 44 --force` (skips confirmations)
 
 # Important Instruction Reminders
 

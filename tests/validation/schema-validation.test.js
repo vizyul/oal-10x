@@ -323,7 +323,7 @@ describe('Automated Schema Validation', () => {
       const start = Date.now();
       
       await pool.query(`
-        SELECT u.id, u.email, us.subscription_tier, s.status
+        SELECT u.id, u.email, u.subscription_tier, s.status
         FROM users u
         LEFT JOIN user_subscriptions us ON u.id = us.users_id
         LEFT JOIN sessions s ON u.id = s.users_id

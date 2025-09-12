@@ -253,9 +253,11 @@ class TranscriptService {
    * @param {string} videoId - YouTube video ID
    * @param {string} videoUrl - Full YouTube video URL
    * @param {string} videoRecordId - Video record ID
+   * @param {string} userId - User ID
+   * @param {Array} contentTypes - Content types to generate (optional)
    * @returns {Promise<Object>} Processing results
    */
-  async processVideoTranscript(videoId, videoUrl, videoRecordId, userId = null) {
+  async processVideoTranscript(videoId, videoUrl, videoRecordId, userId = null, contentTypes = null) {
     try {
       logger.info(`Processing transcript for video ${videoId} (record: ${videoRecordId})`);
 
@@ -306,13 +308,36 @@ class TranscriptService {
           // Start content generation asynchronously - don't wait for completion
           logger.info(`Starting content generation for video ${videoId}`);
 
+          // Use provided content types or get all available from database
+          let typesToGenerate = contentTypes;
+          
+          if (!typesToGenerate || typesToGenerate.length === 0) {
+            try {
+              const database = require('./database.service');
+              const result = await database.query(`
+                SELECT DISTINCT content_type 
+                FROM ai_prompts 
+                WHERE is_active = true
+                ORDER BY content_type
+              `);
+              typesToGenerate = result.rows.map(row => row.content_type);
+              logger.info(`No content types specified, using all ${typesToGenerate.length} available types from database`);
+            } catch (dbError) {
+              logger.warn('Could not load content types from database, using fallback:', dbError.message);
+              typesToGenerate = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+            }
+          } else {
+            logger.info(`Using ${typesToGenerate.length} specified content types for generation: ${typesToGenerate.join(', ')}`);
+          }
+
           contentGenerationService.generateAllContentForVideo(videoRecordId, videoId, transcript, {
-            contentTypes: ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'], // Generate all content types
+            contentTypes: typesToGenerate,
             userId: userId
           }).then(result => {
             logger.info(`Content generation completed for video ${videoId}`, {
               successful: result.summary?.successful || 0,
-              failed: result.summary?.failed || 0
+              failed: result.summary?.failed || 0,
+              contentTypes: typesToGenerate.length
             });
           }).catch(error => {
             logger.warn(`Content generation failed for video ${videoId}:`, error.message);
