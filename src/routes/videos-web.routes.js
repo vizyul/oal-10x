@@ -131,6 +131,22 @@ router.get('/analytics',
 );
 
 /**
+ * @route   GET /videos/content-types
+ * @desc    Get available content types from ai_prompts table (API endpoint accessible from web routes)
+ * @access  Private
+ */
+router.get('/content-types', async (req, res) => {
+  try {
+    const videosController = require('../controllers/videos.controller');
+    // Call the controller method directly
+    await videosController.getAvailableContentTypes(req, res);
+  } catch (error) {
+    console.error('Content types error:', error);
+    res.status(500).json({ error: 'Failed to fetch content types' });
+  }
+});
+
+/**
  * @route   GET /videos/:id
  * @desc    Individual video details page
  * @access  Private

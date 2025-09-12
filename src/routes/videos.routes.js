@@ -23,7 +23,7 @@ async function getAvailableContentTypes() {
       ORDER BY content_type
     `);
 
-    contentTypesCache = result.rows.map(row => row.content_type);
+    contentTypesCache = ['transcript', ...result.rows.map(row => row.content_type)];
     cacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
     return contentTypesCache;
   } catch {
