@@ -6,9 +6,6 @@ const app = require('./app');
 const { logger } = require('./utils');
 const processingStatusService = require('./services/processing-status.service');
 
-// Load environment variables
-require('dotenv').config();
-
 const PORT = process.env.HTTPS_PORT || 443;
 const HOST = process.env.HOST || '0.0.0.0';
 
