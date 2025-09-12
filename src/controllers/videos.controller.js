@@ -1520,42 +1520,33 @@ class VideosController {
     try {
       logger.info('Fetching available content types from ai_prompts table');
 
-      // Get all unique content types from ai_prompts table
+      // Get all unique content types with their icons and labels from ai_prompts table
       const contentTypeQuery = await database.query(`
         SELECT DISTINCT content_type, 
+               content_icon,
+               content_label,
+               display_order,
+               description,
                COUNT(*) as provider_count,
                ARRAY_AGG(DISTINCT ai_provider) as providers
         FROM ai_prompts 
         WHERE is_active = true
-        GROUP BY content_type
-        ORDER BY content_type
+        GROUP BY content_type, content_icon, content_label, display_order, description
+        ORDER BY display_order ASC, content_type ASC
       `);
 
-      // Define user-friendly labels and icons for each content type
-      const contentTypeDisplayMap = {
-        'summary_text': { label: 'Summary', icon: '📄', description: 'Quick overview of video content' },
-        'study_guide_text': { label: 'Study Guide', icon: '📚', description: 'Educational material and key points' },
-        'discussion_guide_text': { label: 'Discussion Guide', icon: '💬', description: 'Questions for group discussions' },
-        'group_guide_text': { label: 'Group Guide', icon: '👥', description: 'Team and group activities' },
-        'social_media_text': { label: 'Social Media Posts', icon: '📱', description: 'Content for sharing on social platforms' },
-        'quiz_text': { label: 'Quiz', icon: '❓', description: 'Questions to test comprehension' },
-        'chapters_text': { label: 'Chapters', icon: '📖', description: 'Video breakdown and timestamps' },
-        'ebook_text': { label: 'E-Book', icon: '📕', description: 'Comprehensive long-form content' }
-      };
-
-      // Format the response with display information
+      // Format the response with database-driven display information
       const availableContentTypes = contentTypeQuery.rows.map(row => {
-        const displayInfo = contentTypeDisplayMap[row.content_type] || {
-          label: row.content_type.replace('_text', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          icon: '📄',
-          description: 'AI-generated content'
-        };
+        // Use database values or fallback to generated values
+        const label = row.content_label || row.content_type.replace('_text', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const icon = row.content_icon || '📄';
+        const description = row.description || 'AI-generated content';
 
         return {
           key: row.content_type,
-          label: displayInfo.label,
-          icon: displayInfo.icon,
-          description: displayInfo.description,
+          label: label,
+          icon: icon,
+          description: description,
           providerCount: parseInt(row.provider_count),
           providers: row.providers,
           enabled: true // Default to enabled
