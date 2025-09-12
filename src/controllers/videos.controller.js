@@ -1520,38 +1520,39 @@ class VideosController {
     try {
       logger.info('Fetching available content types from ai_prompts table');
 
-      // Get all unique content types with their icons and labels from ai_prompts table
-      const contentTypeQuery = await database.query(`
-        SELECT DISTINCT content_type, 
-               content_icon,
-               content_label,
-               display_order,
-               description,
-               COUNT(*) as provider_count,
-               ARRAY_AGG(DISTINCT ai_provider) as providers
+      // Use the new ContentService for normalized content type retrieval
+      const contentService = require('../services/content.service');
+      const contentTypes = await contentService.getAvailableContentTypes();
+
+      // Get AI provider counts from ai_prompts for additional metadata
+      const providerCounts = await database.query(`
+        SELECT content_type, COUNT(*) as provider_count, ARRAY_AGG(DISTINCT ai_provider) as providers
         FROM ai_prompts 
         WHERE is_active = true
-        GROUP BY content_type, content_icon, content_label, display_order, description
-        ORDER BY display_order ASC, content_type ASC
+        GROUP BY content_type
       `);
 
-      // Format the response with database-driven display information
-      const availableContentTypes = contentTypeQuery.rows.map(row => {
-        // Use database values or fallback to generated values
-        const label = row.content_label || row.content_type.replace('_text', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-        const icon = row.content_icon || '📄';
-        const description = row.description || 'AI-generated content';
-
-        return {
-          key: row.content_type,
-          label: label,
-          icon: icon,
-          description: description,
-          providerCount: parseInt(row.provider_count),
-          providers: row.providers,
-          enabled: true // Default to enabled
+      const providerMap = {};
+      providerCounts.rows.forEach(row => {
+        providerMap[row.content_type] = {
+          count: parseInt(row.provider_count),
+          providers: row.providers
         };
       });
+
+      // Format response with content type data and AI provider info
+      const availableContentTypes = contentTypes.map(ct => ({
+        key: ct.key,
+        label: ct.label,
+        icon: ct.icon,
+        description: ct.description,
+        displayOrder: ct.display_order,
+        requiresAi: ct.requires_ai,
+        hasUrlField: ct.has_url_field,
+        providerCount: providerMap[ct.key]?.count || 0,
+        providers: providerMap[ct.key]?.providers || [],
+        enabled: true
+      }));
 
       logger.info(`Found ${availableContentTypes.length} available content types`);
 
