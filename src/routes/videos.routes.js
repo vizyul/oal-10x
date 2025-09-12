@@ -5,7 +5,6 @@ const videosController = require('../controllers/videos.controller');
 const { authMiddleware, subscriptionMiddleware } = require('../middleware');
 
 // Helper function to get available content types for validation
-let availableContentTypes = null;
 let contentTypesCache = null;
 let cacheExpiry = null;
 
@@ -27,7 +26,7 @@ async function getAvailableContentTypes() {
     contentTypesCache = result.rows.map(row => row.content_type);
     cacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
     return contentTypesCache;
-  } catch (error) {
+  } catch {
     // Fallback to hardcoded types if database query fails
     contentTypesCache = ['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
     cacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
