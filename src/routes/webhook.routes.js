@@ -19,13 +19,13 @@ router.get('/test', (req, res) => {
 });
 
 /**
- * @route   POST /webhook/stripe
+ * @route   POST /webhook/stripe (via app.js direct mount)
  * @desc    Handle Stripe webhook events - COMPLETELY PUBLIC
  * @access  Public (verified via Stripe signature)
  */
 router.post('/',
   (req, res, next) => {
-    console.log('🔗 Webhook received!', {
+    console.log('🔗 Stripe webhook received!', {
       method: req.method,
       url: req.url,
       headers: req.headers,

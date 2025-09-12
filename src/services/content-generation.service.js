@@ -4,8 +4,44 @@ const { logger } = require('../utils');
 
 class ContentGenerationService {
   constructor() {
-    this.supportedContentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+    // Remove hardcoded content types - will load from database
     this.supportedProviders = ['gemini', 'chatgpt', 'claude'];
+    this.supportedContentTypesCache = null;
+    this.contentTypesCacheExpiry = null;
+  }
+
+  /**
+   * Get supported content types from database with caching
+   * @returns {Array} Array of content type strings
+   */
+  async getSupportedContentTypes() {
+    // Check if cache is still valid (cache for 5 minutes)
+    const now = Date.now();
+    if (this.supportedContentTypesCache && this.contentTypesCacheExpiry && now < this.contentTypesCacheExpiry) {
+      return this.supportedContentTypesCache;
+    }
+
+    try {
+      const database = require('./database.service');
+      const result = await database.query(`
+        SELECT DISTINCT content_type 
+        FROM ai_prompts 
+        WHERE is_active = true
+        ORDER BY content_type
+      `);
+
+      this.supportedContentTypesCache = result.rows.map(row => row.content_type);
+      this.contentTypesCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
+
+      logger.info(`Loaded ${this.supportedContentTypesCache.length} supported content types from database`);
+      return this.supportedContentTypesCache;
+    } catch (error) {
+      logger.error('Error loading content types from database:', error);
+      // Fallback to hardcoded types if database query fails
+      this.supportedContentTypesCache = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+      this.contentTypesCacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
+      return this.supportedContentTypesCache;
+    }
   }
 
   /**
@@ -348,7 +384,8 @@ class ContentGenerationService {
         group_guide_text: ['group_guide_text', 'group_guide_url'],
         social_media_text: ['social_media_text', 'social_media_url'],
         quiz_text: ['quiz_text', 'quiz_url'],
-        chapters_text: ['chapter_text', 'chapter_url']
+        chapters_text: ['chapter_text', 'chapter_url'],
+        ebook_text: ['ebook_text', 'ebook_url']
       };
 
       // Prepare updates for database

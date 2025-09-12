@@ -129,12 +129,19 @@ class ProfileDropdown {
       }
     });
 
-    // Prevent menu items from closing dropdown on click (except logout)
+    // Handle menu item clicks
     this.menu.addEventListener('click', (e) => {
       const target = e.target.closest('.profile-menu-item');
-      if (target && !target.classList.contains('profile-menu-logout') && !target.querySelector('select')) {
-        // Only prevent default for non-logout items that don't contain selects
+      if (target) {
+        // Close dropdown for all menu item clicks except theme selector
         if (!target.classList.contains('theme-selector')) {
+          // Allow navigation links (Profile, Subscription) to work normally
+          if (target.tagName === 'A') {
+            this.close();
+            // Don't prevent default - let the link navigate
+            return;
+          }
+          // Only prevent default for non-link items (like logout button)
           e.preventDefault();
         }
       }

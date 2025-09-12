@@ -4,6 +4,37 @@ const router = express.Router();
 const videosController = require('../controllers/videos.controller');
 const { authMiddleware, subscriptionMiddleware } = require('../middleware');
 
+// Helper function to get available content types for validation
+let availableContentTypes = null;
+let contentTypesCache = null;
+let cacheExpiry = null;
+
+async function getAvailableContentTypes() {
+  const now = Date.now();
+  if (contentTypesCache && cacheExpiry && now < cacheExpiry) {
+    return contentTypesCache;
+  }
+
+  try {
+    const database = require('../services/database.service');
+    const result = await database.query(`
+      SELECT DISTINCT content_type 
+      FROM ai_prompts 
+      WHERE is_active = true
+      ORDER BY content_type
+    `);
+
+    contentTypesCache = result.rows.map(row => row.content_type);
+    cacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
+    return contentTypesCache;
+  } catch (error) {
+    // Fallback to hardcoded types if database query fails
+    contentTypesCache = ['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+    cacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
+    return contentTypesCache;
+  }
+}
+
 // Apply authentication middleware to all video routes
 router.use(authMiddleware);
 
@@ -83,6 +114,15 @@ const videoValidation = {
 router.get('/',
   videoValidation.query,
   videosController.getVideos.bind(videosController)
+);
+
+/**
+ * @route   GET /videos/content-types
+ * @desc    Get available content types from ai_prompts table
+ * @access  Private
+ */
+router.get('/content-types',
+  videosController.getAvailableContentTypes.bind(videosController)
 );
 
 /**
@@ -178,9 +218,58 @@ router.post('/:id/cancel',
 router.get('/:id/content/:contentType',
   videoValidation.params,
   param('contentType')
-    .isIn(['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'])
-    .withMessage('Invalid content type'),
+    .custom(async (value) => {
+      const availableTypes = await getAvailableContentTypes();
+      if (!availableTypes.includes(value)) {
+        throw new Error(`Invalid content type. Available types: ${availableTypes.join(', ')}`);
+      }
+      return true;
+    }),
   videosController.getVideoContent.bind(videosController)
+);
+
+/**
+ * @route   POST /api/videos/batch
+ * @desc    Process multiple video URLs
+ * @access  Private - Requires Basic subscription
+ */
+router.post('/batch',
+  subscriptionMiddleware.requireSubscription('basic'),
+  subscriptionMiddleware.checkUsageLimit('videos'),
+  [
+    body('urls')
+      .isArray()
+      .withMessage('URLs must be an array')
+      .custom((urls) => {
+        if (urls.length === 0) {
+          throw new Error('At least one URL is required');
+        }
+        // Validate each URL
+        for (const url of urls) {
+          if (typeof url !== 'string' || !url.match(/(?:youtube\.com|youtu\.be)/)) {
+            throw new Error('All URLs must be valid YouTube URLs');
+          }
+        }
+        return true;
+      }),
+    body('contentTypes')
+      .optional()
+      .isArray()
+      .withMessage('Content types must be an array')
+      .custom(async (contentTypes) => {
+        if (contentTypes && contentTypes.length > 0) {
+          const validTypes = await getAvailableContentTypes();
+          for (const type of contentTypes) {
+            if (!validTypes.includes(type)) {
+              throw new Error(`Invalid content type: ${type}. Available types: ${validTypes.join(', ')}`);
+            }
+          }
+        }
+        return true;
+      })
+  ],
+  videosController.processBatch.bind(videosController),
+  subscriptionMiddleware.incrementUsage
 );
 
 module.exports = router;

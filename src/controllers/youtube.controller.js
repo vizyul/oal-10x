@@ -289,7 +289,7 @@ class YouTubeController {
       }
 
       const userId = req.user.id;
-      const { videoIds } = req.body;
+      const { videoIds, contentTypes } = req.body;
 
       logger.info(`Importing ${videoIds.length} videos for user ${userId}`);
 
@@ -403,20 +403,43 @@ class YouTubeController {
               const recordId = postgresRecord.id;
 
               if (recordId) {
-                // Initialize processing status
-                const contentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text'];
+                // Initialize processing status with selected content types or get all types from database as fallback
+                let selectedContentTypes = contentTypes && Array.isArray(contentTypes) && contentTypes.length > 0 
+                  ? contentTypes 
+                  : null;
+
+                // If no content types selected, get all available from database
+                if (!selectedContentTypes) {
+                  try {
+                    const database = require('../services/database.service');
+                    const result = await database.query(`
+                      SELECT DISTINCT content_type 
+                      FROM ai_prompts 
+                      WHERE is_active = true
+                      ORDER BY content_type
+                    `);
+                    selectedContentTypes = result.rows.map(row => row.content_type);
+                    logger.info(`Using all available content types from database: ${selectedContentTypes.length} types`);
+                  } catch (dbError) {
+                    logger.warn('Could not load content types from database, using fallback:', dbError.message);
+                    selectedContentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
+                  }
+                }
+                
+                logger.info(`Initializing processing for video ${videoId} with content types: ${selectedContentTypes.join(', ')}`);
+                
                 processingStatusService.initializeVideoProcessing(
                   videoId,
                   recordId,
                   metadata?.title || 'Untitled Video',
                   actualUserId,
-                  contentTypes
+                  selectedContentTypes
                 );
 
                 logger.info(`Starting transcript extraction for video ${videoId}`);
 
                 // Process transcript asynchronously - don't wait for completion
-                transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId)
+                transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId, selectedContentTypes)
                   .then(result => {
                     if (result.success) {
                       logger.info(`✅ Transcript successfully processed for video ${videoId}`);

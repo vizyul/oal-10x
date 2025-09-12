@@ -2,7 +2,7 @@ const stripe = require('stripe')(require('../config/stripe.config').getSecretKey
 const stripeConfig = require('../config/stripe.config');
 const database = require('./database.service');
 const { logger } = require('../utils');
-const { clearCachedUser } = require('../middleware');
+const { clearCachedUser, forceTokenRefresh } = require('../middleware');
 
 class StripeService {
   constructor() {
@@ -222,6 +222,70 @@ class StripeService {
     const userId = subscription.metadata.user_id;
     const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
 
+    logger.info('Processing subscription created webhook:', {
+      subscriptionId: subscription.id,
+      customerId: subscription.customer,
+      userId: userId,
+      userIdType: typeof userId,
+      tier: tier,
+      metadata: subscription.metadata
+    });
+
+    // Check if user exists before processing
+    if (!userId) {
+      logger.error('No user_id found in subscription metadata:', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer,
+        metadata: subscription.metadata
+      });
+      throw new Error('No user_id in subscription metadata');
+    }
+
+    // Try to resolve user ID and check if user exists
+    let pgUserId;
+    try {
+      pgUserId = await this.resolveUserId(userId);
+      logger.info('Successfully resolved user ID:', {
+        originalUserId: userId,
+        resolvedUserId: pgUserId
+      });
+    } catch (userError) {
+      logger.error('Failed to resolve user ID:', {
+        originalUserId: userId,
+        error: userError.message,
+        subscriptionId: subscription.id,
+        customerId: subscription.customer
+      });
+      
+      // Try to get customer information from Stripe to help debug
+      try {
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        logger.error('Customer information from Stripe:', {
+          customerId: customer.id,
+          customerEmail: customer.email,
+          customerMetadata: customer.metadata
+        });
+        
+        // If we can find user by email, log that information
+        if (customer.email) {
+          try {
+            const usersByEmail = await database.findByField('users', 'email', customer.email);
+            logger.info('Users found by customer email:', {
+              email: customer.email,
+              foundUsers: usersByEmail.length,
+              users: usersByEmail.map(u => ({ id: u.id, email: u.email, airtable_id: u.airtable_id }))
+            });
+          } catch (emailSearchError) {
+            logger.error('Error searching users by email:', emailSearchError.message);
+          }
+        }
+      } catch (customerError) {
+        logger.error('Error retrieving customer from Stripe:', customerError.message);
+      }
+      
+      throw userError; // Re-throw the original error
+    }
+
     // Debug: Log date formatting
     const startDate = new Date(subscription.current_period_start * 1000).toISOString().split('T')[0];
     const endDate = new Date(subscription.current_period_end * 1000).toISOString().split('T')[0];
@@ -246,7 +310,6 @@ class StripeService {
       // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
       const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
       await database.update('user_subscriptions', recordId, {
-        subscription_tier: tier,
         status: subscription.status,
         current_period_start: startDate,
         current_period_end: endDate,
@@ -277,7 +340,6 @@ class StripeService {
         await database.update('user_subscriptions', recordId, {
           users_id: parseInt(userId),
           stripe_customer_id: subscription.customer,
-          subscription_tier: tier,
           status: subscription.status,
           current_period_start: startDate,
           current_period_end: endDate,
@@ -292,7 +354,6 @@ class StripeService {
           users_id: parseInt(userId),
           stripe_customer_id: subscription.customer,
           stripe_subscription_id: subscription.id,
-          subscription_tier: tier,
           status: subscription.status,
           current_period_start: startDate,
           current_period_end: endDate,
@@ -304,15 +365,14 @@ class StripeService {
       }
     }
 
-    // Update user record with proper ID resolution
-    const pgUserId = await this.resolveUserId(userId);
+    // Update user record with proper ID resolution (use already resolved pgUserId)
     await database.update('users', pgUserId, {
       subscription_tier: tier,
       subscription_status: subscription.status
     });
 
-    // Clear cached user data to force reload with new subscription info
-    clearCachedUser(userId);
+    // Force token refresh to update subscription info in JWT
+    forceTokenRefresh(pgUserId);
 
     // Create initial usage record for the subscription
     await this.createUsageRecord(userId, subscription, subscriptionRecord);
@@ -347,7 +407,6 @@ class StripeService {
 
       // Update subscription record
       await database.update('user_subscriptions', recordId, {
-        subscription_tier: tier,
         status: subscription.status,
         current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
         current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
@@ -405,8 +464,8 @@ class StripeService {
       subscription_status: 'canceled'
     });
 
-    // Clear cached user data to force reload with new subscription info
-    clearCachedUser(userId);
+    // Force token refresh to update subscription info in JWT
+    forceTokenRefresh(pgUserId);
 
     logger.info('Subscription canceled:', {
       subscriptionId: subscription.id,
@@ -445,8 +504,8 @@ class StripeService {
       subscription_status: 'paused'
     });
 
-    // Clear cached user data to force reload with new subscription info
-    clearCachedUser(userId);
+    // Force token refresh to update subscription info in JWT
+    forceTokenRefresh(pgUserId);
 
     logger.info('Subscription paused:', {
       subscriptionId: subscription.id,
@@ -489,8 +548,8 @@ class StripeService {
       subscription_status: 'active'
     });
 
-    // Clear cached user data to force reload with new subscription info
-    clearCachedUser(userId);
+    // Force token refresh to update subscription info in JWT
+    forceTokenRefresh(pgUserId);
 
     logger.info('Subscription resumed:', {
       subscriptionId: subscription.id,

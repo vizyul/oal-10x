@@ -342,7 +342,7 @@ describe('Service Integration Tests', () => {
 
       // 4. Verify relationships work
       const userWithSubscription = await databaseService.query(`
-        SELECT u.*, us.subscription_tier, s.status as session_status
+        SELECT u.*, s.status as session_status
         FROM users u
         LEFT JOIN user_subscriptions us ON u.id = us.users_id
         LEFT JOIN sessions s ON u.id = s.users_id

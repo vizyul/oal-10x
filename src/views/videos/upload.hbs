@@ -1,24 +1,62 @@
 {{#> layouts/main}}
 
 <div class="video-upload-page">
-  <div class="upload-header">
-    <h1>Upload Videos</h1>
-    <p>Import videos from your YouTube account or add them by URL</p>
-    
-    {{#if subscription}}
-    <div class="usage-status">
-      <div class="usage-bar">
-        <div class="usage-fill{{#if (gt subscription.usage.videos 0)}} usage-fill-active{{/if}}" style="width: {{subscription.percentages.videos}}%"></div>
-      </div>
-      <span class="usage-text">
-        {{subscription.usage.videos}}/{{subscription.limits.videos}} videos used this month
-        {{#if (eq subscription.limits.videos subscription.usage.videos)}}
-        <span class="limit-reached">Limit reached - <a href="/subscription/upgrade">Upgrade plan</a></span>
+  <!-- Header and Content Selection Flex Container -->
+  <div class="upload-main-content">
+    <div class="upload-left-panel">
+      <div class="upload-header">
+        <h1>Upload Videos</h1>
+        <p>Import videos from your YouTube account or add them by URL</p>
+        
+        {{#if subscription}}
+        <div class="usage-status">
+          <div class="usage-bar">
+            <div class="usage-fill{{#if (gt subscription.usage.videos 0)}} usage-fill-active{{/if}}" style="width: {{subscription.percentages.videos}}%"></div>
+          </div>
+          <span class="usage-text">
+            {{subscription.usage.videos}}/{{subscription.limits.videos}} videos used this month
+            {{#if (eq subscription.limits.videos subscription.usage.videos)}}
+            <span class="limit-reached">Limit reached - <a href="/subscription/upgrade">Upgrade plan</a></span>
+            {{/if}}
+          </span>
+        </div>
         {{/if}}
-      </span>
+      </div>
     </div>
-    {{/if}}
+
+    <div class="upload-right-panel">
+      <!-- Content Type Selection -->
+      <div class="content-type-selection-container" id="content-type-selection-container">
+    <div class="content-selection-header">
+      <div class="header-left">
+        <h3>Select Content Types to Generate</h3>
+        <p>Choose which AI-generated content you want for your videos</p>
+      </div>
+      <div class="header-center hidden" id="header-selection-info">
+        <span id="selected-content-count">0</span> content types selected
+      </div>
+      <div class="header-right hidden" id="header-selection-controls">
+        <button type="button" id="select-all-content-btn" class="btn btn-secondary btn-small">Select All</button>
+        <button type="button" id="clear-all-content-btn" class="btn btn-secondary btn-small">Clear All</button>
+      </div>
+    </div>
+    
+    <div class="content-types-grid hidden" id="content-types-grid">
+      <!-- Content types will be loaded dynamically -->
+    </div>
+    
+        
+        <div class="content-type-error hidden" id="content-type-error">
+          <div class="error-message">
+            Failed to load content types. Please refresh the page and try again.
+          </div>
+        </div>
+      </div>
+      <!-- End Content Type Selection Container -->
+    </div>
+    <!-- End Upload Right Panel -->
   </div>
+  <!-- End Upload Main Content -->
 
   {{#if success}}
   <div class="alert alert-success">{{success}}</div>
@@ -191,14 +229,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const totalCountEl = document.getElementById('total-count');
   const errorMessageEl = document.getElementById('error-message');
   
+  // Content Type Selection Elements
+  const contentTypesGrid = document.getElementById('content-types-grid');
+  const headerSelectionControls = document.getElementById('header-selection-controls');
+  const headerSelectionInfo = document.getElementById('header-selection-info');
+  const contentTypeError = document.getElementById('content-type-error');
+  const selectAllContentBtn = document.getElementById('select-all-content-btn');
+  const clearAllContentBtn = document.getElementById('clear-all-content-btn');
+  const selectedContentCount = document.getElementById('selected-content-count');
+  
   // State
   let selectedVideos = new Set();
   let availableVideos = [];
   let subscriptionLimits = null;
   
-  // Initialize
+  // Content Type Selection State
+  let availableContentTypes = [];
+  let selectedContentTypes = new Set();
+  
+  // Initialize - ensure error is hidden on page load
+  if (contentTypeError) {
+    contentTypeError.classList.add('hidden');
+  }
+  
   checkYouTubeConnection();
   loadSubscriptionInfo();
+  loadContentTypes();
   
   // YouTube OAuth Functions
   async function checkYouTubeConnection() {
@@ -552,9 +608,16 @@ document.addEventListener('DOMContentLoaded', function() {
   async function importSelectedVideos() {
     if (selectedVideos.size === 0) return;
     
-    const videoIds = Array.from(selectedVideos);
+    // Check if content types are selected
+    if (selectedContentTypes.size === 0) {
+      showError('Please select at least one content type to generate.');
+      return;
+    }
     
-    showProgress('Importing Videos...', `Importing ${videoIds.length} video(s)...`);
+    const videoIds = Array.from(selectedVideos);
+    const contentTypes = Array.from(selectedContentTypes);
+    
+    showProgress('Importing Videos...', `Importing ${videoIds.length} video(s) with ${contentTypes.length} content type(s)...`);
     importSelectedBtn.disabled = true;
     
     try {
@@ -563,7 +626,10 @@ document.addEventListener('DOMContentLoaded', function() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ videoIds })
+        body: JSON.stringify({ 
+          videoIds,
+          contentTypes 
+        })
       });
       
       const result = await response.json();
@@ -586,7 +652,14 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // URL Upload Functions
   async function processURLs(urls) {
-    showProgress('Processing Videos...', `Processing ${urls.length} video(s)...`);
+    // Check if content types are selected
+    if (selectedContentTypes.size === 0) {
+      showError('Please select at least one content type to generate.');
+      return;
+    }
+    
+    const contentTypes = Array.from(selectedContentTypes);
+    showProgress('Processing Videos...', `Processing ${urls.length} video(s) with ${contentTypes.length} content type(s)...`);
     urlUploadBtn.disabled = true;
     
     try {
@@ -595,7 +668,10 @@ document.addEventListener('DOMContentLoaded', function() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ urls })
+        body: JSON.stringify({ 
+          urls,
+          contentTypes 
+        })
       });
       
       const result = await response.json();
@@ -763,6 +839,138 @@ document.addEventListener('DOMContentLoaded', function() {
     
     await processURLs(urls);
   });
+
+  // Content Type Selection Functions
+  async function loadContentTypes() {
+    try {
+      contentTypeError.classList.add('hidden');
+
+      const response = await fetch('/api/videos/content-types', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success || !result.data?.contentTypes) {
+        throw new Error(result.message || 'Invalid response format');
+      }
+
+      availableContentTypes = result.data.contentTypes;
+      renderContentTypes();
+      
+      // Select all content types by default
+      availableContentTypes.forEach(contentType => {
+        selectedContentTypes.add(contentType.key);
+      });
+      updateContentSelectionUI();
+
+    } catch (error) {
+      console.error('Failed to load content types:', error);
+      contentTypeError.classList.remove('hidden');
+    }
+  }
+
+  function renderContentTypes() {
+    if (!availableContentTypes.length) return;
+
+    // Ensure error message is hidden when we successfully render content
+    contentTypeError.classList.add('hidden');
+
+    contentTypesGrid.innerHTML = availableContentTypes.map(contentType => `
+      <div class="content-type-compact">
+        <label class="content-type-compact-label">
+          <input 
+            type="checkbox" 
+            id="content-${contentType.key}"
+            value="${contentType.key}"
+            data-content-type="${contentType.key}"
+            checked
+          />
+          <div class="content-type-compact-content">
+            <span class="content-type-compact-icon">${contentType.icon}</span>
+            <span class="content-type-compact-text">${contentType.label}</span>
+            <span class="content-type-compact-check">✓</span>
+          </div>
+        </label>
+      </div>
+    `).join('');
+
+    // Initialize all labels as checked and add event listeners
+    availableContentTypes.forEach(contentType => {
+      const checkbox = document.getElementById(`content-${contentType.key}`);
+      const label = checkbox?.closest('.content-type-compact-label');
+      
+      if (label) {
+        label.classList.add('checked');
+      }
+      
+      if (checkbox) {
+        checkbox.addEventListener('change', function() {
+          handleContentTypeChange(contentType.key);
+        });
+      }
+    });
+
+    contentTypesGrid.classList.remove('hidden');
+    headerSelectionControls.classList.remove('hidden');
+    headerSelectionInfo.classList.remove('hidden');
+  }
+
+  function handleContentTypeChange(contentTypeKey) {
+    const checkbox = document.getElementById(`content-${contentTypeKey}`);
+    const label = checkbox.closest('.content-type-compact-label');
+    
+    if (checkbox.checked) {
+      selectedContentTypes.add(contentTypeKey);
+      label.classList.add('checked');
+    } else {
+      selectedContentTypes.delete(contentTypeKey);
+      label.classList.remove('checked');
+    }
+    
+    updateContentSelectionUI();
+  }
+
+  function updateContentSelectionUI() {
+    selectedContentCount.textContent = selectedContentTypes.size;
+  }
+
+  // Content Selection Control Handlers
+  selectAllContentBtn.addEventListener('click', function() {
+    availableContentTypes.forEach(contentType => {
+      selectedContentTypes.add(contentType.key);
+      const checkbox = document.getElementById(`content-${contentType.key}`);
+      if (checkbox) {
+        checkbox.checked = true;
+        const label = checkbox.closest('.content-type-compact-label');
+        label.classList.add('checked');
+      }
+    });
+    updateContentSelectionUI();
+  });
+
+  clearAllContentBtn.addEventListener('click', function() {
+    selectedContentTypes.clear();
+    availableContentTypes.forEach(contentType => {
+      const checkbox = document.getElementById(`content-${contentType.key}`);
+      if (checkbox) {
+        checkbox.checked = false;
+        const label = checkbox.closest('.content-type-compact-label');
+        label.classList.remove('checked');
+      }
+    });
+    updateContentSelectionUI();
+  });
+
+  // No longer need global function since we use proper event listeners
+
 });
 </script>
 
