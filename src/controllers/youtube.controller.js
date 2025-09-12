@@ -404,8 +404,8 @@ class YouTubeController {
 
               if (recordId) {
                 // Initialize processing status with selected content types or get all types from database as fallback
-                let selectedContentTypes = contentTypes && Array.isArray(contentTypes) && contentTypes.length > 0 
-                  ? contentTypes 
+                let selectedContentTypes = contentTypes && Array.isArray(contentTypes) && contentTypes.length > 0
+                  ? contentTypes
                   : null;
 
                 // If no content types selected, get all available from database
@@ -425,9 +425,9 @@ class YouTubeController {
                     selectedContentTypes = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
                   }
                 }
-                
+
                 logger.info(`Initializing processing for video ${videoId} with content types: ${selectedContentTypes.join(', ')}`);
-                
+
                 processingStatusService.initializeVideoProcessing(
                   videoId,
                   recordId,

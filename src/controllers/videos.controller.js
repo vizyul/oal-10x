@@ -1440,8 +1440,8 @@ class VideosController {
       });
 
       // Use selected content types if provided, otherwise get all available from database
-      let contentTypes = selectedContentTypes && selectedContentTypes.length > 0 
-        ? selectedContentTypes 
+      let contentTypes = selectedContentTypes && selectedContentTypes.length > 0
+        ? selectedContentTypes
         : null;
 
       // If no content types selected, get all available from database
@@ -1465,7 +1465,7 @@ class VideosController {
       // Initialize processing status for the video with selected content types
       const processingStatusService = require('../services/processing-status.service');
       const youtubeVideoId = metadata?.videoId || this.extractVideoId(metadata?.url || '');
-      
+
       if (youtubeVideoId) {
         // Initialize status for selected content types only
         processingStatusService.initializeVideoProcessing(youtubeVideoId, contentTypes);
@@ -1491,7 +1491,7 @@ class VideosController {
 
       // Add processing tasks to queue for each selected content type
       const processingQueue = require('../services/processing-queue.service');
-      
+
       const processingTasks = [
         { task_type: 'extract_transcript', priority: 5 }, // Always extract transcript first
         { task_type: 'generate_content', priority: 4, contentTypes }  // Generate selected content types

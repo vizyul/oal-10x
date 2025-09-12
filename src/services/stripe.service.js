@@ -256,7 +256,7 @@ class StripeService {
         subscriptionId: subscription.id,
         customerId: subscription.customer
       });
-      
+
       // Try to get customer information from Stripe to help debug
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
@@ -265,7 +265,7 @@ class StripeService {
           customerEmail: customer.email,
           customerMetadata: customer.metadata
         });
-        
+
         // If we can find user by email, log that information
         if (customer.email) {
           try {
@@ -282,7 +282,7 @@ class StripeService {
       } catch (customerError) {
         logger.error('Error retrieving customer from Stripe:', customerError.message);
       }
-      
+
       throw userError; // Re-throw the original error
     }
 

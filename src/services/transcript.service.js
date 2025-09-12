@@ -310,7 +310,7 @@ class TranscriptService {
 
           // Use provided content types or get all available from database
           let typesToGenerate = contentTypes;
-          
+
           if (!typesToGenerate || typesToGenerate.length === 0) {
             try {
               const database = require('./database.service');
