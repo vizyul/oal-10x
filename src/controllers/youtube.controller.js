@@ -428,10 +428,10 @@ class YouTubeController {
 
                 logger.info(`Initializing processing for video ${videoId} with content types: ${selectedContentTypes.join(', ')}`);
 
-                processingStatusService.initializeVideoProcessing(
+                await processingStatusService.initializeVideoProcessingAsync(
                   videoId,
                   recordId,
-                  metadata?.title || 'Untitled Video',
+                  videoData.video_title,
                   actualUserId,
                   selectedContentTypes
                 );

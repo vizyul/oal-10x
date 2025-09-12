@@ -55,7 +55,9 @@ io.on('connection', (socket) => {
 
   // Handle status request
   socket.on('request-status', () => {
+    logger.info(`Socket.IO: User ${userId} requested processing status`);
     const processingVideos = processingStatusService.getUserProcessingVideos(userId);
+    logger.info(`Socket.IO: Sending ${processingVideos.length} processing videos to user ${userId}`);
     socket.emit('processing-status-batch', processingVideos);
   });
 });
