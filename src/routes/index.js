@@ -22,7 +22,7 @@ router.use('/auth', authRoutes);
 router.get('/', (req, res) => {
   res.render('index', {
     title: 'Welcome to Our AI Legacy',
-    description: 'Empowering ministry through responsible AI innovation',
+    description: 'Empowering business through responsible AI innovation',
     user: req.user,
     userTheme: req.userTheme,
     subscription: req.subscriptionInfo,
@@ -95,6 +95,9 @@ router.use('/videos', require('./videos-web.routes'));
 
 // API routes
 router.use('/api', require('./api.routes'));
+
+// Admin routes (protected by admin middleware)
+router.use('/admin', require('./admin.routes'));
 
 // Terms and Privacy pages
 router.get('/terms', (req, res) => {

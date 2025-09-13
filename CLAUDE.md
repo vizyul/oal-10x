@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-"Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for ministry use.
+"Our AI Legacy" is a Node.js Express application with Handlebars templating and Airtable integration. It's an authentication-focused application for video content management, designed for business use.
 
 **Database Architecture**: This application has been fully migrated from Airtable to PostgreSQL as the primary database.
 - **PostgreSQL** (primary) - Main data storage for all application data

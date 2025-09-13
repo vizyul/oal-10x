@@ -358,7 +358,7 @@ class EmailService {
             
             <p>This code will expire in 10 minutes. If you didn't request this verification, you can safely ignore this email.</p>
             
-            <p>Welcome to Our AI Legacy - where your ministry content comes to life through AI!</p>
+            <p>Welcome to Our AI Legacy - where your content is amplified leveraging through AI!</p>
         </div>
         <div class="footer">
             <p>© ${new Date().getFullYear()} Our AI Legacy. All rights reserved.</p>
@@ -378,7 +378,7 @@ ${code}
 
 This code will expire in 10 minutes. If you didn't request this verification, you can safely ignore this email.
 
-Welcome to Our AI Legacy - where your ministry content comes to life through AI!
+Welcome to Our AI Legacy - where your content is amplified by leveraging AI!
 
 © ${new Date().getFullYear()} Our AI Legacy. All rights reserved.
 This is an automated email, please do not reply.
@@ -516,7 +516,7 @@ This is an automated email, please do not reply.
             <h2>Hello ${firstName}!</h2>
             <p>Welcome to Our AI Legacy! Your account has been successfully created and verified.</p>
             
-            <p>You can now start using our platform to bring your ministry content to life through AI. Explore our features and begin your journey with us.</p>
+            <p>You can now start using our platform to amplify your content by leveraging AI. Explore our features and begin your journey with us.</p>
             
             <p>If you have any questions or need assistance, feel free to reach out to our support team at <a href="mailto:support@ourailegacy.com" style="color: #c99b31; text-decoration: none;">support@ourailegacy.com</a>.</p>
             
@@ -538,7 +538,7 @@ Hello ${firstName}!
 
 Welcome to Our AI Legacy! Your account has been successfully created and verified.
 
-You can now start using our platform to bring your ministry content to life through AI. Explore our features and begin your journey with us.
+You can now start using our platform to amplify content by leveraging AI. Explore our features and begin your journey with us.
 
 If you have any questions or need assistance, feel free to reach out to our support team at support@ourailegacy.com.
 

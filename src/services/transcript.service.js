@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { aiPrompts, video: videoModel } = require('../models');
 const { logger } = require('../utils');
 
 class TranscriptService {
@@ -29,14 +30,10 @@ class TranscriptService {
       }
 
       // Secondary check: if video was deleted from database, consider it cancelled
-      const database = require('./database.service');
-      const videos = await database.query(
-        'SELECT id FROM videos WHERE videoid = $1',
-        [videoId]
-      );
+      const video = await videoModel.findByVideoId(videoId);
 
       // If video doesn't exist in database but we're still processing, it might have been deleted (cancelled)
-      if (!videos.rows || videos.rows.length === 0) {
+      if (!video) {
         logger.info(`Video ${videoId} not found in database - may have been cancelled and deleted`);
         return true;
       }
@@ -221,23 +218,21 @@ class TranscriptService {
    */
   async updateVideoTranscript(videoRecordId, transcript) {
     try {
-      const databaseService = require('./database.service');
-
       const results = {
         success: false,
         error: null
       };
 
-      // Update PostgreSQL
+      // Update using Video model
       try {
-        await databaseService.update('videos', videoRecordId, {
+        await videoModel.updateVideo(videoRecordId, {
           transcript_text: transcript
         });
         results.success = true;
-        logger.debug(`Updated PostgreSQL transcript for record ${videoRecordId}`);
-      } catch (postgresError) {
-        results.error = postgresError.message;
-        logger.error(`Failed to update PostgreSQL transcript for ${videoRecordId}:`, postgresError.message);
+        logger.debug(`Updated video transcript for record ${videoRecordId} using Video model`);
+      } catch (updateError) {
+        results.error = updateError.message;
+        logger.error(`Failed to update video transcript for ${videoRecordId}:`, updateError.message);
       }
 
       return results;
@@ -313,17 +308,11 @@ class TranscriptService {
 
           if (!typesToGenerate || typesToGenerate.length === 0) {
             try {
-              const database = require('./database.service');
-              const result = await database.query(`
-                SELECT DISTINCT content_type 
-                FROM ai_prompts 
-                WHERE is_active = true
-                ORDER BY content_type
-              `);
-              typesToGenerate = result.rows.map(row => row.content_type);
-              logger.info(`No content types specified, using all ${typesToGenerate.length} available types from database`);
+              const contentTypes = await aiPrompts.getAvailableContentTypes();
+              typesToGenerate = contentTypes.map(ct => ct.type);
+              logger.info(`No content types specified, using all ${typesToGenerate.length} available types from AiPrompts model`);
             } catch (dbError) {
-              logger.warn('Could not load content types from database, using fallback:', dbError.message);
+              logger.warn('Could not load content types from AiPrompts model, using fallback:', dbError.message);
               typesToGenerate = ['summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
             }
           } else {

@@ -411,14 +411,9 @@ class YouTubeController {
                 // If no content types selected, get all available from database
                 if (!selectedContentTypes) {
                   try {
-                    const database = require('../services/database.service');
-                    const result = await database.query(`
-                      SELECT DISTINCT content_type 
-                      FROM ai_prompts 
-                      WHERE is_active = true
-                      ORDER BY content_type
-                    `);
-                    selectedContentTypes = result.rows.map(row => row.content_type);
+                    const { aiPrompts } = require('../models');
+                    const availableTypes = await aiPrompts.getAvailableContentTypes();
+                    selectedContentTypes = availableTypes.map(type => type.type);
                     logger.info(`Using all available content types from database: ${selectedContentTypes.length} types`);
                   } catch (dbError) {
                     logger.warn('Could not load content types from database, using fallback:', dbError.message);
@@ -460,7 +455,7 @@ class YouTubeController {
           if (postgresRecord) {
             // Database write succeeded - increment subscription usage
             try {
-              await subscriptionService.incrementUsage(actualUserId, 'videos', 1);
+              await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
               logger.info(`✅ Incremented video usage for user ${actualUserId}`);
             } catch (usageError) {
               logger.warn(`⚠️  Failed to increment video usage for user ${actualUserId}:`, usageError.message);

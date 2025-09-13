@@ -1,0 +1,244 @@
+{
+  "timestamp": "2025-09-13T01-20-51-767Z",
+  "table": "content_types",
+  "total_records": 13,
+  "data": [
+    {
+      "id": 1,
+      "key": "transcript_text",
+      "label": "Transcript",
+      "icon": "📄",
+      "description": "YouTube video transcript extraction",
+      "display_order": 1,
+      "requires_ai": false,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 2,
+      "key": "summary_text",
+      "label": "Summary",
+      "icon": "📋",
+      "description": "AI-generated content summary",
+      "display_order": 2,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 3,
+      "key": "study_guide_text",
+      "label": "Study Guide",
+      "icon": "📚",
+      "description": "Educational study materials",
+      "display_order": 3,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 4,
+      "key": "discussion_guide_text",
+      "label": "Discussion Guide",
+      "icon": "💬",
+      "description": "Questions for group discussions",
+      "display_order": 4,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 5,
+      "key": "group_guide_text",
+      "label": "Group Guide",
+      "icon": "👥",
+      "description": "Team and group activities",
+      "display_order": 5,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 6,
+      "key": "social_media_text",
+      "label": "Social Media",
+      "icon": "📱",
+      "description": "Content for social platforms",
+      "display_order": 6,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 7,
+      "key": "quiz_text",
+      "label": "Quiz",
+      "icon": "❓",
+      "description": "Comprehension questions",
+      "display_order": 7,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 8,
+      "key": "chapters_text",
+      "label": "Chapters",
+      "icon": "📖",
+      "description": "Video chapters and timestamps",
+      "display_order": 8,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 9,
+      "key": "ebook_text",
+      "label": "E-Book",
+      "icon": "📘",
+      "description": "Long-form comprehensive content",
+      "display_order": 9,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 10,
+      "key": "podcast_text",
+      "label": "Podcast",
+      "icon": "🎙️",
+      "description": "Audio-optimized content",
+      "display_order": 10,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 11,
+      "key": "blog_text",
+      "label": "Blog Post",
+      "icon": "✍️",
+      "description": "Blog article content",
+      "display_order": 11,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 12,
+      "key": "quotes_text",
+      "label": "Quotes",
+      "icon": "💭",
+      "description": "Key quotes and insights",
+      "display_order": 12,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-12T19:55:39.333Z",
+      "updated_at": "2025-09-12T19:55:39.333Z"
+    },
+    {
+      "id": 13,
+      "key": "articles_text",
+      "label": "Blog, LinkedIn, Newsletter",
+      "icon": "📒",
+      "description": "Generate three complete articles: blog, LinkedIn article, and newsletter from a transcript.",
+      "display_order": 13,
+      "requires_ai": true,
+      "has_url_field": true,
+      "is_active": true,
+      "created_at": "2025-09-13T01:08:20.826Z",
+      "updated_at": "2025-09-13T01:08:20.826Z"
+    }
+  ],
+  "schema": [
+    {
+      "column_name": "id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "nextval('content_types_id_seq'::regclass)"
+    },
+    {
+      "column_name": "key",
+      "data_type": "character varying",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "column_name": "label",
+      "data_type": "character varying",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "column_name": "icon",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "column_name": "display_order",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "column_name": "requires_ai",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "column_name": "has_url_field",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true"
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "CURRENT_TIMESTAMP"
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "CURRENT_TIMESTAMP"
+    }
+  ]
+}

@@ -347,6 +347,37 @@
   color: #dc3545 !important;
 }
 
+/* Admin Menu Item Styling */
+.admin-menu-item {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  border-radius: 6px;
+  margin: 4px 0;
+}
+
+.admin-menu-item:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+  color: white !important;
+  transform: translateX(2px);
+}
+
+.admin-menu-item svg {
+  color: white !important;
+}
+
+.admin-menu-item:hover svg {
+  color: white !important;
+}
+
+.admin-menu-item span {
+  color: white !important;
+  font-weight: 500;
+}
+
+.admin-menu-item:hover span {
+  color: white !important;
+}
+
 .profile-menu-logout:hover * {
   color: #dc3545 !important;
 }

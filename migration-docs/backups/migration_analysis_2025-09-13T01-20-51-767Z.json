@@ -1,0 +1,80 @@
+{
+  "analysis": {
+    "timestamp": "2025-09-13T01-20-51-767Z",
+    "content_types": {
+      "total": 13,
+      "active": 13,
+      "keys": [
+        "transcript_text",
+        "summary_text",
+        "study_guide_text",
+        "discussion_guide_text",
+        "group_guide_text",
+        "social_media_text",
+        "quiz_text",
+        "chapters_text",
+        "ebook_text",
+        "podcast_text",
+        "blog_text",
+        "quotes_text",
+        "articles_text"
+      ]
+    },
+    "ai_prompts": {
+      "total": 15,
+      "active": 15,
+      "unique_content_types": [
+        "transcript_text",
+        "summary_text",
+        "study_guide_text",
+        "social_media_text",
+        "discussion_guide_text",
+        "group_guide_text",
+        "quiz_text",
+        "chapters_text",
+        "ebook_text",
+        "podcast_text",
+        "articles_text"
+      ],
+      "providers": [
+        "none",
+        "gemini",
+        "claude",
+        "chatgpt"
+      ]
+    },
+    "sync_analysis": {
+      "in_content_types_only": [
+        "blog_text",
+        "quotes_text"
+      ],
+      "in_ai_prompts_only": [],
+      "in_both": [
+        "transcript_text",
+        "summary_text",
+        "study_guide_text",
+        "discussion_guide_text",
+        "group_guide_text",
+        "social_media_text",
+        "quiz_text",
+        "chapters_text",
+        "ebook_text",
+        "podcast_text",
+        "articles_text"
+      ]
+    }
+  },
+  "readinessCheck": {
+    "timestamp": "2025-09-13T01-20-51-767Z",
+    "checks": [
+      "✅ All ai_prompts have matching content_types",
+      "✅ No existing content_type_id column",
+      "✅ Database size: 10 MB"
+    ],
+    "ready_for_migration": true,
+    "warnings": [
+      "⚠️  2 content_types have no AI prompts: blog_text, quotes_text"
+    ],
+    "blockers": []
+  }
+}

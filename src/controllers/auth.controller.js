@@ -524,8 +524,8 @@ class AuthController {
 
       logger.info(`Sign in attempt for email: ${email}`);
 
-      // Find user
-      const user = await authService.findUserByEmail(email);
+      // Find user (with password for authentication)
+      const user = await authService.findUserByEmailForAuth(email);
       if (!user) {
         return res.status(401).json({
           success: false,

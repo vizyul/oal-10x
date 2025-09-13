@@ -1,5 +1,10 @@
 /* Video Styles */
 
+/* Utility Classes */
+.hidden {
+  display: none !important;
+}
+
 /* Dashboard Layout */
 .video-dashboard {
   width: 100%;
@@ -134,7 +139,7 @@
 }
 
 .video-info {
-  padding: 1.5rem;
+  padding: 0.5rem;
 }
 
 .video-title {

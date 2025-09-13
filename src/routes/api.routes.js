@@ -343,6 +343,9 @@ router.post('/auth/resend-verification', [
 // Videos routes
 router.use('/videos', require('./videos.routes'));
 
+// Content routes (normalized content management)
+router.use('/content', require('./content.routes'));
+
 // YouTube routes
 router.use('/youtube', require('./youtube.routes'));
 

@@ -1,0 +1,755 @@
+<div class="admin-prompts-page">
+  <div class="page-header">
+    <div class="header-left">
+      <h1>🤖 AI Prompts: {{contentType.label}}</h1>
+      <p class="subtitle">Manage AI prompts for {{contentType.icon}} {{contentType.label}}</p>
+      <div class="breadcrumb">
+        <a href="/admin">Admin</a> → 
+        <a href="/admin/content-types">Content Types</a> → 
+        <a href="/admin/content-types/{{contentType.id}}">{{contentType.label}}</a> → 
+        <span>AI Prompts</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button id="addPromptBtn" class="btn btn-primary">
+        <span>➕</span> Add AI Prompt
+      </button>
+    </div>
+  </div>
+
+  {{#if prompts.length}}
+    <div class="prompts-grid">
+      {{#each prompts}}
+        <div class="prompt-card {{#unless is_active}}inactive{{/unless}}" data-prompt-id="{{id}}">
+          <div class="card-header">
+            <div class="prompt-info">
+              <h3>{{name}}</h3>
+              <div class="prompt-meta">
+                <span class="provider-badge provider-{{ai_provider}}">{{ai_provider}}</span>
+                {{#if is_active}}
+                  <span class="status-badge active">✅ Active</span>
+                {{else}}
+                  <span class="status-badge inactive">⭕ Inactive</span>
+                {{/if}}
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-sm btn-outline edit-prompt-btn" data-prompt-id="{{id}}">
+                ✏️ Edit
+              </button>
+              <button class="btn btn-sm btn-danger delete-prompt-btn" data-prompt-id="{{id}}">
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            {{#if description}}
+              <p class="description">{{description}}</p>
+            {{/if}}
+
+            <div class="prompt-settings">
+              <div class="setting-item">
+                <span class="label">Temperature:</span>
+                <span class="value">{{temperature}}</span>
+              </div>
+              <div class="setting-item">
+                <span class="label">Max Tokens:</span>
+                <span class="value">{{max_tokens}}</span>
+              </div>
+            </div>
+
+            <div class="prompt-preview">
+              <h4>Prompt Text Preview:</h4>
+              <div class="prompt-text">
+                {{#if (gt prompt_text.length 200)}}
+                  {{substring prompt_text 0 200}}...
+                {{else}}
+                  {{prompt_text}}
+                {{/if}}
+              </div>
+              {{#if system_message}}
+                <h4>System Message:</h4>
+                <div class="system-message">
+                  {{#if (gt system_message.length 150)}}
+                    {{substring system_message 0 150}}...
+                  {{else}}
+                    {{system_message}}
+                  {{/if}}
+                </div>
+              {{/if}}
+            </div>
+          </div>
+        </div>
+      {{/each}}
+    </div>
+  {{else}}
+    <div class="empty-state">
+      <div class="empty-icon">🤖</div>
+      <h3>No AI Prompts Configured</h3>
+      <p>This content type doesn't have any AI prompts yet. Add your first prompt to enable AI content generation.</p>
+      <button id="addFirstPromptBtn" class="btn btn-primary">
+        ➕ Add First AI Prompt
+      </button>
+    </div>
+  {{/if}}
+</div>
+
+<!-- Add/Edit Prompt Modal -->
+<div id="promptModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">Add AI Prompt</h2>
+      <button class="modal-close">&times;</button>
+    </div>
+    <form id="promptForm" class="modal-body">
+      <input type="hidden" id="promptId" name="promptId">
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="promptName" class="required">Prompt Name</label>
+          <input type="text" id="promptName" name="name" class="form-control" required
+                 placeholder="e.g., Blog Post Generator">
+        </div>
+        
+        <div class="form-group">
+          <label for="aiProvider" class="required">AI Provider</label>
+          <select id="aiProvider" name="ai_provider" class="form-control" required>
+            <option value="">Select Provider...</option>
+            {{#each availableProviders}}
+              <option value="{{this}}">{{this}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="promptDescription">Description</label>
+        <input type="text" id="promptDescription" name="description" class="form-control"
+               placeholder="Brief description of what this prompt does">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="temperature">Temperature</label>
+          <input type="number" id="temperature" name="temperature" class="form-control"
+                 min="0" max="2" step="0.1" value="0.7">
+          <small class="form-help">Creativity level (0 = focused, 2 = creative)</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="maxTokens">Max Tokens</label>
+          <input type="number" id="maxTokens" name="max_tokens" class="form-control"
+                 min="1" max="100000" value="50000">
+          <small class="form-help">Maximum response length</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="systemMessage">System Message</label>
+        <textarea id="systemMessage" name="system_message" rows="3" class="form-control"
+                  placeholder="Optional system instructions for the AI..."></textarea>
+        <small class="form-help">Optional instructions that set the AI's behavior and context</small>
+      </div>
+
+      <div class="form-group">
+        <label for="promptText" class="required">Prompt Text</label>
+        <textarea id="promptText" name="prompt_text" rows="12" class="form-control large-textarea" required
+                  placeholder="Enter your detailed prompt here... This can be up to 50,000 characters."></textarea>
+        <small class="form-help">
+          <span id="charCount">0</span> / 50,000 characters
+        </small>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="isActive" name="is_active" checked>
+          <label for="isActive">
+            <strong>✅ Active</strong>
+            <span class="checkbox-help">Make this prompt available for use</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <span id="submitBtnText">Create Prompt</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.admin-prompts-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.header-left h1 {
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: #666;
+  margin: 0 0 10px 0;
+}
+
+.breadcrumb {
+  color: #999;
+  font-size: 0.9em;
+}
+
+.breadcrumb a {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #5a6fd8;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-outline {
+  background: white;
+  color: #667eea;
+  border: 1px solid #667eea;
+}
+
+.btn-outline:hover {
+  background: #667eea;
+  color: white;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.875em;
+}
+
+.prompts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  gap: 20px;
+}
+
+.prompt-card {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.prompt-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.prompt-card.inactive {
+  opacity: 0.7;
+  border-color: #ffc107;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 20px 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.prompt-info h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.prompt-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.provider-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.provider-openai { background: #74aa9c; color: white; }
+.provider-google, .provider-gemini { background: #4285f4; color: white; }
+.provider-claude { background: #d4700a; color: white; }
+.provider-chatgpt { background: #10a37f; color: white; }
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-body {
+  padding: 15px 20px;
+}
+
+.description {
+  margin: 0 0 15px 0;
+  color: #555;
+  line-height: 1.5;
+}
+
+.prompt-settings {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-item .label {
+  font-size: 0.8em;
+  color: #666;
+  font-weight: 500;
+}
+
+.setting-item .value {
+  font-weight: 500;
+  color: #333;
+}
+
+.prompt-preview h4 {
+  margin: 15px 0 8px 0;
+  color: #333;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.prompt-text, .system-message {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 4px solid #667eea;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85em;
+  line-height: 1.4;
+  color: #333;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+
+.system-message {
+  border-left-color: #28a745;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 5em;
+  margin-bottom: 20px;
+}
+
+.empty-state h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  background-color: white;
+  margin: 2% auto;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 30px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group label.required::after {
+  content: ' *';
+  color: #dc3545;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.large-textarea {
+  min-height: 300px;
+  font-family: 'Courier New', monospace;
+  resize: vertical;
+}
+
+.form-help {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.85em;
+  color: #666;
+}
+
+.checkbox-group {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 15px;
+  background: #f8f9fa;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin-right: 10px;
+  transform: scale(1.1);
+}
+
+.checkbox-group label {
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.checkbox-help {
+  font-size: 0.85em;
+  color: #666;
+  font-weight: normal;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+@media (max-width: 768px) {
+  .prompts-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-content {
+    margin: 5% auto;
+    width: 95%;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('promptModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const promptForm = document.getElementById('promptForm');
+  const promptText = document.getElementById('promptText');
+  const charCount = document.getElementById('charCount');
+  const submitBtnText = document.getElementById('submitBtnText');
+
+  // Character counter
+  promptText.addEventListener('input', function() {
+    const count = this.value.length;
+    charCount.textContent = count.toLocaleString();
+    
+    if (count > 50000) {
+      charCount.style.color = '#dc3545';
+      this.style.borderColor = '#dc3545';
+    } else if (count > 45000) {
+      charCount.style.color = '#ffc107';
+      this.style.borderColor = '#ffc107';
+    } else {
+      charCount.style.color = '#666';
+      this.style.borderColor = '#ddd';
+    }
+  });
+
+  // Modal controls
+  function openModal(isEdit = false, promptData = null) {
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    if (isEdit && promptData) {
+      modalTitle.textContent = 'Edit AI Prompt';
+      submitBtnText.textContent = 'Update Prompt';
+      
+      // Populate form
+      document.getElementById('promptId').value = promptData.id;
+      document.getElementById('promptName').value = promptData.name || '';
+      document.getElementById('aiProvider').value = promptData.ai_provider || '';
+      document.getElementById('promptDescription').value = promptData.description || '';
+      document.getElementById('temperature').value = promptData.temperature || 0.7;
+      document.getElementById('maxTokens').value = promptData.max_tokens || 50000;
+      document.getElementById('systemMessage').value = promptData.system_message || '';
+      document.getElementById('promptText').value = promptData.prompt_text || '';
+      document.getElementById('isActive').checked = promptData.is_active !== false;
+      
+      // Update character count
+      promptText.dispatchEvent(new Event('input'));
+    } else {
+      modalTitle.textContent = 'Add AI Prompt';
+      submitBtnText.textContent = 'Create Prompt';
+      promptForm.reset();
+      document.getElementById('isActive').checked = true;
+      charCount.textContent = '0';
+    }
+  }
+
+  function closeModal() {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    promptForm.reset();
+  }
+
+  // Event listeners
+  document.getElementById('addPromptBtn').addEventListener('click', () => openModal());
+  document.getElementById('addFirstPromptBtn')?.addEventListener('click', () => openModal());
+  
+  document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', closeModal);
+  });
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      closeModal();
+    }
+  });
+
+  // Edit prompt buttons
+  document.querySelectorAll('.edit-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const promptId = this.dataset.promptId;
+      try {
+        const response = await fetch(`/api/prompts/${promptId}`);
+        if (response.ok) {
+          const promptData = await response.json();
+          openModal(true, promptData);
+        } else {
+          alert('Failed to load prompt data');
+        }
+      } catch (error) {
+        alert('Error loading prompt: ' + error.message);
+      }
+    });
+  });
+
+  // Delete prompt buttons
+  document.querySelectorAll('.delete-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const promptId = this.dataset.promptId;
+      if (confirm('Are you sure you want to delete this AI prompt? This action cannot be undone.')) {
+        try {
+          const response = await fetch(`/admin/prompts/${promptId}`, {
+            method: 'DELETE'
+          });
+          
+          if (response.ok) {
+            location.reload();
+          } else {
+            const error = await response.json();
+            alert('Failed to delete prompt: ' + (error.error || 'Unknown error'));
+          }
+        } catch (error) {
+          alert('Error deleting prompt: ' + error.message);
+        }
+      }
+    });
+  });
+
+  // Form submission
+  promptForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+    
+    // Handle checkbox
+    data.is_active = document.getElementById('isActive').checked;
+    
+    const promptId = document.getElementById('promptId').value;
+    const isEdit = !!promptId;
+    
+    const url = isEdit 
+      ? `/admin/prompts/${promptId}`
+      : `/admin/content-types/{{contentType.id}}/prompts`;
+    
+    const method = isEdit ? 'PUT' : 'POST';
+    
+    try {
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        closeModal();
+        location.reload();
+      } else {
+        alert('Error: ' + (result.error || 'Failed to save prompt'));
+      }
+    } catch (error) {
+      alert('Error saving prompt: ' + error.message);
+    }
+  });
+
+  // Escape key to close modal
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && modal.style.display === 'block') {
+      closeModal();
+    }
+  });
+});
+</script>
