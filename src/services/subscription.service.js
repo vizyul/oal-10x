@@ -1,7 +1,16 @@
 const { logger } = require('../utils');
-// const subscriptionMiddleware = require('../middleware/subscription.middleware'); // Unused - logic reimplemented in service
+const { user, userSubscription, subscriptionUsage } = require('../models');
 
 class SubscriptionService {
+  /**
+   * Helper method to resolve user ID to PostgreSQL ID
+   * @param {string|number} userId - User identifier
+   * @returns {Promise<number|null>} PostgreSQL user ID or null
+   */
+  async _resolveUserId(userId) {
+    return await user.resolveUserId(userId);
+  }
+
   /**
    * Increment usage counter for a specific resource type
    * @param {string} userId - User ID
@@ -12,12 +21,6 @@ class SubscriptionService {
     try {
       logger.info(`Incrementing ${resource} usage for user ${userId} by ${increment}`);
 
-      // Use the existing incrementUserUsage function from subscription middleware
-      // This function is not exported, so we need to access it through the middleware internals
-      // For now, let's recreate the logic here or import it differently
-
-      const database = require('./database.service');
-
       // Get user's active subscription
       const subscription = await this.getUserActiveSubscription(userId);
       if (!subscription) {
@@ -25,83 +28,40 @@ class SubscriptionService {
         return;
       }
 
-      const now = new Date();
-
-      // Get user's integer ID for PostgreSQL
-      let pgUserId;
-      if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
-        // This is already a PostgreSQL user ID
-        pgUserId = parseInt(userId);
-      } else if (typeof userId === 'string' && userId.startsWith('rec')) {
-        // This is an Airtable record ID
-        const pgUsers = await database.findByField('users', 'airtable_id', userId);
-        if (pgUsers.length === 0) {
-          logger.debug(`No user found with airtable_id ${userId}, skipping usage increment`);
-          return;
-        }
-        pgUserId = pgUsers[0].id;
-      } else if (typeof userId === 'string' && userId.includes('@')) {
-        // This is an email address
-        const pgUsers = await database.findByField('users', 'email', userId);
-        if (pgUsers.length === 0) {
-          logger.debug(`No user found with email ${userId}, skipping usage increment`);
-          return;
-        }
-        pgUserId = pgUsers[0].id;
-      } else {
-        logger.warn(`Unrecognized userId format: ${userId} (type: ${typeof userId}), skipping usage increment`);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.debug(`No user found with identifier ${userId}, skipping usage increment`);
         return;
       }
 
-      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage
-      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
-      if (userSubscriptions.length === 0) {
+      // Get active subscription for the user
+      const activeSubscription = await userSubscription.getActiveByUserId(pgUserId);
+      if (!activeSubscription) {
+        logger.debug(`No active subscription found for user ${pgUserId}, skipping usage increment`);
         return;
       }
 
-      const subscriptionId = userSubscriptions[0].id;
-      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
-
-      let currentUsage = usageRecords.find(usage => {
-        const usageData = usage;
-        const usagePeriodStart = new Date(usageData.period_start);
-        const usagePeriodEnd = new Date(usageData.period_end);
-        return usagePeriodStart <= now && usagePeriodEnd >= now;
-      });
+      const subscriptionId = activeSubscription.id;
+      const currentUsage = await subscriptionUsage.getCurrentBySubscriptionId(subscriptionId);
 
       const fieldName = this.getUsageFieldName(resource);
 
       if (currentUsage) {
-        // Update existing usage record in PostgreSQL
-        const usageData = currentUsage;
-        const newValue = (usageData[fieldName] || 0) + increment;
-        const usageId = currentUsage.id;
-        await database.update('subscription_usage', usageId, {
-          [fieldName]: newValue
-        });
-        logger.info(`Updated ${resource} usage for user ${userId} in PostgreSQL: ${usageData[fieldName] || 0} -> ${newValue}`);
+        // Update existing usage record using model
+        await subscriptionUsage.incrementUsage(subscriptionId, fieldName, increment);
+        logger.info(`Updated ${resource} usage for user ${userId}: +${increment}`);
       } else {
         // Create new usage record for current period
-        const subscriptionRecords = await database.findByField('user_subscriptions', 'stripe_subscription_id', subscription.stripe_subscription_id);
-        const subscriptionRecord = subscriptionRecords[0];
+        const usageData = {
+          user_subscriptions_id: subscriptionId,
+          period_start: new Date(subscription.current_period_start).toISOString().split('T')[0],
+          period_end: new Date(subscription.current_period_end).toISOString().split('T')[0]
+        };
 
-        if (subscriptionRecord) {
-          const subscriptionData = subscriptionRecord;
-          const usageData = {
-            users_id: pgUserId,
-            subscription_id: parseInt(subscriptionData.id),
-            period_start: new Date(subscription.current_period_start).toISOString().split('T')[0],
-            period_end: new Date(subscription.current_period_end).toISOString().split('T')[0],
-            videos_processed: resource === 'videos' ? increment : 0,
-            api_calls_made: resource === 'api_calls' ? increment : 0,
-            storage_used_mb: resource === 'storage' ? increment : 0,
-            ai_summaries_generated: resource === 'ai_summaries' ? increment : 0,
-            analytics_views: resource === 'analytics' ? increment : 0
-          };
-
-          await database.create('subscription_usage', usageData);
-          logger.info(`Created new ${resource} usage record for user ${userId} in PostgreSQL: ${increment}`);
-        }
+        await subscriptionUsage.createUsage(usageData);
+        await subscriptionUsage.incrementUsage(subscriptionId, fieldName, increment);
+        logger.info(`Created new ${resource} usage record for user ${userId}: ${increment}`);
       }
     } catch (error) {
       logger.error(`Error incrementing ${resource} usage for user ${userId}:`, error);
@@ -116,65 +76,27 @@ class SubscriptionService {
    */
   async getCurrentUsage(userId) {
     try {
-      const database = require('./database.service');
-      const now = new Date();
-
-      // Get user's integer ID for PostgreSQL
-      let pgUserId;
-      if (typeof userId === 'string' && userId.startsWith('rec')) {
-        // This is an Airtable record ID
-        const pgUsers = await database.findByField('users', 'airtable_id', userId);
-        if (pgUsers.length === 0) {
-          return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-        }
-        pgUserId = pgUsers[0].id;
-      } else if (typeof userId === 'string' && userId.includes('@')) {
-        // This is likely an email address
-        const pgUsers = await database.findByField('users', 'email', userId);
-        if (pgUsers.length === 0) {
-          return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-        }
-        pgUserId = pgUsers[0].id;
-      } else {
-        // This is likely already a PostgreSQL user ID
-        pgUserId = parseInt(userId);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
       logger.info(`Getting current usage for user ${userId} (pgUserId: ${pgUserId})`);
 
-      // Get usage records through proper relationship: user -> user_subscriptions -> subscription_usage
-      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
-      if (userSubscriptions.length === 0) {
-        logger.info(`No subscriptions found for user ${pgUserId}`);
-        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
-      }
-
-      const subscriptionId = userSubscriptions[0].id;
-      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', subscriptionId);
-      logger.info(`Found ${usageRecords.length} usage records for user ${pgUserId}`);
-
-      // Find the current billing period usage record
-      const currentUsage = usageRecords.find(usage => {
-        const usageData = usage;
-        const usagePeriodStart = new Date(usageData.period_start);
-        const usagePeriodEnd = new Date(usageData.period_end);
-        const isCurrentPeriod = usagePeriodStart <= now && usagePeriodEnd >= now;
-
-        logger.info(`Checking usage record: start=${usagePeriodStart.toISOString()}, end=${usagePeriodEnd.toISOString()}, current=${isCurrentPeriod}`);
-        return isCurrentPeriod;
-      });
-
+      // Get current usage using model
+      const currentUsage = await subscriptionUsage.getCurrentByUserId(pgUserId);
+      
       if (!currentUsage) {
         logger.info(`No current billing period usage record found for user ${pgUserId}`);
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
-      const usageData = currentUsage;
       const result = {
-        videos: usageData.videos_processed || 0,
-        api_calls: usageData.api_calls_made || 0,
-        storage: usageData.storage_used_mb || 0,
-        ai_summaries: usageData.ai_summaries_generated || 0
+        videos: currentUsage.videos_processed || 0,
+        api_calls: currentUsage.api_calls_made || 0,
+        storage: currentUsage.storage_used_mb || 0,
+        ai_summaries: currentUsage.ai_summaries_generated || 0
       };
 
       logger.info(`Current usage for user ${pgUserId}:`, result);
@@ -192,39 +114,14 @@ class SubscriptionService {
    */
   async getUserActiveSubscription(userId) {
     try {
-      const database = require('./database.service');
-
-      // Get user's integer ID for PostgreSQL
-      let pgUserId;
-      if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
-        // This is already a PostgreSQL user ID
-        pgUserId = parseInt(userId);
-      } else if (typeof userId === 'string' && userId.startsWith('rec')) {
-        // This is an Airtable record ID
-        const pgUsers = await database.findByField('users', 'airtable_id', userId);
-        if (pgUsers.length === 0) {
-          return null;
-        }
-        pgUserId = pgUsers[0].id;
-      } else if (typeof userId === 'string' && userId.includes('@')) {
-        // This is an email address
-        const pgUsers = await database.findByField('users', 'email', userId);
-        if (pgUsers.length === 0) {
-          return null;
-        }
-        pgUserId = pgUsers[0].id;
-      } else {
-        logger.warn(`Unrecognized userId format: ${userId} (type: ${typeof userId})`);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
         return null;
       }
 
-      const subscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
-      const activeSubscription = subscriptions.find(sub => {
-        const subData = sub;
-        return ['active', 'trialing', 'paused'].includes(subData.status);
-      });
-
-      return activeSubscription || null;
+      const activeSubscription = await userSubscription.getActiveByUserId(pgUserId);
+      return activeSubscription;
     } catch (error) {
       logger.error('Error getting user subscription:', error);
       return null;
@@ -256,29 +153,9 @@ class SubscriptionService {
    */
   async getCurrentPeriodUsage(userId) {
     try {
-      const database = require('./database.service');
-
-      // Get user's active subscription
-      const subscription = await this.getUserActiveSubscriptionByPgId(userId);
-      if (!subscription) {
-        return 0;
-      }
-
-      const now = new Date();
-
-      // Query usage through proper relationship
-      const query = `
-        SELECT su.* FROM subscription_usage su
-        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
-        WHERE us.users_id = $1 
-          AND su.period_start <= $2 
-          AND su.period_end >= $2
-        ORDER BY su.created_at DESC
-        LIMIT 1
-      `;
-      const usageResult = await database.query(query, [userId, now]);
-      const currentUsage = usageResult.rows[0];
-
+      // Get current usage using model
+      const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
+      
       if (!currentUsage) {
         return 0;
       }
@@ -298,23 +175,9 @@ class SubscriptionService {
    */
   async getCurrentPeriodUsageBreakdown(userId) {
     try {
-      const database = require('./database.service');
-
-      const now = new Date();
-
-      // Query usage through proper relationship
-      const query = `
-        SELECT su.* FROM subscription_usage su
-        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
-        WHERE us.users_id = $1 
-          AND su.period_start <= $2 
-          AND su.period_end >= $2
-        ORDER BY su.created_at DESC
-        LIMIT 1
-      `;
-      const usageResult = await database.query(query, [userId, now]);
-      const currentUsage = usageResult.rows[0];
-
+      // Get current usage using model
+      const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
+      
       if (!currentUsage) {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
@@ -339,64 +202,32 @@ class SubscriptionService {
    */
   async trackUsage(userId, resource, increment = 1) {
     try {
-      const database = require('./database.service');
-
-      // Get user's active subscription
-      const subscription = await this.getUserActiveSubscriptionByPgId(userId);
-      if (!subscription) {
+      // Get user's active subscription using model
+      const activeSubscription = await userSubscription.getActiveByUserId(userId);
+      if (!activeSubscription) {
         logger.debug(`No active subscription found for user ${userId}, skipping usage tracking`);
         return;
       }
 
-      const now = new Date();
-
-      // Find current period usage record
-      const usageQuery = `
-        SELECT su.* FROM subscription_usage su
-        JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
-        WHERE us.users_id = $1 
-          AND su.period_start <= $2 
-          AND su.period_end >= $2
-        ORDER BY su.created_at DESC
-        LIMIT 1
-      `;
-      const usageResult = await database.query(usageQuery, [userId, now]);
-      let currentUsage = usageResult.rows[0];
-
+      const subscriptionId = activeSubscription.id;
       const fieldName = this.getUsageFieldName(resource);
 
+      // Get current usage record
+      let currentUsage = await subscriptionUsage.getCurrentBySubscriptionId(subscriptionId);
+
       if (currentUsage) {
-        // Update existing usage record
-        const newValue = (currentUsage[fieldName] || 0) + increment;
-        const updateQuery = `
-          UPDATE subscription_usage 
-          SET ${fieldName} = $1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `;
-        await database.query(updateQuery, [newValue, currentUsage.id]);
+        // Update existing usage record using model
+        await subscriptionUsage.incrementUsage(subscriptionId, fieldName, increment);
       } else {
         // Create new usage record for current period
-        const subscriptionQuery = `
-          SELECT * FROM user_subscriptions 
-          WHERE users_id = $1 
-            AND status IN ('active', 'trialing', 'paused')
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-        const subResult = await database.query(subscriptionQuery, [userId]);
-        const userSubscription = subResult.rows[0];
-
-        if (userSubscription) {
-          const periodStart = new Date(userSubscription.current_period_start);
-          const periodEnd = new Date(userSubscription.current_period_end);
-
-          const insertQuery = `
-            INSERT INTO subscription_usage (
-              user_subscriptions_id, period_start, period_end, ${fieldName}, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `;
-          await database.query(insertQuery, [userSubscription.id, periodStart, periodEnd, increment]);
-        }
+        const usageData = {
+          user_subscriptions_id: subscriptionId,
+          period_start: new Date(activeSubscription.current_period_start),
+          period_end: new Date(activeSubscription.current_period_end)
+        };
+        
+        await subscriptionUsage.createUsage(usageData);
+        await subscriptionUsage.incrementUsage(subscriptionId, fieldName, increment);
       }
 
       logger.info(`Tracked ${resource} usage for user ${userId}: +${increment}`);
@@ -413,17 +244,8 @@ class SubscriptionService {
    */
   async getUserActiveSubscriptionByPgId(userId) {
     try {
-      const database = require('./database.service');
-
-      const query = `
-        SELECT * FROM user_subscriptions 
-        WHERE users_id = $1 
-          AND status IN ('active', 'trialing', 'paused')
-        ORDER BY created_at DESC
-        LIMIT 1
-      `;
-      const result = await database.query(query, [userId]);
-      return result.rows[0] || null;
+      // Use the model's method which handles the same logic
+      return await userSubscription.getActiveByUserId(userId);
     } catch (error) {
       logger.error('Error getting user subscription by PG ID:', error);
       return null;
@@ -437,24 +259,9 @@ class SubscriptionService {
    */
   async createSubscription(subscriptionData) {
     try {
-      const database = require('./database.service');
       logger.info(`Creating subscription for user ${subscriptionData.users_id}`);
 
-      const fields = {
-        users_id: subscriptionData.users_id,
-        stripe_subscription_id: subscriptionData.stripe_subscription_id,
-        plan_name: subscriptionData.plan_name || 'free',
-        subscription_tier: subscriptionData.subscription_tier || 'free',
-        status: subscriptionData.status || 'active',
-        price_id: subscriptionData.price_id,
-        current_period_start: subscriptionData.current_period_start,
-        current_period_end: subscriptionData.current_period_end,
-        trial_start: subscriptionData.trial_start,
-        trial_end: subscriptionData.trial_end,
-        metadata: subscriptionData.metadata || {}
-      };
-
-      const subscription = await database.create('user_subscriptions', fields);
+      const subscription = await userSubscription.createSubscription(subscriptionData);
       logger.info(`Subscription created: ${subscription.id}`);
 
       return subscription;
@@ -471,28 +278,9 @@ class SubscriptionService {
    */
   async createUsageRecord(usageData) {
     try {
-      const database = require('./database.service');
       logger.info(`Creating usage record for subscription ${usageData.user_subscriptions_id}`);
 
-      const fields = {
-        user_subscriptions_id: usageData.user_subscriptions_id,
-        usage_type: usageData.usage_type || 'monthly',
-        usage_count: usageData.usage_count || 0,
-        usage_limit: usageData.usage_limit,
-        videos_processed: usageData.videos_processed || 0,
-        ai_summaries_generated: usageData.ai_summaries_generated || 0,
-        analytics_views: usageData.analytics_views || 0,
-        api_calls_made: usageData.api_calls_made || 0,
-        storage_used_mb: usageData.storage_used_mb || 0,
-        period_start: usageData.period_start,
-        period_end: usageData.period_end,
-        feature_used: usageData.feature_used,
-        ip_address: usageData.ip_address,
-        user_agent: usageData.user_agent,
-        metadata: usageData.metadata || {}
-      };
-
-      const usage = await database.create('subscription_usage', fields);
+      const usage = await subscriptionUsage.createUsage(usageData);
       logger.info(`Usage record created: ${usage.id}`);
 
       return usage;
@@ -509,23 +297,26 @@ class SubscriptionService {
    */
   async canProcessVideo(userId) {
     try {
-      const usage = await this.getCurrentUsage(userId);
-
-      if (!usage) {
-        logger.debug(`No usage data found for user ${userId}, assuming they can process`);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.debug(`No user found for identifier ${userId}, assuming they can process`);
         return true;
       }
 
-      // For free tier, limit might be 5 videos per month
-      // For premium, might be 100 videos per month
-      // These limits should be configurable based on subscription tier
+      // Get user's active subscription
+      const activeSubscription = await userSubscription.getActiveByUserId(pgUserId);
+      if (!activeSubscription) {
+        logger.debug(`No active subscription found for user ${userId}, assuming they can process`);
+        return true;
+      }
 
-      const currentCount = usage.videos_processed || 0;
-      const limit = usage.usage_limit || 5; // Default free tier limit
-
-      logger.debug(`User ${userId} usage: ${currentCount}/${limit} videos`);
-
-      return currentCount < limit;
+      // Use model method to check if usage limit has been exceeded
+      const hasExceeded = await subscriptionUsage.hasExceededLimit(activeSubscription.id, 'videos_processed');
+      
+      logger.debug(`User ${userId} video processing limit check: ${hasExceeded ? 'exceeded' : 'within limit'}`);
+      
+      return !hasExceeded; // Return true if not exceeded
     } catch (error) {
       logger.error('Error checking video processing capability:', error);
       // In case of error, allow processing (fail-safe)
@@ -541,50 +332,28 @@ class SubscriptionService {
     try {
       logger.debug(`Decrementing videos_processed count for user ${userId}`);
 
-      // Get the raw usage record from database (not the transformed one)
-      const database = require('./database.service');
-
-      // Convert userId to PostgreSQL ID if needed
-      let pgUserId;
-      if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const pgUsers = await database.findByField('users', 'airtable_id', userId);
-        if (pgUsers.length === 0) {
-          logger.warn(`User not found for Airtable ID ${userId}`);
-          return false;
-        }
-        pgUserId = pgUsers[0].id;
-      } else {
-        pgUserId = parseInt(userId);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.warn(`User not found for identifier ${userId}`);
+        return false;
       }
 
-      // Get user subscription
-      const userSubscriptions = await database.findByField('user_subscriptions', 'users_id', pgUserId);
-      if (userSubscriptions.length === 0) {
+      // Get user's active subscription
+      const activeSubscription = await userSubscription.getActiveByUserId(pgUserId);
+      if (!activeSubscription) {
         logger.warn(`No subscription found for user ${pgUserId} - cannot decrement`);
         return false;
       }
 
       // Get current usage record
-      const usageRecords = await database.findByField('subscription_usage', 'user_subscriptions_id', userSubscriptions[0].id);
-      if (usageRecords.length === 0) {
+      const currentUsage = await subscriptionUsage.getCurrentBySubscriptionId(activeSubscription.id);
+      if (!currentUsage) {
         logger.warn(`No usage record found for user ${pgUserId} - cannot decrement`);
         return false;
       }
 
-      // Find current billing period usage record
-      const now = new Date();
-      const currentUsageRecord = usageRecords.find(usage => {
-        const usagePeriodStart = new Date(usage.period_start);
-        const usagePeriodEnd = new Date(usage.period_end);
-        return usagePeriodStart <= now && usagePeriodEnd >= now;
-      });
-
-      if (!currentUsageRecord) {
-        logger.warn(`No current billing period usage record found for user ${pgUserId} - cannot decrement`);
-        return false;
-      }
-
-      const currentCount = currentUsageRecord.videos_processed || 0;
+      const currentCount = currentUsage.videos_processed || 0;
 
       // Don't decrement below 0
       if (currentCount <= 0) {
@@ -592,15 +361,10 @@ class SubscriptionService {
         return false;
       }
 
-      const newCount = currentCount - 1;
+      // Use model method to decrement usage
+      await subscriptionUsage.decrementUsage(activeSubscription.id, 'videos_processed', 1);
 
-      // Update the usage record
-      await database.update('subscription_usage', currentUsageRecord.id, {
-        videos_processed: newCount,
-        updated_at: new Date().toISOString()
-      });
-
-      logger.info(`Successfully decremented videos_processed from ${currentCount} to ${newCount} for user ${userId}`);
+      logger.info(`Successfully decremented videos_processed from ${currentCount} to ${currentCount - 1} for user ${userId}`);
       return true;
 
     } catch (error) {

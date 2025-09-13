@@ -1,7 +1,7 @@
 const { google } = require('googleapis');
 const crypto = require('crypto');
 const { logger } = require('../utils');
-const database = require('./database.service');
+const { youtubeOauthTokens, userYoutubeChannels, user: userModel } = require('../models');
 
 class YouTubeOAuthService {
   constructor() {
@@ -528,11 +528,11 @@ class YouTubeOAuthService {
 
     // If it starts with 'rec', it's an Airtable record ID - look up the PostgreSQL ID
     if (userId.toString().startsWith('rec')) {
-      const records = await database.findByField('users', 'airtable_id', userId);
-      if (!records || records.length === 0) {
+      const user = await userModel.findByAirtableId(userId);
+      if (!user) {
         throw new Error(`No PostgreSQL user found for Airtable ID: ${userId}`);
       }
-      return records[0].id;
+      return user.id;
     }
 
     throw new Error(`Invalid user ID format: ${userId}`);
@@ -633,10 +633,7 @@ class YouTubeOAuthService {
       const resolvedUserId = await this.resolveUserId(userId);
 
       // Check if tokens already exist for this user and channel
-      const existingRecords = await database.query(
-        'SELECT id FROM youtube_oauth_tokens WHERE users_id = $1 AND channel_id = $2',
-        [resolvedUserId, channelData.id]
-      );
+      const existingToken = await youtubeOauthTokens.findUserChannelToken(resolvedUserId, channelData.id);
 
       const tokenData = {
         users_id: resolvedUserId,
@@ -653,15 +650,13 @@ class YouTubeOAuthService {
       };
 
       let result;
-      if (existingRecords.rows && existingRecords.rows.length > 0) {
+      if (existingToken) {
         // Update existing record
-        const existingId = existingRecords.rows[0].id;
-        result = await database.update('youtube_oauth_tokens', existingId, tokenData);
+        result = await youtubeOauthTokens.updateToken(existingToken.id, tokenData);
         logger.debug(`Tokens updated in PostgreSQL for user ${userId}`);
       } else {
         // Create new record
-        tokenData.created_at = new Date().toISOString();
-        result = await database.create('youtube_oauth_tokens', tokenData);
+        result = await youtubeOauthTokens.createToken(tokenData);
         logger.debug(`Tokens created in PostgreSQL for user ${userId}`);
       }
 
@@ -682,7 +677,7 @@ class YouTubeOAuthService {
       const resolvedUserId = await this.resolveUserId(userId);
 
       // Check if channel already exists
-      const existingChannels = await database.findByField('user_youtube_channels', 'channel_id', channelData.id);
+      const existingChannel = await userYoutubeChannels.findByChannelId(channelData.id);
 
       const channelRecord = {
         users_id: resolvedUserId,
@@ -698,14 +693,13 @@ class YouTubeOAuthService {
       };
 
       let result;
-      if (existingChannels && existingChannels.length > 0) {
+      if (existingChannel) {
         // Update existing channel
-        const existingChannel = existingChannels[0];
-        result = await database.update('user_youtube_channels', existingChannel.id, channelRecord);
+        result = await userYoutubeChannels.updateChannel(existingChannel.id, channelRecord);
         logger.debug(`Channel updated in PostgreSQL for user ${userId}`);
       } else {
         // Create new channel
-        result = await database.create('user_youtube_channels', channelRecord);
+        result = await userYoutubeChannels.createChannel(channelRecord);
         logger.debug(`Channel created in PostgreSQL for user ${userId}`);
       }
 
@@ -725,15 +719,14 @@ class YouTubeOAuthService {
     try {
       // Get tokens from PostgreSQL
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
+      const tokens = await youtubeOauthTokens.getUserTokensWithSecrets(resolvedUserId);
 
-      if (!records || records.length === 0) {
+      if (!tokens || tokens.length === 0) {
         return null;
       }
 
       // Get the most recent active token
-      // Note: PostgreSQL returns records directly, not wrapped in {fields: ...}
-      const activeTokens = records
+      const activeTokens = tokens
         .filter(record => record.is_active)
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
@@ -752,13 +745,13 @@ class YouTubeOAuthService {
   async updateUserTokens(userId, encryptedTokens) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
+      const tokens = await youtubeOauthTokens.getUserTokens(resolvedUserId, { activeOnly: true });
 
-      if (!records || records.length === 0) {
+      if (!tokens || tokens.length === 0) {
         throw new Error('No tokens found to update');
       }
 
-      const record = records[0];
+      const record = tokens[0];
       const updateData = {
         encrypted_tokens: encryptedTokens.encrypted_tokens,
         encryption_iv: encryptedTokens.iv,
@@ -766,7 +759,7 @@ class YouTubeOAuthService {
         last_refreshed: new Date().toISOString()
       };
 
-      await database.update('youtube_oauth_tokens', record.id, updateData);
+      await youtubeOauthTokens.updateToken(record.id, updateData);
     } catch (error) {
       logger.error('Error updating user tokens:', error);
       throw new Error('Failed to update tokens');
@@ -780,13 +773,7 @@ class YouTubeOAuthService {
   async deactivateUserTokens(userId) {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
-      const records = await database.findByField('youtube_oauth_tokens', 'users_id', resolvedUserId);
-
-      for (const record of records) {
-        await database.update('youtube_oauth_tokens', record.id, {
-          is_active: false
-        });
-      }
+      await youtubeOauthTokens.deactivateUserTokens(resolvedUserId);
     } catch (error) {
       logger.error('Error deactivating user tokens:', error);
       throw new Error('Failed to deactivate tokens');

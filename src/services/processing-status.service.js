@@ -22,13 +22,9 @@ class ProcessingStatusService extends EventEmitter {
     }
 
     try {
-      const database = require('./database.service');
-      const result = await database.query(`
-        SELECT DISTINCT content_type 
-        FROM ai_prompts 
-        WHERE is_active = true
-        ORDER BY content_type
-      `);
+      const { aiPrompts } = require('../models');
+      const availableTypes = await aiPrompts.getAvailableContentTypes();
+      const result = { rows: availableTypes.map(type => ({ content_type: type.type })) };
 
       this.contentTypesCache = result.rows.map(row => row.content_type);
       this.contentTypesCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes

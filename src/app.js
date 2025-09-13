@@ -53,6 +53,19 @@ app.engine('.hbs', engine({
     capitalize: (str) => {
       if (!str || typeof str !== 'string') return str;
       return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    },
+    substring: (str, start, end) => {
+      if (!str || typeof str !== 'string') return '';
+      return str.substring(start, end);
+    },
+    lookup: (obj, key) => {
+      return obj && obj[key];
+    },
+    unless: (condition, options) => {
+      if (!condition) {
+        return options.fn && options.fn();
+      }
+      return options.inverse && options.inverse();
     }
   }
 }));

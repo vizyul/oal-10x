@@ -57,8 +57,12 @@ const securityMiddleware = [
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
-      // Skip rate limiting for health check and static assets
-      return req.path === '/health' || req.path.startsWith('/css') || req.path.startsWith('/js') || req.path.startsWith('/images');
+      // Skip rate limiting for health check, static assets, and logout
+      return req.path === '/health' || 
+             req.path === '/auth/logout' ||
+             req.path.startsWith('/css') || 
+             req.path.startsWith('/js') || 
+             req.path.startsWith('/images');
     }
   })
 ];
@@ -177,10 +181,11 @@ const authMiddleware = async (req, res, next) => {
       logger.info('Processing forced token refresh for user:', { userId });
     }
 
+
     if (decoded.firstName && decoded.emailVerified !== undefined) {
-      // JWT contains user data - check if subscription fields are missing
-      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
-        // Old token format - needs refresh with subscription data
+      // JWT contains user data - check if subscription fields or role are missing
+      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined || decoded.role === undefined) {
+        // Old token format - needs refresh with subscription data and role
         needsTokenRefresh = true;
       }
 
@@ -193,6 +198,7 @@ const authMiddleware = async (req, res, next) => {
         fullName: `${decoded.firstName} ${decoded.lastName}`,
         emailVerified: decoded.emailVerified,
         status: decoded.status,
+        role: decoded.role,
         subscription_tier: decoded.subscription_tier,
         subscription_status: decoded.subscription_status,
         stripe_customer_id: decoded.stripe_customer_id
@@ -295,9 +301,9 @@ const optionalAuthMiddleware = async (req, res, next) => {
     let needsTokenRefresh = false;
 
     if (decoded.firstName && decoded.emailVerified !== undefined) {
-      // JWT contains user data - check if subscription fields are missing
-      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined) {
-        // Old token format - needs refresh with subscription data
+      // JWT contains user data - check if subscription fields or role are missing
+      if (decoded.subscription_tier === undefined || decoded.subscription_status === undefined || decoded.role === undefined) {
+        // Old token format - needs refresh with subscription data and role
         needsTokenRefresh = true;
       }
 
@@ -310,6 +316,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
         fullName: `${decoded.firstName} ${decoded.lastName}`,
         emailVerified: decoded.emailVerified,
         status: decoded.status,
+        role: decoded.role,
         subscription_tier: decoded.subscription_tier,
         subscription_status: decoded.subscription_status,
         stripe_customer_id: decoded.stripe_customer_id

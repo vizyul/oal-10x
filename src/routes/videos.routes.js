@@ -15,15 +15,10 @@ async function getAvailableContentTypes() {
   }
 
   try {
-    const database = require('../services/database.service');
-    const result = await database.query(`
-      SELECT DISTINCT content_type 
-      FROM ai_prompts 
-      WHERE is_active = true
-      ORDER BY content_type
-    `);
-
-    contentTypesCache = ['transcript', ...result.rows.map(row => row.content_type)];
+    const { aiPrompts } = require('../models');
+    const availableTypes = await aiPrompts.getAvailableContentTypes();
+    
+    contentTypesCache = ['transcript', ...availableTypes.map(type => type.type)];
     cacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
     return contentTypesCache;
   } catch {

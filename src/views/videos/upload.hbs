@@ -115,7 +115,7 @@
               </div>
               <div class="control-group">
                 <label for="playlist-selector" class="control-label">Playlist:</label>
-                <select id="playlist-selector" class="form-input hidden">
+                <select id="playlist-selector" class="form-input">
                   <option value="">All Videos (No playlist filter)</option>
                 </select>
               </div>
@@ -131,7 +131,9 @@
                   <button type="button" id="clear-selection-btn" class="btn btn-secondary btn-small">Clear</button>
                 </div>
               </div>
-              
+              <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
+                Amplify Selected Videos
+              </button>
               <div class="videos-container" id="videos-container">
                 <!-- Video items will be loaded here -->
               </div>
@@ -143,9 +145,7 @@
                 </div>
               </div>
               
-              <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
-                Amplify Selected Videos
-              </button>
+              
             </div>
           </div>
         </div>
@@ -178,7 +178,7 @@ https://www.youtube.com/watch?v=..."
           <div class="form-help">Enter one URL per line. You can paste multiple URLs at once.</div>
         </div>
         
-        <button type="submit" class="btn btn-primary btn-large" id="url-upload-btn">
+        <button type="submit" class="btn btn-primary btn-large hidden" id="url-upload-btn">
           Process Videos
         </button>
       </form>
@@ -206,6 +206,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // DOM Elements
   const urlForm = document.getElementById('url-upload-form');
   const urlUploadBtn = document.getElementById('url-upload-btn');
+  const youtubeUrlsTextarea = document.getElementById('youtube-urls');
   const progressDiv = document.getElementById('upload-progress');
   const progressFill = document.getElementById('progress-fill');
   const progressMessage = document.getElementById('progress-message');
@@ -246,6 +247,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Content Type Selection State
   let availableContentTypes = [];
   let selectedContentTypes = new Set();
+  
+  // URL Validation Functions
+  function validateURLInput() {
+    const text = youtubeUrlsTextarea.value.trim();
+    
+    if (!text) {
+      urlUploadBtn.classList.add('hidden');
+      return;
+    }
+    
+    const { urls, errors } = parseURLs(text);
+    
+    if (urls.length > 0 && errors.length === 0) {
+      urlUploadBtn.classList.remove('hidden');
+    } else {
+      urlUploadBtn.classList.add('hidden');
+    }
+  }
   
   // Initialize - ensure error is hidden on page load
   if (contentTypeError) {
@@ -809,6 +828,13 @@ document.addEventListener('DOMContentLoaded', function() {
   importSelectedBtn?.addEventListener('click', importSelectedVideos);
   selectAllBtn?.addEventListener('click', selectAllVideos);
   clearSelectionBtn?.addEventListener('click', clearVideoSelection);
+  
+  // Add URL validation event listener
+  youtubeUrlsTextarea?.addEventListener('input', validateURLInput);
+  youtubeUrlsTextarea?.addEventListener('paste', function() {
+    // Use setTimeout to allow paste content to be processed
+    setTimeout(validateURLInput, 10);
+  });
   
   urlForm.addEventListener('submit', async (e) => {
     e.preventDefault();

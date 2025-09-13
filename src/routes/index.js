@@ -96,6 +96,9 @@ router.use('/videos', require('./videos-web.routes'));
 // API routes
 router.use('/api', require('./api.routes'));
 
+// Admin routes (protected by admin middleware)
+router.use('/admin', require('./admin.routes'));
+
 // Terms and Privacy pages
 router.get('/terms', (req, res) => {
   res.render('legal/terms', {

@@ -1,4 +1,5 @@
 const database = require('./database.service');
+const { user: UserModel } = require('../models');
 const jwt = require('jsonwebtoken');
 const { logger } = require('../utils');
 
@@ -66,7 +67,7 @@ class AuthService {
         };
       }
 
-      const record = await database.create(this.tableName, fields);
+      const record = await UserModel.createUser(fields);
 
       return this.formatUserRecord(record);
     } catch (error) {
@@ -82,19 +83,35 @@ class AuthService {
    */
   async findUserByEmail(email) {
     try {
-      const records = await database.findByField(
-        this.tableName,
-        'email',
-        email
-      );
+      const foundUser = await UserModel.findByEmail(email);
 
-      if (records.length === 0) {
+      if (!foundUser) {
         return null;
       }
 
-      return this.formatUserRecord(records[0]);
+      return this.formatUserRecord(foundUser);
     } catch (error) {
       logger.error('Error finding user by email:', error.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Find user by email address (including password for authentication)
+   * @param {string} email - User email address
+   * @returns {Promise<Object|null>} User object with password or null if not found
+   */
+  async findUserByEmailForAuth(email) {
+    try {
+      const foundUser = await UserModel.findByEmailWithPassword(email);
+
+      if (!foundUser) {
+        return null;
+      }
+
+      return this.formatUserRecord(foundUser);
+    } catch (error) {
+      logger.error('Error finding user by email for auth:', error.message || error);
       return null;
     }
   }
@@ -108,22 +125,18 @@ class AuthService {
     try {
       logger.info(`Finding user by Apple ID: ${appleId}`);
 
-      // Query using the normalized oauth_provider and oauth_id columns
-      const query = `
-        SELECT * FROM ${this.tableName} 
-        WHERE oauth_provider = 'apple' AND oauth_id = $1
-      `;
-      const result = await database.query(query, [appleId]);
+      // Find user by OAuth credentials
+      const foundUser = await UserModel.findByOAuth('apple', appleId);
 
-      if (result.rows.length === 0) {
+      if (!foundUser) {
         logger.info(`No user found with Apple ID: ${appleId}`);
         return null;
       }
 
-      const user = this.formatUserRecord(database.formatRecord(result.rows[0]));
-      logger.info(`User found by Apple ID: ${user.email}`);
+      const userRecord = this.formatUserRecord(foundUser);
+      logger.info(`User found by Apple ID: ${userRecord.email}`);
 
-      return user;
+      return userRecord;
     } catch (error) {
       logger.error('Error finding user by Apple ID:', error);
       throw new Error('Failed to find user by Apple ID');
@@ -138,25 +151,22 @@ class AuthService {
     try {
       logger.info('Finding most recent Apple user as fallback');
 
-      // Use raw SQL to get Apple users sorted by updated timestamp descending
-      const query = `
-        SELECT * FROM ${this.tableName} 
-        WHERE oauth_provider = 'apple' AND status = 'active'
-        ORDER BY updated_at DESC 
-        LIMIT 1
-      `;
+      // Get the most recent Apple user
+      const appleUsers = await UserModel.getActiveUsers({ 
+        provider: 'apple',
+        limit: 1,
+        orderBy: 'updated_at DESC'
+      });
 
-      const result = await database.query(query);
-
-      if (result.rows.length === 0) {
+      if (!appleUsers || appleUsers.length === 0) {
         logger.info('No active Apple users found');
         return null;
       }
 
-      const user = this.formatUserRecord(database.formatRecord(result.rows[0]));
-      logger.info(`Found most recent Apple user: ${user.email}`);
+      const userRecord = this.formatUserRecord(appleUsers[0]);
+      logger.info(`Found most recent Apple user: ${userRecord.email}`);
 
-      return user;
+      return userRecord;
     } catch (error) {
       logger.error('Error finding most recent Apple user:', error);
       throw new Error('Failed to find Apple user');
@@ -172,13 +182,13 @@ class AuthService {
     try {
       logger.info(`Finding user by ID: ${userId}`);
 
-      const record = await database.findById(this.tableName, userId);
+      const foundUser = await UserModel.findById(userId);
 
-      if (!record) {
+      if (!foundUser) {
         return null;
       }
 
-      return this.formatUserRecord(record);
+      return this.formatUserRecord(foundUser);
     } catch (error) {
       logger.error('Error finding user by ID:', error);
       throw new Error('Failed to find user');
@@ -234,7 +244,7 @@ class AuthService {
       if (updateData.subscription_tier) mappedData.subscription_tier = updateData.subscription_tier;
       if (updateData.subscription_status) mappedData.subscription_status = updateData.subscription_status;
 
-      const record = await database.update(this.tableName, userId, mappedData);
+      const record = await UserModel.updateUser(userId, mappedData);
 
       return this.formatUserRecord(record);
     } catch (error) {
@@ -252,22 +262,18 @@ class AuthService {
     try {
       logger.info('Verifying email token');
 
-      const records = await database.findByField(
-        this.tableName,
-        'email_verification_token',
-        token
-      );
+      const foundUser = await UserModel.findByField('email_verification_token', token);
 
-      if (records.length === 0) {
+      if (!foundUser) {
         logger.warn('Email verification token not found');
         return null;
       }
 
-      const user = this.formatUserRecord(records[0]);
+      const userRecord = this.formatUserRecord(foundUser);
 
       // Check if token is expired
       const now = new Date();
-      const expiryDate = new Date(user.emailVerificationExpires);
+      const expiryDate = new Date(userRecord.emailVerificationExpires);
 
       if (now > expiryDate) {
         logger.warn('Email verification token expired');
@@ -275,7 +281,7 @@ class AuthService {
       }
 
       // Update user to mark email as verified
-      const updatedUser = await this.updateUser(user.id, {
+      const updatedUser = await this.updateUser(userRecord.id, {
         emailVerified: true,
         emailVerificationToken: null,
         emailVerificationExpires: null,
@@ -336,6 +342,7 @@ class AuthService {
       termsAccepted: fields.terms_accepted || false,
       privacyAccepted: fields.privacy_accepted || false,
       status: fields.status || 'pending',
+      role: fields.role || 'user',
       createdAt: fields.created_at,
       updatedAt: fields.updated_at,
       lastLoginAt: fields.last_login, // Use existing last_login column
@@ -375,6 +382,7 @@ class AuthService {
         payload.lastName = userData.lastName;
         payload.emailVerified = userData.emailVerified;
         payload.status = userData.status;
+        payload.role = userData.role;
         payload.subscription_tier = userData.subscription_tier;
         payload.subscription_status = userData.subscription_status;
         payload.stripe_customer_id = userData.stripe_customer_id;
@@ -407,7 +415,7 @@ class AuthService {
    */
   async getUserStats() {
     try {
-      const allUsers = await database.findAll(this.tableName);
+      const allUsers = await UserModel.findAll();
 
       const stats = {
         total: allUsers.length,
@@ -501,10 +509,10 @@ class AuthService {
         subscription_tier: userData.subscription_tier || 'free'
       };
 
-      const user = await database.create(this.tableName, fields);
-      logger.info(`OAuth user created successfully: ${user.email}`);
+      const createdUser = await UserModel.createUser(fields);
+      logger.info(`OAuth user created successfully: ${createdUser.email}`);
 
-      return this.formatUserRecord(user);
+      return this.formatUserRecord(createdUser);
     } catch (error) {
       logger.error('Error creating OAuth user:', error);
       logger.error('OAuth user data was:', userData);
@@ -525,21 +533,17 @@ class AuthService {
     try {
       logger.info(`Finding user by OAuth: ${provider}:${oauthId}`);
 
-      const query = `
-        SELECT * FROM ${this.tableName} 
-        WHERE oauth_provider = $1 AND oauth_id = $2
-      `;
-      const result = await database.query(query, [provider, oauthId]);
+      const foundUser = await UserModel.findByOAuth(provider, oauthId);
 
-      if (result.rows.length === 0) {
+      if (!foundUser) {
         logger.info(`No user found with OAuth ${provider}:${oauthId}`);
         return null;
       }
 
-      const user = this.formatUserRecord(result.rows[0]);
-      logger.info(`User found by OAuth: ${user.email}`);
+      const userRecord = this.formatUserRecord(foundUser);
+      logger.info(`User found by OAuth: ${userRecord.email}`);
 
-      return user;
+      return userRecord;
     } catch (error) {
       logger.error('Error finding user by OAuth:', error);
       throw new Error('Failed to find user by OAuth credentials');

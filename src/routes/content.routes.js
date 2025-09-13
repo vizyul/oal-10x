@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const contentController = require('../controllers/content.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { authMiddleware } = require('../middleware');
 const { body, param, query } = require('express-validator');
 
-// Apply authentication to all content routes
-router.use(authMiddleware.authenticateToken);
+// Apply authentication individually to routes instead of using router.use 
 
 /**
  * GET /api/content/types
  * Get all available content types
  */
-router.get('/types', contentController.getContentTypes);
+router.get('/types', authMiddleware, contentController.getContentTypes);
 
 /**
  * GET /api/content/videos/:videoId
  * Get all content for a specific video
  */
 router.get('/videos/:videoId', 
+  authMiddleware,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   query('includeMetadata').optional().isBoolean().withMessage('includeMetadata must be boolean'),
   query('publishedOnly').optional().isBoolean().withMessage('publishedOnly must be boolean'),
@@ -29,6 +29,7 @@ router.get('/videos/:videoId',
  * Get specific content type for a video
  */
 router.get('/videos/:videoId/:contentType',
+  authMiddleware,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
   query('version').optional().isInt({ min: 1 }).withMessage('Version must be positive integer'),
@@ -40,6 +41,7 @@ router.get('/videos/:videoId/:contentType',
  * Create new content for a video
  */
 router.post('/videos/:videoId',
+  authMiddleware,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   body('contentTypeKey').isLength({ min: 1 }).withMessage('Content type key is required'),
   body('contentText').optional().isLength({ min: 1 }).withMessage('Content text cannot be empty if provided'),
@@ -56,6 +58,7 @@ router.post('/videos/:videoId',
  * Update existing content
  */
 router.put('/:contentId',
+  authMiddleware,
   param('contentId').isInt().withMessage('Content ID must be an integer'),
   body('contentText').optional().isLength({ min: 1 }).withMessage('Content text cannot be empty if provided'),
   body('contentUrl').optional().isURL().withMessage('Content URL must be valid URL'),
@@ -71,6 +74,7 @@ router.put('/:contentId',
  * Delete content
  */
 router.delete('/:contentId',
+  authMiddleware,
   param('contentId').isInt().withMessage('Content ID must be an integer'),
   contentController.deleteVideoContent
 );
@@ -80,6 +84,7 @@ router.delete('/:contentId',
  * Get content generation statistics
  */
 router.get('/statistics',
+  authMiddleware,
   query('userId').optional().isInt().withMessage('User ID must be integer'),
   query('startDate').optional().isISO8601().withMessage('Start date must be valid ISO date'),
   query('endDate').optional().isISO8601().withMessage('End date must be valid ISO date'),

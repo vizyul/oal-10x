@@ -1,4 +1,5 @@
 const database = require('./database.service');
+const { sessions } = require('../models');
 const { logger } = require('../utils');
 const crypto = require('crypto');
 
@@ -206,7 +207,7 @@ class SessionService {
         duration: 0.00 // Initialize duration as 0.00 for active sessions
       };
 
-      const record = await database.create(this.tableName, fields);
+      const record = await sessions.createSession(fields);
       logger.info(`Session created successfully: ${record.id}`);
 
       return this.formatSessionRecord(record);
@@ -234,14 +235,12 @@ class SessionService {
       }
 
       // Find session by session_id
-      const sessions = await database.findByField(this.tableName, 'session_id', sessionId);
+      const sessionRecord = await sessions.findBySessionId(sessionId);
 
-      if (sessions.length === 0) {
+      if (!sessionRecord) {
         logger.warn(`Session not found: ${sessionId}`);
         return null;
       }
-
-      const sessionRecord = sessions[0];
 
       // Map update data to PostgreSQL fields
       const mappedData = {};
@@ -255,7 +254,7 @@ class SessionService {
         logger.info(`Duration field debug: value=${updateData.duration}, type=${typeof updateData.duration}`);
       }
 
-      const updatedRecord = await database.update(this.tableName, sessionRecord.id, mappedData);
+      const updatedRecord = await sessions.updateActivity(sessionId, mappedData);
 
       return this.formatSessionRecord(updatedRecord);
     } catch (error) {
@@ -299,41 +298,17 @@ class SessionService {
         return;
       }
 
-      // Find active sessions for the user using SQL query
-      const query = `
-        SELECT session_id, created_at 
-        FROM ${this.tableName} 
-        WHERE users_id = $1 AND status = 'active'
-      `;
+      // Find active sessions for the user
+      const activeSessions = await sessions.findActiveByUserId(userId);
 
-      const result = await database.query(query, [userId]);
-      const records = result.rows;
-
-      const expiredAt = new Date().toISOString();
-
-      for (const record of records) {
-        const sessionId = record.session_id;
+      for (const sessionRecord of activeSessions) {
+        const sessionId = sessionRecord.session_id;
         if (sessionId) {
-          // Let the database calculate duration to avoid timezone issues
-          const durationQuery = `
-            SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) as duration_seconds
-            FROM sessions 
-            WHERE session_id = $1
-          `;
-          const durationResult = await database.query(durationQuery, [sessionId]);
-          const durationSeconds = Math.round(Math.abs(durationResult.rows[0].duration_seconds));
-          const duration = this.secondsToDecimalDuration(durationSeconds);
-
-          await this.updateSession(sessionId, {
-            endedAt: expiredAt,
-            status: 'expired',
-            lastActivityAt: expiredAt,
-            duration
-          });
+          await sessions.endSession(sessionId, 'expired');
         }
       }
 
-      logger.info(`Expired ${records.length} sessions for user: ${userId}`);
+      logger.info(`Expired ${activeSessions.length} sessions for user: ${userId}`);
     } catch (error) {
       logger.error('Error expiring user sessions:', error);
     }
@@ -413,46 +388,17 @@ class SessionService {
         return;
       }
 
-      // Find active sessions for the user using SQL query
-      const query = `
-        SELECT session_id, created_at 
-        FROM ${this.tableName} 
-        WHERE users_id = $1 AND status = 'active'
-      `;
+      // Find active sessions for the user
+      const activeSessions = await sessions.findActiveByUserId(userId);
 
-      const result = await database.query(query, [userId]);
-      const records = result.rows;
-
-      const endedAt = new Date().toISOString();
-
-      for (const record of records) {
-        const sessionId = record.session_id;
+      for (const sessionRecord of activeSessions) {
+        const sessionId = sessionRecord.session_id;
         if (sessionId) {
-          // Let the database calculate duration to avoid timezone issues
-          const durationQuery = `
-            SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) as duration_seconds
-            FROM sessions 
-            WHERE session_id = $1
-          `;
-          const durationResult = await database.query(durationQuery, [sessionId]);
-          const durationSeconds = Math.round(Math.abs(durationResult.rows[0].duration_seconds));
-          const duration = this.secondsToDecimalDuration(durationSeconds);
-
-          // Enhanced logging for duration calculation
-          const hours = Math.floor(duration);
-          const minutes = Math.round((duration - hours) * 100);
-          logger.info(`Session ${sessionId} duration: ${durationSeconds}s = ${duration} (${hours}h ${minutes}m)`);
-
-          await this.updateSession(sessionId, {
-            endedAt: endedAt,
-            status: 'logged_out',
-            lastActivityAt: endedAt,
-            duration
-          });
+          await sessions.endSession(sessionId, 'logged_out');
         }
       }
 
-      logger.info(`Ended ${records.length} active sessions for user: ${userId}`);
+      logger.info(`Ended ${activeSessions.length} active sessions for user: ${userId}`);
     } catch (error) {
       logger.error('Error ending user sessions:', error);
     }
@@ -517,13 +463,7 @@ class SessionService {
         return { total: 0, active: 0, expired: 0, loggedOut: 0 };
       }
 
-      const query = `
-        SELECT status, login_method, created_at 
-        FROM ${this.tableName}
-      `;
-
-      const result = await database.query(query);
-      const allSessions = result.rows;
+      const allSessions = await sessions.findAll();
 
       const stats = {
         total: allSessions.length,
@@ -578,25 +518,14 @@ class SessionService {
         return null;
       }
 
-      // Update session with calculated duration from PostgreSQL
-      const query = `
-        UPDATE ${this.tableName}
-        SET 
-          duration = ROUND(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))::numeric / 3600, 2),
-          last_activity_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING *
-      `;
+      // Update session activity (which will also update duration)
+      const updatedSession = await sessions.updateActivity(sessionId);
 
-      const result = await database.query(query, [sessionId]);
-
-      if (result.rows.length === 0) {
+      if (!updatedSession) {
         logger.warn(`Session not found: ${sessionId}`);
         return null;
       }
 
-      const updatedSession = result.rows[0];
       logger.debug(`Session duration updated: ${updatedSession.duration} hours`);
 
       return this.formatSessionRecord(updatedSession);

@@ -1,6 +1,6 @@
 const stripe = require('stripe')(require('../config/stripe.config').getSecretKey());
 const stripeConfig = require('../config/stripe.config');
-const database = require('./database.service');
+const { user: UserModel, userSubscription, subscriptionUsage, subscriptionEvents } = require('../models');
 const { logger } = require('../utils');
 const { clearCachedUser, forceTokenRefresh } = require('../middleware');
 
@@ -70,12 +70,11 @@ class StripeService {
       // Check if user already has a Stripe customer ID
       let user;
       try {
-        user = await database.findById('users', userId);
+        user = await UserModel.findById(userId);
       // eslint-disable-next-line no-unused-vars
       } catch (_recordIdError) {
         logger.info('User ID not found by ID, searching by email:', { userId, email });
-        const users = await database.findByField('users', 'email', email);
-        user = users && users.length > 0 ? users[0] : null;
+        user = await UserModel.findByEmail(email);
       }
 
       if (!user) {
@@ -103,7 +102,7 @@ class StripeService {
       });
 
       // Update user record with customer ID
-      await database.update('users', actualUserId, {
+      await UserModel.updateUser(actualUserId, {
         stripe_customer_id: customer.id
       });
 
@@ -199,17 +198,17 @@ class StripeService {
     if (typeof userId === 'number' || (typeof userId === 'string' && /^\d+$/.test(userId))) {
       return parseInt(userId);
     } else if (typeof userId === 'string' && userId.startsWith('rec')) {
-      const pgUsers = await database.findByField('users', 'airtable_id', userId);
-      if (pgUsers.length === 0) {
+      const user = await UserModel.findByAirtableId(userId);
+      if (!user) {
         throw new Error(`No user found with airtable_id ${userId}`);
       }
-      return pgUsers[0].id;
+      return user.id;
     } else if (typeof userId === 'string' && userId.includes('@')) {
-      const pgUsers = await database.findByField('users', 'email', userId);
-      if (pgUsers.length === 0) {
+      const user = await UserModel.findByEmail(userId);
+      if (!user) {
         throw new Error(`No user found with email ${userId}`);
       }
-      return pgUsers[0].id;
+      return user.id;
     } else {
       throw new Error(`Unrecognized userId format: ${userId} (type: ${typeof userId})`);
     }
@@ -269,11 +268,11 @@ class StripeService {
         // If we can find user by email, log that information
         if (customer.email) {
           try {
-            const usersByEmail = await database.findByField('users', 'email', customer.email);
-            logger.info('Users found by customer email:', {
+            const userByEmail = await UserModel.findByEmail(customer.email);
+            logger.info('User found by customer email:', {
               email: customer.email,
-              foundUsers: usersByEmail.length,
-              users: usersByEmail.map(u => ({ id: u.id, email: u.email, airtable_id: u.airtable_id }))
+              foundUser: !!userByEmail,
+              user: userByEmail ? { id: userByEmail.id, email: userByEmail.email, airtable_id: userByEmail.airtable_id } : null
             });
           } catch (emailSearchError) {
             logger.error('Error searching users by email:', emailSearchError.message);
@@ -296,20 +295,14 @@ class StripeService {
       formattedEnd: endDate
     });
 
-    // Check for existing subscription record using the unique constraint: stripe_subscription_id, users_id, and stripe_customer_id
-    const existingSubscription = await database.findByMultipleFields('user_subscriptions', {
-      stripe_subscription_id: subscription.id,
-      users_id: parseInt(userId),
-      stripe_customer_id: subscription.customer
-    });
+    // Check for existing subscription record by Stripe subscription ID first
+    let subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    let subscriptionRecord;
-    if (existingSubscription && existingSubscription.length > 0) {
-      // Update existing record - findByMultipleFields returns an array
-      subscriptionRecord = existingSubscription[0];
-      // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-      const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-      await database.update('user_subscriptions', recordId, {
+    if (subscriptionRecord) {
+      // Update existing record
+      subscriptionRecord = await userSubscription.updateSubscription(subscriptionRecord.id, {
+        users_id: parseInt(userId),
+        stripe_customer_id: subscription.customer,
         status: subscription.status,
         current_period_start: startDate,
         current_period_end: endDate,
@@ -317,56 +310,25 @@ class StripeService {
         trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
         trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
       });
-      logger.info('Updated existing subscription record:', { subscriptionId: subscription.id, recordId: recordId });
+      logger.info('Updated existing subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
     } else {
-      // Double-check for any existing records with the same Stripe subscription ID (fallback check)
-      const duplicatesByStripeId = await database.findByField(
-        'user_subscriptions',
-        'stripe_subscription_id',
-        subscription.id
-      );
-
-      if (duplicatesByStripeId.length > 0) {
-        logger.warn('Found existing subscription with same Stripe ID but different user/customer combination:', {
-          subscriptionId: subscription.id,
-          existingRecords: duplicatesByStripeId.map(r => {
-            const fields = r.fields || r;
-            return { id: r.id || fields.id, userId: fields.users_id, customerId: fields.stripe_customer_id };
-          })
-        });
-        // Use the first existing record and update it
-        subscriptionRecord = duplicatesByStripeId[0];
-        const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-        await database.update('user_subscriptions', recordId, {
-          users_id: parseInt(userId),
-          stripe_customer_id: subscription.customer,
-          status: subscription.status,
-          current_period_start: startDate,
-          current_period_end: endDate,
-          cancel_at_period_end: subscription.cancel_at_period_end,
-          trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
-          trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
-        });
-        logger.info('Updated existing subscription record with corrected user/customer info:', { subscriptionId: subscription.id, recordId: recordId });
-      } else {
-        // Create new subscription record
-        subscriptionRecord = await database.create('user_subscriptions', {
-          users_id: parseInt(userId),
-          stripe_customer_id: subscription.customer,
-          stripe_subscription_id: subscription.id,
-          status: subscription.status,
-          current_period_start: startDate,
-          current_period_end: endDate,
-          cancel_at_period_end: subscription.cancel_at_period_end,
-          trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
-          trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
-        });
-        logger.info('Created new subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
-      }
+      // Create new subscription record
+      subscriptionRecord = await userSubscription.createSubscription({
+        users_id: parseInt(userId),
+        stripe_customer_id: subscription.customer,
+        stripe_subscription_id: subscription.id,
+        status: subscription.status,
+        current_period_start: startDate,
+        current_period_end: endDate,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString().split('.')[0] + 'Z' : null,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
+      });
+      logger.info('Created new subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
     }
 
     // Update user record with proper ID resolution (use already resolved pgUserId)
-    await database.update('users', pgUserId, {
+    await UserModel.updateUser(pgUserId, {
       subscription_tier: tier,
       subscription_status: subscription.status
     });
@@ -394,19 +356,11 @@ class StripeService {
     const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Find existing subscription record
-    const existingSubscriptions = await database.findByField(
-      'user_subscriptions',
-      'stripe_subscription_id',
-      subscription.id
-    );
+    const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    if (existingSubscriptions.length > 0) {
-      const subscriptionRecord = existingSubscriptions[0];
-      // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-      const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-
+    if (subscriptionRecord) {
       // Update subscription record
-      await database.update('user_subscriptions', recordId, {
+      await userSubscription.updateSubscription(subscriptionRecord.id, {
         status: subscription.status,
         current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
         current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
@@ -415,7 +369,7 @@ class StripeService {
 
       // Update user record with proper ID resolution
       const pgUserId = await this.resolveUserId(userId);
-      await database.update('users', pgUserId, {
+      await UserModel.updateUser(pgUserId, {
         subscription_tier: tier,
         subscription_status: subscription.status
       });
@@ -441,25 +395,17 @@ class StripeService {
     const userId = subscription.metadata.user_id;
 
     // Update subscription record
-    const existingSubscriptions = await database.findByField(
-      'user_subscriptions',
-      'stripe_subscription_id',
-      subscription.id
-    );
+    const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    if (existingSubscriptions.length > 0) {
-      const subscriptionRecord = existingSubscriptions[0];
-      // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-      const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-
-      await database.update('user_subscriptions', recordId, {
+    if (subscriptionRecord) {
+      await userSubscription.updateSubscription(subscriptionRecord.id, {
         status: 'canceled'
       });
     }
 
     // Update user record with proper ID resolution
     const pgUserId = await this.resolveUserId(userId);
-    await database.update('users', pgUserId, {
+    await UserModel.updateUser(pgUserId, {
       subscription_tier: 'free',
       subscription_status: 'canceled'
     });
@@ -482,25 +428,17 @@ class StripeService {
     const userId = subscription.metadata.user_id;
 
     // Update subscription record
-    const existingSubscriptions = await database.findByField(
-      'user_subscriptions',
-      'stripe_subscription_id',
-      subscription.id
-    );
+    const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    if (existingSubscriptions.length > 0) {
-      const subscriptionRecord = existingSubscriptions[0];
-      // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-      const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-
-      await database.update('user_subscriptions', recordId, {
+    if (subscriptionRecord) {
+      await userSubscription.updateSubscription(subscriptionRecord.id, {
         status: 'paused'
       });
     }
 
     // Update user record - keep tier but mark as paused with proper ID resolution
     const pgUserId = await this.resolveUserId(userId);
-    await database.update('users', pgUserId, {
+    await UserModel.updateUser(pgUserId, {
       subscription_status: 'paused'
     });
 
@@ -523,18 +461,10 @@ class StripeService {
     const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Update subscription record
-    const existingSubscriptions = await database.findByField(
-      'user_subscriptions',
-      'stripe_subscription_id',
-      subscription.id
-    );
+    const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    if (existingSubscriptions.length > 0) {
-      const subscriptionRecord = existingSubscriptions[0];
-      // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-      const recordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
-
-      await database.update('user_subscriptions', recordId, {
+    if (subscriptionRecord) {
+      await userSubscription.updateSubscription(subscriptionRecord.id, {
         status: 'active',
         current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
         current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0]
@@ -543,7 +473,7 @@ class StripeService {
 
     // Update user record with proper ID resolution
     const pgUserId = await this.resolveUserId(userId);
-    await database.update('users', pgUserId, {
+    await UserModel.updateUser(pgUserId, {
       subscription_tier: tier,
       subscription_status: 'active'
     });
@@ -596,7 +526,7 @@ class StripeService {
 
       // Update user status with proper ID resolution
       const pgUserId = await this.resolveUserId(userId);
-      await database.update('users', pgUserId, {
+      await UserModel.updateUser(pgUserId, {
         subscription_status: 'past_due'
       });
 
@@ -636,12 +566,7 @@ class StripeService {
     try {
       // If subscriptionRecord is not provided, find it
       if (!subscriptionRecord) {
-        const existingSubscriptions = await database.findByField(
-          'user_subscriptions',
-          'stripe_subscription_id',
-          subscription.id
-        );
-        subscriptionRecord = existingSubscriptions.length > 0 ? existingSubscriptions[0] : null;
+        subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
       }
 
       if (!subscriptionRecord) {
@@ -659,10 +584,10 @@ class StripeService {
       // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
       const subscriptionRecordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
 
-      const existingUsage = await database.findByMultipleFields('subscription_usage', {
-        user_id: parseInt(userId),
-        user_subscriptions_id: parseInt(subscriptionRecordId)
-      });
+      const existingUsage = await subscriptionUsage.findByUserAndSubscription(
+        parseInt(userId),
+        parseInt(subscriptionRecordId)
+      );
 
       if (existingUsage) {
         // Update existing usage record with new period dates if needed
@@ -672,7 +597,7 @@ class StripeService {
 
         if (currentPeriodStart !== periodStart || currentPeriodEnd !== periodEnd) {
           const usageRecordId = existingUsage.id || (existingUsage.fields && existingUsage.fields.id) || existingUsage.id;
-          await database.update('subscription_usage', usageRecordId, {
+          await subscriptionUsage.updateUsage(usageRecordId, {
             period_start: periodStart,
             period_end: periodEnd
           });
@@ -695,7 +620,7 @@ class StripeService {
         return;
       }
 
-      const usageRecord = await database.create('subscription_usage', {
+      const usageRecord = await subscriptionUsage.createUsage({
         user_id: parseInt(userId),
         user_subscriptions_id: parseInt(subscriptionRecordId), // Use the user_subscriptions record ID, not Stripe subscription ID
         period_start: periodStart,
@@ -738,7 +663,7 @@ class StripeService {
         return;
       }
 
-      await database.create('subscription_events', {
+      await subscriptionEvents.createEvent({
         stripe_event_id: event.id,
         users_id: parseInt(userId),
         event_type: event.type,
@@ -762,12 +687,9 @@ class StripeService {
    */
   async updateEventLog(eventId, success, errorMessage = null) {
     try {
-      const events = await database.findByField('subscription_events', 'stripe_event_id', eventId);
-      if (events.length > 0) {
-        const event = events[0];
-        // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-        const recordId = event.id || (event.fields && event.fields.id) || event.id;
-        await database.update('subscription_events', recordId, {
+      const event = await subscriptionEvents.findByStripeEventId(eventId);
+      if (event) {
+        await subscriptionEvents.updateEvent(event.id, {
           processed_successfully: success,
           error_message: errorMessage
         });
@@ -803,13 +725,7 @@ class StripeService {
    */
   async getUserSubscription(userId) {
     try {
-      const subscriptions = await database.findByField('user_subscriptions', 'users_id', parseInt(userId));
-      const activeSubscription = subscriptions.find(sub => {
-        // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-        const subFields = sub.fields || sub;
-        return ['active', 'paused', 'trialing'].includes(subFields.status);
-      });
-
+      const activeSubscription = await userSubscription.getActiveByUserId(parseInt(userId));
       return activeSubscription || null;
     } catch (error) {
       logger.error('Error getting user subscription:', error);
@@ -821,10 +737,10 @@ class StripeService {
    * Check if user can access feature based on subscription
    */
   async canAccessFeature(userId, feature) {
-    const user = await database.findById('users', parseInt(userId));
-    // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
-    const userFields = user.fields || user;
-    const tierConfig = stripeConfig.getTierConfig(userFields.subscription_tier || 'free');
+    const user = await UserModel.findById(parseInt(userId));
+    if (!user) return false;
+    
+    const tierConfig = stripeConfig.getTierConfig(user.subscription_tier || 'free');
 
     if (!tierConfig) return false;
 
@@ -836,7 +752,7 @@ class StripeService {
     case 'unlimited_videos':
       return tierConfig.videoLimit === -1;
     default:
-      return userFields.subscription_status === 'active';
+      return user.subscription_status === 'active';
     }
   }
 }

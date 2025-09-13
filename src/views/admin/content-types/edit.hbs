@@ -1,0 +1,711 @@
+<div class="admin-form-page">
+  <div class="form-header">
+    <h1>✏️ Edit Content Type</h1>
+    <p class="subtitle">Modify the settings for "{{contentType.label}}"</p>
+  </div>
+
+  <div class="form-container">
+    <form method="POST" action="/admin/content-types/{{contentType.id}}?_method=PUT" class="content-type-form">
+      {{#if errors}}
+        <div class="alert alert-error">
+          <h4>⚠️ Please fix the following errors:</h4>
+          <ul>
+            {{#each errors}}
+              <li>{{this.msg}}</li>
+            {{/each}}
+          </ul>
+        </div>
+      {{/if}}
+
+      {{#if error}}
+        <div class="alert alert-error">
+          <p>{{error}}</p>
+        </div>
+      {{/if}}
+
+      <div class="form-section">
+        <h3>Basic Information</h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="key">Content Type Key</label>
+            <input type="text" id="key" name="key" 
+                   value="{{contentType.key}}" 
+                   class="form-control" readonly disabled>
+            <small class="form-help">
+              The key cannot be changed after creation to maintain data integrity.
+            </small>
+          </div>
+          
+          <div class="form-group">
+            <label for="label" class="required">Display Label</label>
+            <input type="text" id="label" name="label" 
+                   value="{{#if formData.label}}{{formData.label}}{{else}}{{contentType.label}}{{/if}}" 
+                   placeholder="e.g., Article Content, Podcast Script"
+                   class="form-control" required>
+            <small class="form-help">
+              Human-readable name shown in the interface.
+            </small>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" 
+                    rows="3" 
+                    placeholder="Brief description of what this content type is used for..."
+                    class="form-control">{{#if formData.description}}{{formData.description}}{{else}}{{contentType.description}}{{/if}}</textarea>
+          <small class="form-help">
+            Optional description to help users understand this content type.
+          </small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="icon" class="required">Icon</label>
+            <input type="text" id="icon" name="icon" 
+                   value="{{#if formData.icon}}{{formData.icon}}{{else}}{{contentType.icon}}{{/if}}" 
+                   placeholder="📝"
+                   maxlength="2"
+                   class="form-control icon-input" required>
+            <small class="form-help">
+              Single emoji character that represents this content type.
+            </small>
+          </div>
+          
+          <div class="form-group">
+            <label for="display_order" class="required">Display Order</label>
+            <input type="number" id="display_order" name="display_order" 
+                   value="{{#if formData.display_order}}{{formData.display_order}}{{else}}{{contentType.display_order}}{{/if}}" 
+                   min="1" max="999"
+                   class="form-control" required>
+            <small class="form-help">
+              Lower numbers appear first in lists.
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Content Type Features</h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="requires_ai" name="requires_ai" 
+                     {{#if formData.requires_ai}}
+                       {{#if formData.requires_ai}}checked{{/if}}
+                     {{else}}
+                       {{#if contentType.requires_ai}}checked{{/if}}
+                     {{/if}}>
+              <label for="requires_ai">
+                <strong>🤖 Requires AI Processing</strong>
+                <span class="checkbox-help">This content type uses AI for generation or processing</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="has_url_field" name="has_url_field" 
+                     {{#if formData.has_url_field}}
+                       {{#if formData.has_url_field}}checked{{/if}}
+                     {{else}}
+                       {{#if contentType.has_url_field}}checked{{/if}}
+                     {{/if}}>
+              <label for="has_url_field">
+                <strong>🔗 Has URL Field</strong>
+                <span class="checkbox-help">This content type includes a URL field for external links</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="is_active" name="is_active" 
+                   {{#if formData.is_active}}
+                     {{#unless (eq formData.is_active false)}}checked{{/unless}}
+                   {{else}}
+                     {{#if contentType.is_active}}checked{{/if}}
+                   {{/if}}>
+            <label for="is_active">
+              <strong>✅ Active</strong>
+              <span class="checkbox-help">Make this content type available for use</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section" id="ai-prompts-section">
+        <h3>🤖 AI Prompt Configuration</h3>
+        <div class="section-help">
+          <p>Configure AI prompts for this content type. You can add prompts for different AI providers.</p>
+        </div>
+        
+        <div class="prompts-container" id="prompts-container">
+          <!-- Existing AI Prompts will be loaded here -->
+          {{#each existingPrompts}}
+          <div class="prompt-card">
+            <div class="prompt-card-header">
+              <h4 class="prompt-card-title">{{name}} ({{ai_provider}})</h4>
+              <button type="button" class="remove-prompt-btn" onclick="removePromptCard(this)" data-prompt-id="{{id}}">
+                🗑️ Remove
+              </button>
+            </div>
+            
+            <div class="prompt-form-row">
+              <div class="prompt-form-group">
+                <label>Prompt Name <span style="color: #dc3545;">*</span></label>
+                <input type="text" name="existing_prompts[{{id}}][name]" 
+                       value="{{name}}" 
+                       placeholder="e.g., Blog Content Generator"
+                       required>
+              </div>
+              <div class="prompt-form-group">
+                <label>AI Provider <span style="color: #dc3545;">*</span></label>
+                <select name="existing_prompts[{{id}}][ai_provider]" required>
+                  <option value="gemini" {{#if (eq ai_provider 'gemini')}}selected{{/if}}>GEMINI</option>
+                  <option value="openai" {{#if (eq ai_provider 'openai')}}selected{{/if}}>OPENAI</option>
+                  <option value="claude" {{#if (eq ai_provider 'claude')}}selected{{/if}}>CLAUDE</option>
+                </select>
+              </div>
+              <div class="prompt-form-group">
+                <label>Temperature</label>
+                <input type="number" name="existing_prompts[{{id}}][temperature]" 
+                       value="{{temperature}}" 
+                       min="0" max="2" step="0.1"
+                       placeholder="0.7">
+              </div>
+            </div>
+            
+            <div class="prompt-form-row">
+              <div class="prompt-form-group">
+                <label>Description</label>
+                <input type="text" name="existing_prompts[{{id}}][description]" 
+                       value="{{description}}" 
+                       placeholder="Brief description of this prompt">
+              </div>
+              <div class="prompt-form-group">
+                <label>Max Tokens</label>
+                <input type="number" name="existing_prompts[{{id}}][max_tokens]" 
+                       value="{{max_tokens}}" 
+                       min="100" max="8000"
+                       placeholder="2000">
+              </div>
+              <div class="prompt-form-group">
+                <label>Status</label>
+                <select name="existing_prompts[{{id}}][is_active]">
+                  <option value="true" {{#if is_active}}selected{{/if}}>Active</option>
+                  <option value="false" {{#unless is_active}}selected{{/unless}}>Inactive</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="prompt-textarea-group">
+              <div class="prompt-textarea-row">
+                <div class="prompt-form-group">
+                  <label>User Prompt <span style="color: #dc3545;">*</span></label>
+                  <textarea name="existing_prompts[{{id}}][prompt_text]" 
+                            placeholder="Enter the main prompt that will be sent to the AI..." 
+                            required>{{prompt_text}}</textarea>
+                </div>
+                <div class="prompt-form-group">
+                  <label>System Message</label>
+                  <textarea name="existing_prompts[{{id}}][system_message]" 
+                            placeholder="Enter system instructions for the AI...">{{system_message}}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+          {{/each}}
+        </div>
+        
+        <button type="button" id="add-prompt-btn" class="btn btn-outline-primary">
+          ➕ Add AI Prompt
+        </button>
+      </div>
+
+      <div class="form-actions">
+        <a href="/admin/content-types/{{contentType.id}}" class="btn btn-secondary">
+          ← Cancel
+        </a>
+        <button type="submit" class="btn btn-primary">
+          ✅ Update Content Type
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.admin-form-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.form-header h1 {
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 1.1em;
+  margin: 0;
+}
+
+.form-container {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.content-type-form {
+  padding: 30px;
+}
+
+.alert {
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 25px;
+}
+
+.alert-error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.alert h4 {
+  margin: 0 0 10px 0;
+}
+
+.alert ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.form-section {
+  margin-bottom: 35px;
+}
+
+.form-section h3 {
+  color: #333;
+  margin: 0 0 20px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group label.required::after {
+  content: ' *';
+  color: #dc3545;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-control:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+.icon-input {
+  font-size: 1.2em;
+  text-align: center;
+  font-family: inherit;
+}
+
+.form-help {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.85em;
+  color: #666;
+  line-height: 1.4;
+}
+
+.checkbox-group {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 15px;
+  background: #f8f9fa;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin-right: 10px;
+  transform: scale(1.1);
+}
+
+.checkbox-group label {
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.checkbox-help {
+  font-size: 0.85em;
+  color: #666;
+  font-weight: normal;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 40px;
+  padding-top: 25px;
+  border-top: 1px solid #e9ecef;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #5a6fd8;
+  text-decoration: none;
+  color: white;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+  text-decoration: none;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Form validation styles */
+.form-control:invalid {
+  border-color: #dc3545;
+}
+
+.form-control:valid {
+  border-color: #28a745;
+}
+
+/* AI Prompts Section Styles */
+.btn-outline-primary {
+  background: white;
+  color: #667eea;
+  border: 1px solid #667eea;
+}
+
+.btn-outline-primary:hover {
+  background: #667eea;
+  color: white;
+  text-decoration: none;
+}
+
+.section-help {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid #667eea;
+}
+
+.section-help p {
+  margin: 0;
+  color: #666;
+}
+
+.prompts-container {
+  margin-bottom: 20px;
+}
+
+.prompt-card {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.prompt-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.prompt-card-title {
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.remove-prompt-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.remove-prompt-btn:hover {
+  background: #c82333;
+}
+
+.prompt-form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.prompt-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.prompt-form-group label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.prompt-form-group input,
+.prompt-form-group select,
+.prompt-form-group textarea {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.prompt-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.prompt-textarea-group {
+  margin-bottom: 15px;
+}
+
+.prompt-textarea-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+</style>
+
+<script>
+// Icon preview and validation
+document.getElementById('icon').addEventListener('input', function(e) {
+  const value = e.target.value;
+  // Basic emoji validation - should be 1-2 characters and likely an emoji
+  if (value.length > 2) {
+    e.target.value = value.slice(0, 2);
+  }
+});
+
+// AI Prompts Management for Edit Page
+let promptCounter = 1000; // Start high to avoid conflicts with existing prompt IDs
+const availableProviders = ['gemini', 'openai', 'claude'];
+const promptsToDelete = [];
+
+function createPromptCard(promptData = {}) {
+  const promptId = promptCounter++;
+  
+  const card = document.createElement('div');
+  card.className = 'prompt-card';
+  card.innerHTML = `
+    <div class="prompt-card-header">
+      <h4 class="prompt-card-title">AI Prompt #${promptId + 1}</h4>
+      <button type="button" class="remove-prompt-btn" onclick="removePromptCard(this)">
+        🗑️ Remove
+      </button>
+    </div>
+    
+    <div class="prompt-form-row">
+      <div class="prompt-form-group">
+        <label>Prompt Name <span style="color: #dc3545;">*</span></label>
+        <input type="text" name="prompts[${promptId}][name]" 
+               value="${promptData.name || ''}" 
+               placeholder="e.g., Blog Content Generator"
+               required>
+      </div>
+      <div class="prompt-form-group">
+        <label>AI Provider <span style="color: #dc3545;">*</span></label>
+        <select name="prompts[${promptId}][ai_provider]" required>
+          <option value="">Select Provider</option>
+          ${availableProviders.map(provider => 
+            `<option value="${provider}" ${promptData.ai_provider === provider ? 'selected' : ''}>${provider.toUpperCase()}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="prompt-form-group">
+        <label>Temperature</label>
+        <input type="number" name="prompts[${promptId}][temperature]" 
+               value="${promptData.temperature || '0.7'}" 
+               min="0" max="2" step="0.1"
+               placeholder="0.7">
+      </div>
+    </div>
+    
+    <div class="prompt-form-row">
+      <div class="prompt-form-group">
+        <label>Description</label>
+        <input type="text" name="prompts[${promptId}][description]" 
+               value="${promptData.description || ''}" 
+               placeholder="Brief description of this prompt">
+      </div>
+      <div class="prompt-form-group">
+        <label>Max Tokens</label>
+        <input type="number" name="prompts[${promptId}][max_tokens]" 
+               value="${promptData.max_tokens || '2000'}" 
+               min="100" max="8000"
+               placeholder="2000">
+      </div>
+      <div class="prompt-form-group">
+        <label>Status</label>
+        <select name="prompts[${promptId}][is_active]">
+          <option value="true" ${promptData.is_active !== false ? 'selected' : ''}>Active</option>
+          <option value="false" ${promptData.is_active === false ? 'selected' : ''}>Inactive</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="prompt-textarea-group">
+      <div class="prompt-textarea-row">
+        <div class="prompt-form-group">
+          <label>User Prompt <span style="color: #dc3545;">*</span></label>
+          <textarea name="prompts[${promptId}][prompt_text]" 
+                    placeholder="Enter the main prompt that will be sent to the AI..." 
+                    required>${promptData.prompt_text || ''}</textarea>
+        </div>
+        <div class="prompt-form-group">
+          <label>System Message</label>
+          <textarea name="prompts[${promptId}][system_message]" 
+                    placeholder="Enter system instructions for the AI...">${promptData.system_message || ''}</textarea>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return card;
+}
+
+function addPromptCard() {
+  const container = document.getElementById('prompts-container');
+  const newCard = createPromptCard();
+  container.appendChild(newCard);
+}
+
+function removePromptCard(button) {
+  const card = button.closest('.prompt-card');
+  const promptId = button.getAttribute('data-prompt-id');
+  
+  // If this is an existing prompt, mark it for deletion
+  if (promptId) {
+    promptsToDelete.push(promptId);
+    // Add hidden input to track deletions
+    const deleteInput = document.createElement('input');
+    deleteInput.type = 'hidden';
+    deleteInput.name = 'delete_prompts[]';
+    deleteInput.value = promptId;
+    card.closest('form').appendChild(deleteInput);
+  }
+  
+  card.remove();
+}
+
+// Add prompt button event listener
+document.getElementById('add-prompt-btn').addEventListener('click', addPromptCard);
+
+// Show/hide AI prompts section based on "Requires AI" checkbox
+const requiresAiCheckbox = document.getElementById('requires_ai');
+const aiPromptsSection = document.getElementById('ai-prompts-section');
+
+function toggleAiPromptsSection() {
+  if (requiresAiCheckbox.checked) {
+    aiPromptsSection.style.display = 'block';
+  } else {
+    aiPromptsSection.style.display = 'none';
+  }
+}
+
+if (requiresAiCheckbox) {
+  requiresAiCheckbox.addEventListener('change', toggleAiPromptsSection);
+  // Initialize on page load
+  toggleAiPromptsSection();
+}
+</script>

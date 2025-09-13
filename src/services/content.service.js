@@ -1,4 +1,4 @@
-const database = require('./database.service');
+const { contentType, videoContent } = require('../models');
 const { logger } = require('../utils');
 
 /**
@@ -15,42 +15,9 @@ class ContentService {
    */
   async getVideoContent(videoId, options = {}) {
     try {
-      const { publishedOnly = true, includeMetadata = false } = options;
-      
-      let query = `
-        SELECT 
-          vc.id,
-          vc.video_id,
-          vc.content_text,
-          vc.content_url,
-          vc.generation_status,
-          vc.is_published,
-          vc.version,
-          vc.created_at,
-          vc.updated_at,
-          ct.key as content_type_key,
-          ct.label as content_type_label,
-          ct.icon as content_type_icon,
-          ct.description as content_type_description,
-          ct.display_order
-          ${includeMetadata ? `, 
-            vc.ai_provider,
-            vc.generation_duration_seconds,
-            vc.content_quality_score,
-            vc.user_rating` : ''}
-        FROM video_content vc
-        JOIN content_types ct ON vc.content_type_id = ct.id
-        WHERE vc.video_id = $1
-        ${publishedOnly ? 'AND vc.is_published = true' : ''}
-        AND ct.is_active = true
-        ORDER BY ct.display_order, vc.version DESC
-      `;
-      
-      const result = await database.query(query, [videoId]);
-      
-      logger.info(`Retrieved ${result.rows.length} content items for video ${videoId}`);
-      return result.rows;
-      
+      const content = await videoContent.getByVideo(videoId, options);
+      logger.info(`Retrieved ${content.length} content items for video ${videoId}`);
+      return content;
     } catch (error) {
       logger.error(`Error getting video content for video ${videoId}:`, error);
       throw error;
@@ -66,46 +33,15 @@ class ContentService {
    */
   async getVideoContentByType(videoId, contentTypeKey, options = {}) {
     try {
-      const { version = 1, publishedOnly = true } = options;
+      const content = await videoContent.getByVideoAndType(videoId, contentTypeKey, options);
       
-      const query = `
-        SELECT 
-          vc.id,
-          vc.video_id,
-          vc.content_text,
-          vc.content_url,
-          vc.generation_status,
-          vc.is_published,
-          vc.version,
-          vc.ai_provider,
-          vc.generation_duration_seconds,
-          vc.content_quality_score,
-          vc.user_rating,
-          vc.created_at,
-          vc.updated_at,
-          ct.key as content_type_key,
-          ct.label as content_type_label,
-          ct.icon as content_type_icon,
-          ct.requires_ai
-        FROM video_content vc
-        JOIN content_types ct ON vc.content_type_id = ct.id
-        WHERE vc.video_id = $1 
-        AND ct.key = $2 
-        AND vc.version = $3
-        ${publishedOnly ? 'AND vc.is_published = true' : ''}
-        AND ct.is_active = true
-      `;
-      
-      const result = await database.query(query, [videoId, contentTypeKey, version]);
-      
-      if (result.rows.length > 0) {
+      if (content) {
         logger.info(`Retrieved ${contentTypeKey} content for video ${videoId}`);
-        return result.rows[0];
+      } else {
+        logger.info(`No ${contentTypeKey} content found for video ${videoId}`);
       }
       
-      logger.info(`No ${contentTypeKey} content found for video ${videoId}`);
-      return null;
-      
+      return content;
     } catch (error) {
       logger.error(`Error getting ${contentTypeKey} content for video ${videoId}:`, error);
       throw error;
@@ -133,62 +69,31 @@ class ContentService {
         contentQualityScore = null
       } = contentData;
       
-      // Validate required fields
-      if (!videoId || !contentTypeKey) {
-        throw new Error('videoId and contentTypeKey are required');
-      }
-      
-      if (!contentText && !contentUrl) {
-        throw new Error('Either contentText or contentUrl must be provided');
-      }
-      
-      // Get content type ID
-      const contentType = await this.getContentTypeByKey(contentTypeKey);
-      if (!contentType) {
+      // Get content type
+      const contentTypeRecord = await this.getContentTypeByKey(contentTypeKey);
+      if (!contentTypeRecord) {
         throw new Error(`Content type '${contentTypeKey}' not found`);
       }
       
-      // Check for existing content (enforce unique constraint)
-      const existing = await this.getVideoContentByType(videoId, contentTypeKey, { 
-        version: 1, 
-        publishedOnly: false 
-      });
+      // Prepare data for model
+      const modelData = {
+        video_id: videoId,
+        content_type_id: contentTypeRecord.id,
+        content_text: contentText,
+        content_url: contentUrl,
+        ai_provider: aiProvider,
+        prompt_used_id: promptUsedId,
+        generation_status: generationStatus,
+        is_published: isPublished,
+        created_by_user_id: createdByUserId,
+        generation_duration_seconds: generationDurationSeconds,
+        content_quality_score: contentQualityScore
+      };
       
-      let version = 1;
-      if (existing) {
-        // Create new version
-        version = existing.version + 1;
-      }
+      // Use model's versioned create method
+      const createdContent = await videoContent.createVersioned(modelData);
       
-      const query = `
-        INSERT INTO video_content (
-          video_id, content_type_id, content_text, content_url,
-          ai_provider, prompt_used_id, generation_status, is_published,
-          version, created_by_user_id, generation_duration_seconds,
-          content_quality_score, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        RETURNING *
-      `;
-      
-      const values = [
-        videoId,
-        contentType.id,
-        contentText,
-        contentUrl,
-        aiProvider,
-        promptUsedId,
-        generationStatus,
-        isPublished,
-        version,
-        createdByUserId,
-        generationDurationSeconds,
-        contentQualityScore
-      ];
-      
-      const result = await database.query(query, values);
-      const createdContent = result.rows[0];
-      
-      logger.info(`Created ${contentTypeKey} content for video ${videoId} (version ${version})`);
+      logger.info(`Created ${contentTypeKey} content for video ${videoId} (version ${createdContent.version})`);
       return createdContent;
       
     } catch (error) {
@@ -214,62 +119,46 @@ class ContentService {
         userRating
       } = updateData;
       
-      const updateFields = [];
-      const updateValues = [];
-      let paramIndex = 1;
+      // Prepare data for model update
+      const modelUpdateData = {};
       
       if (contentText !== undefined) {
-        updateFields.push(`content_text = $${paramIndex++}`);
-        updateValues.push(contentText);
+        modelUpdateData.content_text = contentText;
       }
       
       if (contentUrl !== undefined) {
-        updateFields.push(`content_url = $${paramIndex++}`);
-        updateValues.push(contentUrl);
+        modelUpdateData.content_url = contentUrl;
       }
       
       if (generationStatus !== undefined) {
-        updateFields.push(`generation_status = $${paramIndex++}`);
-        updateValues.push(generationStatus);
+        modelUpdateData.generation_status = generationStatus;
       }
       
       if (isPublished !== undefined) {
-        updateFields.push(`is_published = $${paramIndex++}`);
-        updateValues.push(isPublished);
+        modelUpdateData.is_published = isPublished;
       }
       
       if (contentQualityScore !== undefined) {
-        updateFields.push(`content_quality_score = $${paramIndex++}`);
-        updateValues.push(contentQualityScore);
+        modelUpdateData.content_quality_score = contentQualityScore;
       }
       
       if (userRating !== undefined) {
-        updateFields.push(`user_rating = $${paramIndex++}`);
-        updateValues.push(userRating);
+        modelUpdateData.user_rating = userRating;
       }
       
-      if (updateFields.length === 0) {
+      if (Object.keys(modelUpdateData).length === 0) {
         throw new Error('No fields to update');
       }
       
-      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-      updateValues.push(contentId);
+      // Use model's update method
+      const updatedContent = await videoContent.update(contentId, modelUpdateData);
       
-      const query = `
-        UPDATE video_content 
-        SET ${updateFields.join(', ')}
-        WHERE id = $${paramIndex}
-        RETURNING *
-      `;
-      
-      const result = await database.query(query, updateValues);
-      
-      if (result.rows.length === 0) {
+      if (!updatedContent) {
         throw new Error(`Content with ID ${contentId} not found`);
       }
       
       logger.info(`Updated video content ${contentId}`);
-      return result.rows[0];
+      return updatedContent;
       
     } catch (error) {
       logger.error(`Error updating video content ${contentId}:`, error);
@@ -284,12 +173,8 @@ class ContentService {
    */
   async deleteVideoContent(contentId) {
     try {
-      const result = await database.query(
-        'DELETE FROM video_content WHERE id = $1',
-        [contentId]
-      );
+      const deleted = await videoContent.delete(contentId);
       
-      const deleted = result.rowCount > 0;
       if (deleted) {
         logger.info(`Deleted video content ${contentId}`);
       } else {
@@ -311,13 +196,7 @@ class ContentService {
    */
   async getContentTypeByKey(key) {
     try {
-      const result = await database.query(
-        'SELECT * FROM content_types WHERE key = $1 AND is_active = true',
-        [key]
-      );
-      
-      return result.rows.length > 0 ? result.rows[0] : null;
-      
+      return await contentType.findByKey(key);
     } catch (error) {
       logger.error(`Error getting content type by key ${key}:`, error);
       throw error;
@@ -330,16 +209,9 @@ class ContentService {
    */
   async getAvailableContentTypes() {
     try {
-      const result = await database.query(`
-        SELECT id, key, label, icon, description, display_order, requires_ai, has_url_field
-        FROM content_types 
-        WHERE is_active = true
-        ORDER BY display_order
-      `);
-      
-      logger.info(`Retrieved ${result.rows.length} available content types`);
-      return result.rows;
-      
+      const types = await contentType.getActive();
+      logger.info(`Retrieved ${types.length} available content types`);
+      return types;
     } catch (error) {
       logger.error('Error getting available content types:', error);
       throw error;
@@ -355,52 +227,18 @@ class ContentService {
     try {
       const { userId = null, startDate = null, endDate = null } = options;
       
-      let whereConditions = [];
-      let queryParams = [];
-      let paramIndex = 1;
+      // Use model's statistics method with filters
+      const filters = {};
+      if (userId) filters.userId = userId;
+      if (startDate) filters.startDate = startDate;
+      if (endDate) filters.endDate = endDate;
       
-      if (userId) {
-        whereConditions.push(`v.users_id = $${paramIndex++}`);
-        queryParams.push(userId);
-      }
-      
-      if (startDate) {
-        whereConditions.push(`vc.created_at >= $${paramIndex++}`);
-        queryParams.push(startDate);
-      }
-      
-      if (endDate) {
-        whereConditions.push(`vc.created_at <= $${paramIndex++}`);
-        queryParams.push(endDate);
-      }
-      
-      const whereClause = whereConditions.length > 0 ? 
-        `WHERE ${whereConditions.join(' AND ')}` : '';
-      
-      const query = `
-        SELECT 
-          ct.label as content_type,
-          ct.icon,
-          COUNT(*) as total_generated,
-          COUNT(CASE WHEN vc.generation_status = 'completed' THEN 1 END) as completed,
-          COUNT(CASE WHEN vc.generation_status = 'failed' THEN 1 END) as failed,
-          AVG(vc.generation_duration_seconds) as avg_generation_time,
-          AVG(vc.content_quality_score) as avg_quality_score,
-          AVG(vc.user_rating) as avg_user_rating
-        FROM video_content vc
-        JOIN content_types ct ON vc.content_type_id = ct.id
-        JOIN videos v ON vc.video_id = v.id
-        ${whereClause}
-        GROUP BY ct.id, ct.label, ct.icon, ct.display_order
-        ORDER BY ct.display_order
-      `;
-      
-      const result = await database.query(query, queryParams);
+      const stats = await videoContent.getStatistics(filters);
       
       logger.info('Retrieved content generation statistics');
       return {
-        contentTypes: result.rows,
-        totalItems: result.rows.reduce((sum, row) => sum + parseInt(row.total_generated), 0)
+        contentTypes: stats,
+        totalItems: stats.reduce((sum, row) => sum + row.total_generated, 0)
       };
       
     } catch (error) {
@@ -417,24 +255,8 @@ class ContentService {
    */
   async getVideoContentLegacyFormat(videoId) {
     try {
-      const content = await this.getVideoContent(videoId, { publishedOnly: true });
-      
-      // Transform to old format expected by existing code
-      const legacyFormat = {};
-      
-      content.forEach(item => {
-        const key = item.content_type_key;
-        
-        // Map to old field names for backward compatibility
-        if (key === 'chapters_text') {
-          // Special case: chapters_text in API maps to chapter_text in old schema
-          legacyFormat['chapter_text'] = item.content_text;
-          legacyFormat['chapter_url'] = item.content_url;
-        } else {
-          legacyFormat[key] = item.content_text;
-          legacyFormat[key.replace('_text', '_url')] = item.content_url;
-        }
-      });
+      // Use model's legacy format method
+      const legacyFormat = await videoContent.getLegacyFormat(videoId);
       
       logger.info(`Retrieved video content in legacy format for video ${videoId}`);
       return legacyFormat;
