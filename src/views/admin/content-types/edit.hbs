@@ -158,8 +158,10 @@
               <div class="prompt-form-group">
                 <label>Prompt Name <span style="color: #dc3545;">*</span></label>
                 <input type="text" name="existing_prompts[{{id}}][name]" 
-                       value="{{name}}" 
-                       placeholder="e.g., Blog Content Generator"
+                       value="{{../contentType.key}}" 
+                       placeholder="Auto-populated from Content Type Key"
+                       readonly
+                       style="background-color: #f8f9fa; color: #6c757d;"
                        required>
               </div>
               <div class="prompt-form-group">
@@ -599,8 +601,10 @@ function createPromptCard(promptData = {}) {
       <div class="prompt-form-group">
         <label>Prompt Name <span style="color: #dc3545;">*</span></label>
         <input type="text" name="prompts[${promptId}][name]" 
-               value="${promptData.name || ''}" 
-               placeholder="e.g., Blog Content Generator"
+               value="${promptData.name || '{{contentType.key}}'}" 
+               placeholder="Auto-populated from Content Type Key"
+               readonly
+               style="background-color: #f8f9fa; color: #6c757d;"
                required>
       </div>
       <div class="prompt-form-group">

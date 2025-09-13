@@ -166,7 +166,15 @@ user_subscriptions (1) ←→ (M) subscription_events
 
 ## UI/UX Guidelines
 
-**Error Messaging**: Do NOT use JavaScript dialog popup boxes (alert(), confirm(), prompt()). Always use HTML-based error messaging displayed inline on pages for better user experience and accessibility.
+**CRITICAL: NO JavaScript Popup Dialogs**: 
+- **NEVER use JavaScript alert(), confirm(), or prompt() functions** in any UI components or frontend code
+- **ALWAYS use inline HTML error/success messaging** with proper styling for user notifications  
+- **Use styled notification banners** that appear at the top of pages or within forms
+- **Implement custom modal dialogs** for confirmations when absolutely necessary
+- **Provide auto-dismissing messages** with manual close buttons for better UX
+- **Include smooth animations** (slide-in/fade) for showing/hiding messages
+
+**Rationale**: JavaScript popup dialogs are disruptive, not accessible, unprofessional, and break modern web UX patterns. This application requires enterprise-grade user interface standards.
 
 ## Development Commands
 
