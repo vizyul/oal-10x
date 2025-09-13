@@ -17,72 +17,321 @@
     </div>
   </div>
 
-  {{#if prompts.length}}
-    <div class="prompts-grid">
+  <!-- Error Message Container -->
+  <div id="errorMessage" class="alert alert-error" style="display: none;">
+    <span class="error-text"></span>
+    <button class="close-error" onclick="hideError()">&times;</button>
+  </div>
+
+  <!-- Success Message Container -->
+  <div id="successMessage" class="alert alert-success" style="display: none;">
+    <span class="success-text"></span>
+    <button class="close-success" onclick="hideSuccess()">&times;</button>
+  </div>
+
+<style>
+.alert {
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  position: relative;
+  font-weight: 500;
+}
+
+.alert-error {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.alert button {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alert-error button {
+  color: #721c24;
+}
+
+.alert-success button {
+  color: #155724;
+}
+
+.alert button:hover {
+  opacity: 0.7;
+}
+</style>
+
+  <!-- New Prompt Form (for Add AI Prompt button) -->
+  <div id="newPromptEditor" class="prompt-editor" style="display: none;">
+    <div class="editor-header">
+      <h2>Add New AI Prompt</h2>
+      <div class="editor-actions">
+        <button id="cancelNewPromptBtn" class="btn btn-secondary">Cancel</button>
+        <button id="saveNewPromptBtn" class="btn btn-primary">
+          <span>Create Prompt</span>
+        </button>
+      </div>
+    </div>
+    
+    <form id="newPromptForm" class="editor-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="required">Prompt Name</label>
+          <input type="text" id="newPromptName" name="name" class="form-control" required
+                 placeholder="e.g., Blog Post Generator">
+        </div>
+        
+        <div class="form-group">
+          <label class="required">AI Provider</label>
+          <select id="newAiProvider" name="ai_provider" class="form-control" required>
+            <option value="">Select Provider...</option>
+            {{#each availableProviders}}
+              <option value="{{this}}">{{this}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="newPromptDescription" name="description" class="form-control"
+               placeholder="Brief description of what this prompt does">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Temperature</label>
+          <input type="number" id="newTemperature" name="temperature" class="form-control"
+                 min="0" max="2" step="0.1" value="0.7">
+          <small class="form-help">Creativity level (0 = focused, 2 = creative)</small>
+        </div>
+        
+        <div class="form-group">
+          <label>Max Tokens</label>
+          <input type="number" id="newMaxTokens" name="max_tokens" class="form-control"
+                 min="1" max="100000" value="50000">
+          <small class="form-help">Maximum response length</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>System Prompt</label>
+        <textarea id="newSystemMessage" name="system_message" rows="3" class="form-control"
+                  placeholder="Optional system instructions for the AI..."></textarea>
+        <small class="form-help">Optional instructions that set the AI's behavior and context</small>
+      </div>
+
+      <div class="form-group">
+        <label class="required">User Prompt</label>
+        <textarea id="newPromptText" name="prompt_text" rows="15" class="form-control large-textarea" required
+                  placeholder="Enter your detailed prompt here... This can be up to 50,000 characters."></textarea>
+        <small class="form-help">
+          <span id="newCharCount">0</span> / 50,000 characters
+        </small>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="newIsActive" name="is_active" checked>
+          <label for="newIsActive">
+            <strong>✅ Active</strong>
+            <span class="checkbox-help">Make this prompt available for use</span>
+          </label>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {{#if prompts}}
+    {{#if prompts.length}}
+      <div class="prompts-grid">
       {{#each prompts}}
         <div class="prompt-card {{#unless is_active}}inactive{{/unless}}" data-prompt-id="{{id}}">
-          <div class="card-header">
-            <div class="prompt-info">
-              <h3>{{name}}</h3>
-              <div class="prompt-meta">
-                <span class="provider-badge provider-{{ai_provider}}">{{ai_provider}}</span>
-                {{#if is_active}}
-                  <span class="status-badge active">✅ Active</span>
-                {{else}}
-                  <span class="status-badge inactive">⭕ Inactive</span>
-                {{/if}}
+          <!-- Preview State (default) -->
+          <div class="card-preview">
+            <div class="card-header">
+              <div class="prompt-info">
+                <h3>{{name}}</h3>
+                <div class="prompt-meta">
+                  <span class="provider-badge provider-{{ai_provider}}">{{ai_provider}}</span>
+                  {{#if is_active}}
+                    <span class="status-badge active">✅ Active</span>
+                  {{else}}
+                    <span class="status-badge inactive">⭕ Inactive</span>
+                  {{/if}}
+                </div>
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-sm btn-outline edit-prompt-btn" data-prompt-id="{{id}}">
+                  ✏️ Edit
+                </button>
+                <button class="btn btn-sm btn-danger delete-prompt-btn" data-prompt-id="{{id}}">
+                  🗑️ Delete
+                </button>
               </div>
             </div>
-            <div class="card-actions">
-              <button class="btn btn-sm btn-outline edit-prompt-btn" data-prompt-id="{{id}}">
-                ✏️ Edit
-              </button>
-              <button class="btn btn-sm btn-danger delete-prompt-btn" data-prompt-id="{{id}}">
-                🗑️ Delete
-              </button>
+
+            <div class="card-body">
+              {{#if description}}
+                <p class="description">{{description}}</p>
+              {{/if}}
+
+              <div class="prompt-settings">
+                <div class="setting-item">
+                  <span class="label">Temperature:</span>
+                  <span class="value">{{temperature}}</span>
+                </div>
+                <div class="setting-item">
+                  <span class="label">Max Tokens:</span>
+                  <span class="value">{{max_tokens}}</span>
+                </div>
+              </div>
+
+              <div class="prompt-preview">
+                {{#if system_message}}
+                  <h4>System Prompt Preview:</h4>
+                  <div class="system-message">
+                    {{#if (gt system_message.length 150)}}
+                      {{substring system_message 0 150}}...
+                    {{else}}
+                      {{system_message}}
+                    {{/if}}
+                  </div>
+                {{/if}}
+                <h4>User Prompt Preview:</h4>
+                <div class="prompt-text">
+                  {{#if (gt prompt_text.length 200)}}
+                    {{substring prompt_text 0 200}}...
+                  {{else}}
+                    {{prompt_text}}
+                  {{/if}}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="card-body">
-            {{#if description}}
-              <p class="description">{{description}}</p>
-            {{/if}}
-
-            <div class="prompt-settings">
-              <div class="setting-item">
-                <span class="label">Temperature:</span>
-                <span class="value">{{temperature}}</span>
+          <!-- Edit State (hidden by default) -->
+          <div class="card-edit" style="display: none;">
+            <div class="card-header">
+              <div class="prompt-info">
+                <h3>✏️ Editing: <span class="editing-prompt-name">{{name}}</span></h3>
               </div>
-              <div class="setting-item">
-                <span class="label">Max Tokens:</span>
-                <span class="value">{{max_tokens}}</span>
+              <div class="card-actions">
+                <button class="btn btn-sm btn-secondary cancel-edit-btn">Cancel</button>
+                <button class="btn btn-sm btn-primary save-edit-btn" data-prompt-id="{{id}}">
+                  💾 Save
+                </button>
               </div>
             </div>
 
-            <div class="prompt-preview">
-              <h4>Prompt Text Preview:</h4>
-              <div class="prompt-text">
-                {{#if (gt prompt_text.length 200)}}
-                  {{substring prompt_text 0 200}}...
-                {{else}}
-                  {{prompt_text}}
-                {{/if}}
-              </div>
-              {{#if system_message}}
-                <h4>System Message:</h4>
-                <div class="system-message">
-                  {{#if (gt system_message.length 150)}}
-                    {{substring system_message 0 150}}...
-                  {{else}}
-                    {{system_message}}
-                  {{/if}}
+            <div class="card-body">
+              <form class="inline-edit-form">
+                <input type="hidden" class="edit-prompt-id" value="{{id}}">
+                
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="required">Prompt Name</label>
+                    <input type="text" class="form-control edit-prompt-name-input" 
+                           value="{{name}}" readonly 
+                           style="background-color: #f8f9fa; color: #6c757d;">
+                    <small class="form-help">Prompt name is auto-generated and cannot be changed</small>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label class="required">AI Provider</label>
+                    <select class="form-control edit-ai-provider" required>
+                      <option value="">Select Provider...</option>
+                      {{#each ../availableProviders}}
+                        <option value="{{this}}" {{#if (eq this ../ai_provider)}}selected{{/if}}>{{this}}</option>
+                      {{/each}}
+                    </select>
+                  </div>
                 </div>
-              {{/if}}
+
+                <div class="form-group">
+                  <label>Description</label>
+                  <input type="text" class="form-control edit-description" 
+                         value="{{description}}" 
+                         placeholder="Brief description of what this prompt does">
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Temperature</label>
+                    <input type="number" class="form-control edit-temperature" 
+                           value="{{temperature}}" min="0" max="2" step="0.1">
+                    <small class="form-help">Creativity level (0 = focused, 2 = creative)</small>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label>Max Tokens</label>
+                    <input type="number" class="form-control edit-max-tokens" 
+                           value="{{max_tokens}}" min="1" max="100000">
+                    <small class="form-help">Maximum response length</small>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>System Prompt</label>
+                  <textarea class="form-control edit-system-message" rows="3"
+                            placeholder="Optional system instructions for the AI...">{{system_message}}</textarea>
+                  <small class="form-help">Optional instructions that set the AI's behavior and context</small>
+                </div>
+
+                <div class="form-group">
+                  <label class="required">User Prompt</label>
+                  <textarea class="form-control edit-prompt-text large-textarea" rows="12" required
+                            placeholder="Enter your detailed prompt here...">{{prompt_text}}</textarea>
+                  <small class="form-help">
+                    <span class="edit-char-count">0</span> / 50,000 characters
+                  </small>
+                </div>
+
+                <div class="form-group">
+                  <div class="checkbox-group">
+                    <input type="checkbox" class="edit-is-active" {{#if is_active}}checked{{/if}}>
+                    <label>
+                      <strong>✅ Active</strong>
+                      <span class="checkbox-help">Make this prompt available for use</span>
+                    </label>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>
       {{/each}}
-    </div>
+      </div>
+    {{else}}
+      <div class="empty-state">
+        <div class="empty-icon">🤖</div>
+        <h3>No AI Prompts Configured</h3>
+        <p>This content type doesn't have any AI prompts yet. Add your first prompt to enable AI content generation.</p>
+        <button id="addFirstPromptBtn" class="btn btn-primary">
+          ➕ Add First AI Prompt
+        </button>
+      </div>
+    {{/if}}
   {{else}}
     <div class="empty-state">
       <div class="empty-icon">🤖</div>
@@ -95,97 +344,98 @@
   {{/if}}
 </div>
 
-<!-- Add/Edit Prompt Modal -->
-<div id="promptModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 id="modalTitle">Add AI Prompt</h2>
-      <button class="modal-close">&times;</button>
-    </div>
-    <form id="promptForm" class="modal-body">
-      <input type="hidden" id="promptId" name="promptId">
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label for="promptName" class="required">Prompt Name</label>
-          <input type="text" id="promptName" name="name" class="form-control" required
-                 placeholder="e.g., Blog Post Generator">
-        </div>
-        
-        <div class="form-group">
-          <label for="aiProvider" class="required">AI Provider</label>
-          <select id="aiProvider" name="ai_provider" class="form-control" required>
-            <option value="">Select Provider...</option>
-            {{#each availableProviders}}
-              <option value="{{this}}">{{this}}</option>
-            {{/each}}
-          </select>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="promptDescription">Description</label>
-        <input type="text" id="promptDescription" name="description" class="form-control"
-               placeholder="Brief description of what this prompt does">
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="temperature">Temperature</label>
-          <input type="number" id="temperature" name="temperature" class="form-control"
-                 min="0" max="2" step="0.1" value="0.7">
-          <small class="form-help">Creativity level (0 = focused, 2 = creative)</small>
-        </div>
-        
-        <div class="form-group">
-          <label for="maxTokens">Max Tokens</label>
-          <input type="number" id="maxTokens" name="max_tokens" class="form-control"
-                 min="1" max="100000" value="50000">
-          <small class="form-help">Maximum response length</small>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="systemMessage">System Message</label>
-        <textarea id="systemMessage" name="system_message" rows="3" class="form-control"
-                  placeholder="Optional system instructions for the AI..."></textarea>
-        <small class="form-help">Optional instructions that set the AI's behavior and context</small>
-      </div>
-
-      <div class="form-group">
-        <label for="promptText" class="required">Prompt Text</label>
-        <textarea id="promptText" name="prompt_text" rows="12" class="form-control large-textarea" required
-                  placeholder="Enter your detailed prompt here... This can be up to 50,000 characters."></textarea>
-        <small class="form-help">
-          <span id="charCount">0</span> / 50,000 characters
-        </small>
-      </div>
-
-      <div class="form-group">
-        <div class="checkbox-group">
-          <input type="checkbox" id="isActive" name="is_active" checked>
-          <label for="isActive">
-            <strong>✅ Active</strong>
-            <span class="checkbox-help">Make this prompt available for use</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
-        <button type="submit" class="btn btn-primary">
-          <span id="submitBtnText">Create Prompt</span>
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <style>
 .admin-prompts-page {
-  max-width: 1400px;
+  max-width: none;
   margin: 0 auto;
   padding: 20px;
+}
+
+/* Inline Prompt Editor Styles */
+.prompt-editor {
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  border-bottom: 2px solid #f0f0f0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 10px 10px 0 0;
+}
+
+.editor-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-form {
+  padding: 30px;
+}
+
+.editor-form .large-textarea {
+  min-height: 400px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* Card Edit State Styles */
+.card-edit {
+  animation: slideIn 0.3s ease-out;
+}
+
+.card-edit .card-header {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  border-radius: 10px 10px 0 0;
+}
+
+.card-edit .card-header h3 {
+  margin: 0;
+  color: white;
+}
+
+.card-edit .editing-prompt-name {
+  font-weight: normal;
+  opacity: 0.9;
+}
+
+.card-edit .inline-edit-form {
+  padding: 0;
+}
+
+.card-edit .large-textarea {
+  min-height: 300px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  resize: vertical;
 }
 
 .page-header {
@@ -275,7 +525,7 @@
 
 .prompts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
@@ -401,7 +651,9 @@
   line-height: 1.4;
   color: #333;
   margin-bottom: 10px;
-  white-space: pre-wrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .system-message {
@@ -424,63 +676,7 @@
   color: #333;
 }
 
-/* Modal Styles */
-.modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.modal-content {
-  background-color: white;
-  margin: 2% auto;
-  border-radius: 10px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 30px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.modal-header h2 {
-  margin: 0;
-  color: #333;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-close:hover {
-  color: #333;
-}
-
-.modal-body {
-  padding: 30px;
-}
-
+/* Form Styles for Inline Editor */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -518,12 +714,6 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.large-textarea {
-  min-height: 300px;
-  font-family: 'Courier New', monospace;
-  resize: vertical;
-}
-
 .form-help {
   display: block;
   margin-top: 5px;
@@ -557,13 +747,10 @@
   font-weight: normal;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #e9ecef;
+@media (max-width: 1200px) {
+  .prompts-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -575,12 +762,13 @@
     grid-template-columns: 1fr;
   }
   
-  .modal-content {
-    margin: 5% auto;
-    width: 95%;
+  .editor-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
   }
   
-  .modal-body {
+  .editor-form {
     padding: 20px;
   }
 }
@@ -588,141 +776,173 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  const modal = document.getElementById('promptModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const promptForm = document.getElementById('promptForm');
-  const promptText = document.getElementById('promptText');
-  const charCount = document.getElementById('charCount');
-  const submitBtnText = document.getElementById('submitBtnText');
+  const newPromptEditor = document.getElementById('newPromptEditor');
+  const newPromptText = document.getElementById('newPromptText');
+  const newCharCount = document.getElementById('newCharCount');
 
-  // Character counter
-  promptText.addEventListener('input', function() {
+  // UI-friendly message functions
+  function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    const errorText = errorDiv.querySelector('.error-text');
+    errorText.textContent = message;
+    errorDiv.style.display = 'block';
+    
+    // Auto-hide after 8 seconds
+    setTimeout(() => {
+      hideError();
+    }, 8000);
+    
+    // Scroll to top to show error
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function hideError() {
+    document.getElementById('errorMessage').style.display = 'none';
+  }
+
+  function showSuccess(message) {
+    const successDiv = document.getElementById('successMessage');
+    const successText = successDiv.querySelector('.success-text');
+    successText.textContent = message;
+    successDiv.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      hideSuccess();
+    }, 5000);
+    
+    // Scroll to top to show success
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function hideSuccess() {
+    document.getElementById('successMessage').style.display = 'none';
+  }
+
+  // Make functions globally available
+  window.hideError = hideError;
+  window.hideSuccess = hideSuccess;
+
+  // Character counter for new prompt form
+  newPromptText.addEventListener('input', function() {
     const count = this.value.length;
-    charCount.textContent = count.toLocaleString();
+    newCharCount.textContent = count.toLocaleString();
     
     if (count > 50000) {
-      charCount.style.color = '#dc3545';
+      newCharCount.style.color = '#dc3545';
       this.style.borderColor = '#dc3545';
     } else if (count > 45000) {
-      charCount.style.color = '#ffc107';
+      newCharCount.style.color = '#ffc107';
       this.style.borderColor = '#ffc107';
     } else {
-      charCount.style.color = '#666';
+      newCharCount.style.color = '#666';
       this.style.borderColor = '#ddd';
     }
   });
 
-  // Modal controls
-  function openModal(isEdit = false, promptData = null) {
-    modal.style.display = 'block';
-    document.body.style.overflow = 'hidden';
+  // Function to setup character counter for edit forms
+  function setupCharCounter(textarea, counterSpan) {
+    textarea.addEventListener('input', function() {
+      const count = this.value.length;
+      counterSpan.textContent = count.toLocaleString();
+      
+      if (count > 50000) {
+        counterSpan.style.color = '#dc3545';
+        this.style.borderColor = '#dc3545';
+      } else if (count > 45000) {
+        counterSpan.style.color = '#ffc107';
+        this.style.borderColor = '#ffc107';
+      } else {
+        counterSpan.style.color = '#666';
+        this.style.borderColor = '#ddd';
+      }
+    });
     
-    if (isEdit && promptData) {
-      modalTitle.textContent = 'Edit AI Prompt';
-      submitBtnText.textContent = 'Update Prompt';
-      
-      // Populate form
-      document.getElementById('promptId').value = promptData.id;
-      document.getElementById('promptName').value = promptData.name || '';
-      document.getElementById('aiProvider').value = promptData.ai_provider || '';
-      document.getElementById('promptDescription').value = promptData.description || '';
-      document.getElementById('temperature').value = promptData.temperature || 0.7;
-      document.getElementById('maxTokens').value = promptData.max_tokens || 50000;
-      document.getElementById('systemMessage').value = promptData.system_message || '';
-      document.getElementById('promptText').value = promptData.prompt_text || '';
-      document.getElementById('isActive').checked = promptData.is_active !== false;
-      
-      // Update character count
-      promptText.dispatchEvent(new Event('input'));
-    } else {
-      modalTitle.textContent = 'Add AI Prompt';
-      submitBtnText.textContent = 'Create Prompt';
-      promptForm.reset();
-      document.getElementById('isActive').checked = true;
-      charCount.textContent = '0';
-    }
+    // Initialize counter
+    textarea.dispatchEvent(new Event('input'));
   }
 
-  function closeModal() {
-    modal.style.display = 'none';
-    document.body.style.overflow = '';
-    promptForm.reset();
+  // Card-based editing functions
+  function editPromptInCard(promptCard, promptData) {
+    const cardPreview = promptCard.querySelector('.card-preview');
+    const cardEdit = promptCard.querySelector('.card-edit');
+    
+    // Hide preview, show edit form
+    cardPreview.style.display = 'none';
+    cardEdit.style.display = 'block';
+    
+    // Get the prompt data
+    const prompt = promptData.prompt || promptData;
+    
+    // Populate the inline edit form
+    const form = cardEdit.querySelector('.inline-edit-form');
+    form.querySelector('.edit-prompt-id').value = prompt.id || '';
+    form.querySelector('.edit-prompt-name-input').value = prompt.name || '';
+    form.querySelector('.edit-ai-provider').value = prompt.ai_provider || '';
+    form.querySelector('.edit-description').value = prompt.description || '';
+    form.querySelector('.edit-temperature').value = prompt.temperature || 0.7;
+    form.querySelector('.edit-max-tokens').value = prompt.max_tokens || 50000;
+    form.querySelector('.edit-system-message').value = prompt.system_message || '';
+    form.querySelector('.edit-prompt-text').value = prompt.prompt_text || '';
+    form.querySelector('.edit-is-active').checked = prompt.is_active !== false;
+    
+    // Setup character counter for this edit form
+    const textarea = form.querySelector('.edit-prompt-text');
+    const counter = form.querySelector('.edit-char-count');
+    setupCharCounter(textarea, counter);
+    
+    // Scroll to the card
+    promptCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-
-  // Event listeners
-  document.getElementById('addPromptBtn').addEventListener('click', () => openModal());
-  document.getElementById('addFirstPromptBtn')?.addEventListener('click', () => openModal());
   
-  document.querySelectorAll('.modal-close').forEach(btn => {
-    btn.addEventListener('click', closeModal);
-  });
+  function cancelEditInCard(promptCard) {
+    const cardPreview = promptCard.querySelector('.card-preview');
+    const cardEdit = promptCard.querySelector('.card-edit');
+    
+    // Show preview, hide edit form
+    cardEdit.style.display = 'none';
+    cardPreview.style.display = 'block';
+  }
+  
+  function openNewPromptEditor() {
+    newPromptEditor.style.display = 'block';
+    newPromptEditor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Reset form
+    document.getElementById('newPromptForm').reset();
+    document.getElementById('newIsActive').checked = true;
+    newCharCount.textContent = '0';
+  }
+  
+  function closeNewPromptEditor() {
+    newPromptEditor.style.display = 'none';
+    document.getElementById('newPromptForm').reset();
+  }
 
-  modal.addEventListener('click', function(e) {
-    if (e.target === modal) {
-      closeModal();
-    }
-  });
-
-  // Edit prompt buttons
-  document.querySelectorAll('.edit-prompt-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
-      const promptId = this.dataset.promptId;
-      try {
-        const response = await fetch(`/api/prompts/${promptId}`);
-        if (response.ok) {
-          const promptData = await response.json();
-          openModal(true, promptData);
-        } else {
-          alert('Failed to load prompt data');
-        }
-      } catch (error) {
-        alert('Error loading prompt: ' + error.message);
-      }
-    });
-  });
-
-  // Delete prompt buttons
-  document.querySelectorAll('.delete-prompt-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
-      const promptId = this.dataset.promptId;
-      if (confirm('Are you sure you want to delete this AI prompt? This action cannot be undone.')) {
-        try {
-          const response = await fetch(`/admin/prompts/${promptId}`, {
-            method: 'DELETE'
-          });
-          
-          if (response.ok) {
-            location.reload();
-          } else {
-            const error = await response.json();
-            alert('Failed to delete prompt: ' + (error.error || 'Unknown error'));
-          }
-        } catch (error) {
-          alert('Error deleting prompt: ' + error.message);
-        }
-      }
-    });
-  });
-
-  // Form submission
-  promptForm.addEventListener('submit', async function(e) {
+  // Event listeners for new prompt form
+  document.getElementById('addPromptBtn').addEventListener('click', openNewPromptEditor);
+  document.getElementById('addFirstPromptBtn')?.addEventListener('click', openNewPromptEditor);
+  
+  document.getElementById('cancelNewPromptBtn').addEventListener('click', closeNewPromptEditor);
+  
+  // Save new prompt button
+  document.getElementById('saveNewPromptBtn').addEventListener('click', function(e) {
     e.preventDefault();
     
-    const formData = new FormData(this);
+    const form = document.getElementById('newPromptForm');
+    const formData = new FormData(form);
     const data = Object.fromEntries(formData.entries());
     
     // Handle checkbox
-    data.is_active = document.getElementById('isActive').checked;
+    data.is_active = document.getElementById('newIsActive').checked;
     
-    const promptId = document.getElementById('promptId').value;
-    const isEdit = !!promptId;
+    const url = `/admin/content-types/{{contentType.id}}/prompts`;
+    const method = 'POST';
     
-    const url = isEdit 
-      ? `/admin/prompts/${promptId}`
-      : `/admin/content-types/{{contentType.id}}/prompts`;
-    
-    const method = isEdit ? 'PUT' : 'POST';
-    
+    savePrompt(url, method, data, closeNewPromptEditor);
+  });
+  
+  async function savePrompt(url, method, data, onSuccessCallback) {
     try {
       const response = await fetch(url, {
         method: method,
@@ -735,20 +955,117 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
       
       if (response.ok) {
-        closeModal();
-        location.reload();
+        onSuccessCallback();
+        showSuccess('AI prompt saved successfully');
+        setTimeout(() => location.reload(), 1500);
       } else {
-        alert('Error: ' + (result.error || 'Failed to save prompt'));
+        showError('Error: ' + (result.error || 'Failed to save prompt'));
       }
     } catch (error) {
-      alert('Error saving prompt: ' + error.message);
+      showError('Error saving prompt: ' + error.message);
     }
+  }
+
+  // Edit prompt buttons
+  document.querySelectorAll('.edit-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const promptId = this.dataset.promptId;
+      const promptCard = this.closest('.prompt-card');
+      
+      try {
+        const response = await fetch(`/admin/api/prompts/${promptId}`);
+        if (response.ok) {
+          const promptData = await response.json();
+          editPromptInCard(promptCard, promptData);
+        } else {
+          showError('Failed to load prompt data');
+        }
+      } catch (error) {
+        showError('Error loading prompt: ' + error.message);
+      }
+    });
   });
 
-  // Escape key to close modal
+  // Cancel edit buttons
+  document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const promptCard = this.closest('.prompt-card');
+      cancelEditInCard(promptCard);
+    });
+  });
+
+  // Save edit buttons  
+  document.querySelectorAll('.save-edit-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      const promptCard = this.closest('.prompt-card');
+      const form = promptCard.querySelector('.inline-edit-form');
+      const promptId = this.dataset.promptId;
+      
+      // Collect form data from the inline form
+      const data = {
+        name: form.querySelector('.edit-prompt-name-input').value,
+        ai_provider: form.querySelector('.edit-ai-provider').value,
+        description: form.querySelector('.edit-description').value,
+        temperature: parseFloat(form.querySelector('.edit-temperature').value),
+        max_tokens: parseInt(form.querySelector('.edit-max-tokens').value),
+        system_message: form.querySelector('.edit-system-message').value,
+        prompt_text: form.querySelector('.edit-prompt-text').value,
+        is_active: form.querySelector('.edit-is-active').checked
+      };
+      
+      const url = `/admin/prompts/${promptId}`;
+      const method = 'PUT';
+      
+      savePrompt(url, method, data, () => cancelEditInCard(promptCard));
+    });
+  });
+
+  // Delete prompt buttons
+  document.querySelectorAll('.delete-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const promptId = this.dataset.promptId;
+      
+      // Create custom confirmation dialog
+      const confirmDelete = window.confirm('Are you sure you want to delete this AI prompt? This action cannot be undone.');
+      
+      if (confirmDelete) {
+        try {
+          const response = await fetch(`/admin/prompts/${promptId}`, {
+            method: 'DELETE'
+          });
+          
+          if (response.ok) {
+            showSuccess('AI prompt deleted successfully');
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            const error = await response.json();
+            showError('Failed to delete prompt: ' + (error.error || 'Unknown error'));
+          }
+        } catch (error) {
+          showError('Error deleting prompt: ' + error.message);
+        }
+      }
+    });
+  });
+
+
+  // Escape key to close editors
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && modal.style.display === 'block') {
-      closeModal();
+    if (e.key === 'Escape') {
+      // Close new prompt editor if open
+      if (newPromptEditor.style.display === 'block') {
+        closeNewPromptEditor();
+        return;
+      }
+      
+      // Close any open card edit forms
+      const openEditCards = document.querySelectorAll('.card-edit[style*="block"]');
+      openEditCards.forEach(cardEdit => {
+        const promptCard = cardEdit.closest('.prompt-card');
+        cancelEditInCard(promptCard);
+      });
     }
   });
 });

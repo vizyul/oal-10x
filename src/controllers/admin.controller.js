@@ -204,6 +204,7 @@ class AdminController {
       });
 
       req.flash('success', `Content type "${label}" created successfully!`);
+      logger.info(`Redirecting to content type show page: /admin/content-types/${newContentType.id}`);
       res.redirect(`/admin/content-types/${newContentType.id}`);
     } catch (error) {
       logger.error('Error creating content type:', error);
@@ -236,9 +237,11 @@ class AdminController {
   async showContentType(req, res) {
     try {
       const { id } = req.params;
+      logger.info(`Showing content type with ID: ${id}`);
       
       const ct = await contentType.findById(id);
       if (!ct) {
+        logger.warn(`Content type with ID ${id} not found`);
         return res.status(404).render('errors/404', {
           title: 'Content Type Not Found',
           message: 'The requested content type could not be found.',
@@ -249,6 +252,7 @@ class AdminController {
 
       // Get associated AI prompts
       const prompts = await aiPrompts.getByContentType(id);
+      logger.info(`Found ${prompts.length} prompts for content type ${id}`);
       
       res.render('admin/content-types/show', {
         title: `Content Type: ${ct.label}`,
@@ -471,8 +475,15 @@ class AdminController {
         });
       }
 
-      const prompts = await aiPrompts.getByContentType(id, { includeInactive: true });
+      const prompts = await aiPrompts.getByContentType(parseInt(id), { includeInactive: true });
       const availableProviders = await aiPrompts.getAvailableProviders();
+
+      logger.info(`ManagePrompts: Found ${prompts.length} prompts for content type ${id}`, {
+        contentTypeId: parseInt(id),
+        contentTypeKey: ct.key,
+        promptsCount: prompts.length,
+        promptsData: prompts.map(p => ({ id: p.id, name: p.name, is_active: p.is_active }))
+      });
 
       res.render('admin/content-types/prompts', {
         title: `AI Prompts: ${ct.label}`,
