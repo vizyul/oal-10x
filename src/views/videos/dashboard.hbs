@@ -149,7 +149,6 @@ class ProcessingStatusManager {
             isTranscript: ct.key === 'transcript_text'
           }));
           this.contentTypesLoaded = true;
-          console.log('Loaded content types:', this.contentTypes.length);
         } else {
           throw new Error('Invalid API response format');
         }
@@ -428,15 +427,15 @@ class ProcessingStatusManager {
                 </div>
                 <div class="content-actions">
                   ${type.data?.status === 'completed' ? `
-                    <button class="view-content-btn" 
-                            data-video-id="${video.videoId}" 
-                            data-content-type="${type.key}" 
+                    <button class="view-content-btn"
+                            data-video-id="${video.videoId}"
+                            data-content-type="${type.key}"
                             data-content-label="${type.label}"
                             title="View ${type.label}">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
                       </svg>
-                      View
+                      View ${type.label}
                     </button>
                   ` : ''}
                   ${type.data?.status === 'failed' ? `<div class="error-info" title="${type.data?.error || 'Processing failed'}">⚠️</div>` : ''}
@@ -710,7 +709,6 @@ class ProcessingStatusManager {
 
   // Legacy modal function - no longer used with icon-only approach
   async showAllContentModal(videoId, videoTitle) {
-    console.log('showAllContentModal called but no longer needed - icons are displayed directly');
     // This function is no longer used since we show all content icons directly
     // Keeping for backward compatibility but not implementing
   }
@@ -1188,7 +1186,6 @@ async function loadCompletedVideos() {
         }).join('');
         
         // Set up event listeners for content view buttons AFTER DOM elements are created
-        console.log('🚀 About to set up event listeners after DOM creation');
         
         // Use setTimeout to ensure DOM is fully rendered
         setTimeout(() => {
@@ -1335,14 +1332,12 @@ function setupFilteringEventListeners() {
 function setupVideoCardEventListeners() {
   // Content icon wrappers in video cards
   const contentIcons = document.querySelectorAll('.content-icon-wrapper');
-  console.log(`🔧 Setting up click handlers for ${contentIcons.length} content icons`);
   
   contentIcons.forEach((iconWrapper, index) => {
     const videoId = iconWrapper.getAttribute('data-video-id');
     const contentType = iconWrapper.getAttribute('data-content-type');
     const contentLabel = iconWrapper.getAttribute('data-content-label');
     
-    console.log(`🔧 Icon ${index + 1}: ${contentLabel} (${contentType}) for video ${videoId}`);
     
     iconWrapper.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1351,15 +1346,6 @@ function setupVideoCardEventListeners() {
       const debugKey = iconWrapper.getAttribute('data-debug-key');
       const debugIcon = iconWrapper.getAttribute('data-debug-icon');
       
-      // Debug logging to help identify the content mapping issue
-      console.log('🔍 Content Icon Clicked:', {
-        videoId,
-        contentType,
-        contentLabel,
-        debugKey,
-        debugIcon,
-        iconText: iconWrapper.querySelector('.content-icon-large')?.textContent
-      });
       
       if (statusManager) {
         statusManager.viewContent(videoId, contentType, contentLabel);

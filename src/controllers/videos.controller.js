@@ -253,11 +253,13 @@ class VideosController {
         created_at: new Date().toISOString()
       };
 
-      // Handle tags (convert array to comma-separated string if needed)
-      if (tags && Array.isArray(tags)) {
-        videoData.tags = tags.join(',');
-      } else if (metadata?.tags) {
-        videoData.tags = metadata.tags.slice(0, 10).join(','); // Limit to 10 tags
+      // Handle tags (PostgreSQL ARRAY format)
+      if (tags && Array.isArray(tags) && tags.length > 0) {
+        videoData.tags = tags.slice(0, 10); // Keep as array for PostgreSQL
+      } else if (metadata?.tags && metadata.tags.length > 0) {
+        videoData.tags = metadata.tags.slice(0, 10); // Keep as array for PostgreSQL
+      } else {
+        videoData.tags = null; // Use null for empty tags
       }
 
       // Create video using Video model
@@ -385,9 +387,9 @@ class VideosController {
         }
       }
 
-      // Handle tags conversion if needed (array to comma-separated string)
+      // Handle tags conversion if needed (PostgreSQL ARRAY format)
       if (safeUpdateData.tags && Array.isArray(safeUpdateData.tags)) {
-        safeUpdateData.tags = safeUpdateData.tags.join(',');
+        safeUpdateData.tags = safeUpdateData.tags.length > 0 ? safeUpdateData.tags.slice(0, 10) : null;
       }
 
       const record = await video.updateVideo(id, safeUpdateData);
@@ -803,16 +805,69 @@ class VideosController {
   }
 
   /**
+   * Map YouTube category ID to our application categories
+   * @param {string} youtubeCategoryId - YouTube category ID
+   * @returns {string} - Mapped category
+   */
+  mapYouTubeCategoryToOurCategory(youtubeCategoryId) {
+    // YouTube category ID mappings based on official YouTube categories
+    const categoryMap = {
+      // Education & How-to
+      '27': 'education',   // Education
+      '26': 'education',   // Howto & Style
+
+      // Entertainment
+      '1': 'entertainment',  // Film & Animation
+      '23': 'entertainment', // Comedy
+      '24': 'entertainment', // Entertainment
+      '10': 'entertainment', // Music
+      '21': 'entertainment', // Videoblogging (Vlogs)
+      '22': 'entertainment', // People & Blogs
+      '30': 'entertainment', // Movies
+      '31': 'entertainment', // Anime/Animation
+      '32': 'entertainment', // Action/Adventure
+      '33': 'entertainment', // Classics
+      '34': 'entertainment', // Documentary
+      '35': 'entertainment', // Drama
+      '36': 'entertainment', // Family
+      '37': 'entertainment', // Foreign
+      '38': 'entertainment', // Horror
+      '39': 'entertainment', // Sci-Fi/Fantasy
+      '40': 'entertainment', // Thriller
+      '41': 'entertainment', // Shorts
+      '42': 'entertainment', // Shows
+      '43': 'entertainment', // Trailers
+
+      // Technology
+      '28': 'technology',  // Science & Technology
+      '20': 'technology',  // Gaming
+
+      // Business & News
+      '25': 'business',    // News & Politics
+      '2': 'business',     // Autos & Vehicles (business related)
+
+      // Sports & Lifestyle (map to general)
+      '17': 'general',     // Sports
+      '19': 'general',     // Travel & Events
+      '15': 'general',     // Pets & Animals
+      '29': 'general',     // Nonprofits & Activism
+    };
+
+    return categoryMap[youtubeCategoryId] || 'general';
+  }
+
+  /**
    * Extract video ID from YouTube URL
    * @param {string} url - YouTube URL
    * @returns {string|null} - Video ID or null if invalid
    */
   extractVideoId(url) {
     const patterns = [
-      /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
+      /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube live URLs with query params
     ];
 
     for (const pattern of patterns) {
@@ -996,9 +1051,9 @@ class VideosController {
         FROM content_types 
         WHERE key = $1 AND is_active = true
       `;
-      
+
       const contentTypeResult = await database.query(contentTypeQuery, [contentType]);
-      
+
       if (contentTypeResult.rows.length === 0) {
         logger.error(`Content type '${contentType}' not found in content_types table`);
         return res.status(400).json({
@@ -1006,16 +1061,16 @@ class VideosController {
           message: 'Invalid content type'
         });
       }
-      
+
       const contentTypeRecord = contentTypeResult.rows[0];
       logger.info(`Found content type: ${contentTypeRecord.label} (ID: ${contentTypeRecord.id})`);
-      
+
       // Handle transcript specially since it's stored in videos table, not video_content table
       let content = null;
       let contentUrl = null;
       let generationStatus = null;
       let lastUpdated = null;
-      
+
       if (contentType === 'transcript' || contentType === 'transcript_text') {
         // Transcripts are stored in the videos table
         content = videoRecord.transcript_text;
@@ -1031,9 +1086,9 @@ class VideosController {
           ORDER BY created_at DESC
           LIMIT 1
         `;
-        
+
         const videoContentResult = await database.query(videoContentQuery, [videoRecord.id, contentTypeRecord.id]);
-        
+
         if (videoContentResult.rows.length > 0) {
           const contentRecord = videoContentResult.rows[0];
           content = contentRecord.content_text;
@@ -1088,6 +1143,32 @@ class VideosController {
   }
 
   /**
+   * Test endpoint to debug user authentication
+   * GET /api/videos/debug-user
+   */
+  async debugUser(req, res) {
+    try {
+      logger.info('=== DEBUG USER ENDPOINT ===');
+      logger.info('req.user:', req.user);
+      logger.info('req.user.id:', req.user?.id);
+      logger.info('req.user type:', typeof req.user?.id);
+
+      return res.json({
+        success: true,
+        user: req.user,
+        userId: req.user?.id,
+        userIdType: typeof req.user?.id
+      });
+    } catch (error) {
+      logger.error('Debug user error:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Process multiple video URLs (batch processing)
    * POST /api/videos/batch
    */
@@ -1116,6 +1197,8 @@ class VideosController {
 
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
+      logger.info(`Processing URL videos for user ID: ${userId} (type: ${typeof userId})`);
+
       if (typeof userId === 'string' && userId.startsWith('rec')) {
         try {
           const userResult = await database.findByField('users', 'airtable_id', userId);
@@ -1125,12 +1208,41 @@ class VideosController {
             logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
           } else {
             logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
+            return res.status(400).json({
+              success: false,
+              message: 'User not found in database'
+            });
           }
         } catch (userLookupError) {
           logger.error('Error looking up PostgreSQL user:', userLookupError);
+          return res.status(500).json({
+            success: false,
+            message: 'Error validating user'
+          });
         }
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         actualUserId = parseInt(userId);
+      }
+
+      logger.info(`Final actualUserId for video creation: ${actualUserId}`);
+
+      // Verify the user exists in the database
+      try {
+        const userExists = await database.findById('users', actualUserId);
+        if (!userExists) {
+          logger.error(`User ID ${actualUserId} does not exist in users table`);
+          return res.status(400).json({
+            success: false,
+            message: `User ID ${actualUserId} not found in database`
+          });
+        }
+        logger.info(`✅ Verified user ID ${actualUserId} exists in database`);
+      } catch (userCheckError) {
+        logger.error('Error checking user existence:', userCheckError);
+        return res.status(500).json({
+          success: false,
+          message: 'Error validating user existence'
+        });
       }
 
       const processedVideos = [];
@@ -1182,31 +1294,43 @@ class VideosController {
             upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '',
             status: 'pending',
-            category: 'Education',
+            category: metadata?.categoryId ? this.mapYouTubeCategoryToOurCategory(metadata.categoryId) : 'general',
             privacy_setting: 'public',
             users_id: actualUserId,
             created_at: new Date().toISOString()
           };
 
-          // Handle tags
-          if (metadata?.tags) {
-            videoData.tags = metadata.tags.slice(0, 10).join(',');
+          // Handle tags (PostgreSQL ARRAY format)
+          if (metadata?.tags && metadata.tags.length > 0) {
+            videoData.tags = metadata.tags.slice(0, 10); // Keep as array for PostgreSQL
+          } else {
+            videoData.tags = null; // Use null for empty tags
           }
 
           // Create video record using Video model
+          logger.info(`Writing video ${videoId} to PostgreSQL...`);
           const postgresRecord = await video.createVideo(videoData);
-          logger.info(`✅ Batch video created in PostgreSQL: ID ${postgresRecord.id} (${videoData.video_title})`);
+          logger.info(`✅ Video ${videoId} created in PostgreSQL: ID ${postgresRecord.id}`);
+
+          // Database write succeeded - increment subscription usage
+          try {
+            const subscriptionService = require('../services/subscription.service');
+            await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+            logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+          } catch (usageError) {
+            logger.warn(`⚠️  Failed to increment video usage for user ${actualUserId}:`, usageError.message);
+          }
 
           // Trigger processing with selected content types
           if (metadata && postgresRecord) {
             try {
-              await this.triggerBatchVideoProcessing(postgresRecord.id, metadata, contentTypes);
+              await this.triggerBatchVideoProcessing(postgresRecord.id, metadata, contentTypes, actualUserId);
             } catch (processingError) {
               logger.warn(`Could not trigger processing for ${url}:`, processingError.message);
             }
           }
 
-          processedVideos.push(video.formatVideoResponse(postgresRecord));
+          processedVideos.push(postgresRecord);
 
         } catch (videoError) {
           logger.error(`Error processing video ${url}:`, videoError);
@@ -1248,8 +1372,9 @@ class VideosController {
    * @param {string} videoId - Video record ID
    * @param {Object} metadata - Video metadata
    * @param {Array} selectedContentTypes - Array of selected content types
+   * @param {number} userId - User ID
    */
-  async triggerBatchVideoProcessing(videoId, metadata, selectedContentTypes = []) {
+  async triggerBatchVideoProcessing(videoId, metadata, selectedContentTypes = [], userId) {
     try {
       logger.info(`Batch video processing triggered for ${videoId}`, {
         hasMetadata: !!metadata,
@@ -1280,39 +1405,39 @@ class VideosController {
       const youtubeVideoId = metadata?.videoId || this.extractVideoId(metadata?.url || '');
 
       if (youtubeVideoId) {
-        // Initialize status for selected content types only
-        processingStatusService.initializeVideoProcessing(youtubeVideoId, contentTypes);
+        // Initialize status using the async method like YouTube OAuth videos
+        await processingStatusService.initializeVideoProcessingAsync(
+          youtubeVideoId,
+          videoId,
+          metadata?.title || 'Unknown Video',
+          userId,
+          contentTypes
+        );
         logger.info(`Initialized processing status for video ${youtubeVideoId} with content types:`, contentTypes);
       }
 
       // Update video status to pending using Video model
-      await video.updateStatus(videoId, 'pending', {
-        processing_log: JSON.stringify({
-          triggered: new Date().toISOString(),
-          contentTypes: contentTypes,
-          steps: [{
-            step: 'batch_processing_queued',
-            status: 'pending',
-            timestamp: new Date().toISOString()
-          }]
-        })
-      });
+      await video.updateStatus(videoId, 'pending');
 
-      // Add processing tasks to queue for each selected content type
-      const processingQueue = require('../services/processing-queue.service');
+      // Use direct transcript processing (same as YouTube OAuth videos)
+      const transcriptService = require('../services/transcript.service');
+      const youtubeUrl = metadata?.url;
 
-      const processingTasks = [
-        { task_type: 'extract_transcript', priority: 5 }, // Always extract transcript first
-        { task_type: 'generate_content', priority: 4, contentTypes }  // Generate selected content types
-      ];
+      if (youtubeVideoId && youtubeUrl) {
+        logger.info(`Starting transcript extraction for video ${youtubeVideoId}`);
 
-      for (const task of processingTasks) {
-        try {
-          await processingQueue.addToQueue(videoId, task.task_type, task.priority, { contentTypes: task.contentTypes });
-          logger.info(`Added ${task.task_type} to processing queue for video ${videoId}`);
-        } catch (queueError) {
-          logger.warn(`Could not add ${task.task_type} to queue:`, queueError.message);
-        }
+        // Process transcript asynchronously using the same method as YouTube OAuth videos
+        transcriptService.processVideoTranscript(youtubeVideoId, youtubeUrl, videoId, userId, contentTypes)
+          .then(result => {
+            if (result.success) {
+              logger.info(`✅ Transcript successfully processed for video ${youtubeVideoId}`);
+            } else {
+              logger.info(`ℹ️  Transcript not available for video ${youtubeVideoId}: ${result.reason}`);
+            }
+          })
+          .catch(error => {
+            logger.warn(`⚠️  Transcript processing failed for video ${youtubeVideoId}:`, error.message);
+          });
       }
 
     } catch (error) {
