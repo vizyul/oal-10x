@@ -10,17 +10,17 @@ const crypto = require('crypto');
 class ApiKeys extends BaseModel {
   constructor() {
     super('api_keys', 'id');
-    
+
     this.fillable = [
       'users_id', 'key_id', 'api_key', 'name', 'description', 'permissions',
-      'rate_limit', 'rate_limit_window', 'is_active', 'expires_at', 
+      'rate_limit', 'rate_limit_window', 'is_active', 'expires_at',
       'last_used', 'usage_count'
     ];
-    
+
     this.hidden = [
       'api_key' // Never expose the actual API key in JSON output
     ];
-    
+
     this.casts = {
       'is_active': 'boolean',
       'permissions': 'array',
@@ -41,7 +41,7 @@ class ApiKeys extends BaseModel {
   generateApiKey(prefix = 'oal') {
     const keyId = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
     const keySecret = crypto.randomBytes(32).toString('hex');
-    
+
     return {
       key_id: keyId,
       api_key: `${prefix}_${keyId}_${keySecret}`
@@ -58,7 +58,7 @@ class ApiKeys extends BaseModel {
     try {
       // Generate key if not provided
       const generatedKey = this.generateApiKey();
-      
+
       const apiKeyData = {
         users_id: userId,
         key_id: generatedKey.key_id,
@@ -75,7 +75,7 @@ class ApiKeys extends BaseModel {
 
       const apiKey = await this.create(apiKeyData);
       logger.info(`API key created for user ${userId}: ${apiKey.key_id}`);
-      
+
       // Return with the actual API key for one-time display
       return {
         ...apiKey,
@@ -289,7 +289,7 @@ class ApiKeys extends BaseModel {
         throw new Error('API key not found or access denied');
       }
 
-      const daysSinceCreated = keyRecord.created_at ? 
+      const daysSinceCreated = keyRecord.created_at ?
         Math.ceil((new Date() - new Date(keyRecord.created_at)) / (1000 * 60 * 60 * 24)) : 0;
 
       const daysSinceLastUsed = keyRecord.last_used ?

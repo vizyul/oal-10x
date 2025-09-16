@@ -11,7 +11,7 @@ class SubscriptionUsage extends BaseModel {
     super();
     this.tableName = 'subscription_usage';
     this.primaryKey = 'id';
-    
+
     // Define usage-specific validation rules
     this.validationRules = {
       user_subscriptions_id: { required: true, type: 'integer' },
@@ -56,9 +56,9 @@ class SubscriptionUsage extends BaseModel {
         ORDER BY created_at DESC 
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [subscriptionId, now]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -81,7 +81,7 @@ class SubscriptionUsage extends BaseModel {
 
       const actualUserId = parseInt(userId);
       const now = new Date();
-      
+
       const query = `
         SELECT su.* FROM ${this.tableName} su
         JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
@@ -91,9 +91,9 @@ class SubscriptionUsage extends BaseModel {
         ORDER BY su.created_at DESC 
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [actualUserId, now]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -135,7 +135,7 @@ class SubscriptionUsage extends BaseModel {
       if (!processedData.period_start) {
         processedData.period_start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       }
-      
+
       if (!processedData.period_end) {
         processedData.period_end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
       }
@@ -171,7 +171,7 @@ class SubscriptionUsage extends BaseModel {
 
       // Get current usage record
       let usage = await this.getCurrentBySubscriptionId(subscriptionId);
-      
+
       if (!usage) {
         // Create new usage record if none exists
         usage = await this.createUsage({
@@ -191,7 +191,7 @@ class SubscriptionUsage extends BaseModel {
       }
 
       const updatedUsage = await this.update(usage.id, updateData);
-      
+
       logger.info(`Incremented ${resource} for subscription ${subscriptionId} by ${increment}`, {
         subscriptionId,
         resource,
@@ -221,7 +221,7 @@ class SubscriptionUsage extends BaseModel {
 
       // Get current usage record
       const usage = await this.getCurrentBySubscriptionId(subscriptionId);
-      
+
       if (!usage) {
         logger.warn(`No usage record found for subscription ${subscriptionId}, cannot decrement`);
         return null;
@@ -230,7 +230,7 @@ class SubscriptionUsage extends BaseModel {
       // Decrement the specified resource (don't go below 0)
       const currentValue = usage[resource] || 0;
       const newValue = Math.max(0, currentValue - decrement);
-      
+
       const updateData = {
         [resource]: newValue,
         updated_at: new Date().toISOString()
@@ -243,7 +243,7 @@ class SubscriptionUsage extends BaseModel {
       }
 
       const updatedUsage = await this.update(usage.id, updateData);
-      
+
       logger.info(`Decremented ${resource} for subscription ${subscriptionId} by ${decrement}`, {
         subscriptionId,
         resource,
@@ -265,14 +265,14 @@ class SubscriptionUsage extends BaseModel {
   async hasExceededLimit(subscriptionId, resource = 'videos_processed') {
     try {
       const usage = await this.getCurrentBySubscriptionId(subscriptionId);
-      
+
       if (!usage) {
         return false; // No usage record means not exceeded
       }
 
       const currentUsage = usage[resource] || 0;
       const limit = usage.usage_limit || 10;
-      
+
       return currentUsage >= limit;
     } catch (error) {
       logger.error(`Error checking usage limit for subscription ${subscriptionId}:`, error);
@@ -286,7 +286,7 @@ class SubscriptionUsage extends BaseModel {
   async getUsageBreakdown(subscriptionId) {
     try {
       const usage = await this.getCurrentBySubscriptionId(subscriptionId);
-      
+
       if (!usage) {
         return {
           subscription_id: subscriptionId,

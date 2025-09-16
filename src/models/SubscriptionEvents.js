@@ -11,7 +11,7 @@ class SubscriptionEvents extends BaseModel {
     super();
     this.tableName = 'subscription_events';
     this.primaryKey = 'id';
-    
+
     // Define event-specific validation rules
     this.validationRules = {
       user_subscriptions_id: { required: false, type: 'integer' },
@@ -33,7 +33,7 @@ class SubscriptionEvents extends BaseModel {
     this.allowedStatuses = ['pending', 'processing', 'processed', 'failed'];
     this.allowedEventTypes = [
       'customer.subscription.created',
-      'customer.subscription.updated', 
+      'customer.subscription.updated',
       'customer.subscription.deleted',
       'customer.subscription.paused',
       'customer.subscription.resumed',
@@ -98,7 +98,7 @@ class SubscriptionEvents extends BaseModel {
 
       const query = `SELECT * FROM ${this.tableName} WHERE stripe_event_id = $1`;
       const result = await database.query(query, [stripeEventId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -145,7 +145,7 @@ class SubscriptionEvents extends BaseModel {
       }
 
       const updatedEvent = await this.update(eventId, updateData);
-      
+
       logger.info(`Marked event ${eventId} as processed`, {
         eventId,
         success,
@@ -187,7 +187,7 @@ class SubscriptionEvents extends BaseModel {
       }
 
       const updatedEvent = await this.update(eventId, updateData);
-      
+
       logger.info(`Marked event ${eventId} as failed`, {
         eventId,
         errorMessage,
@@ -215,7 +215,7 @@ class SubscriptionEvents extends BaseModel {
         WHERE user_subscriptions_id = $1 
         ORDER BY created_at DESC
       `;
-      
+
       const result = await database.query(query, [subscriptionId]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -238,7 +238,7 @@ class SubscriptionEvents extends BaseModel {
         WHERE stripe_subscription_id = $1 
         ORDER BY created_at DESC
       `;
-      
+
       const result = await database.query(query, [stripeSubscriptionId]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -259,7 +259,7 @@ class SubscriptionEvents extends BaseModel {
         ORDER BY created_at ASC 
         LIMIT $2
       `;
-      
+
       const result = await database.query(query, [maxRetries, limit]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -283,7 +283,7 @@ class SubscriptionEvents extends BaseModel {
         ORDER BY created_at DESC 
         LIMIT $2
       `;
-      
+
       const result = await database.query(query, [status, limit]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -310,7 +310,7 @@ class SubscriptionEvents extends BaseModel {
         GROUP BY event_type, status
         ORDER BY event_type, status
       `;
-      
+
       const result = await database.query(query, [startDate.toISOString()]);
       return result.rows;
     } catch (error) {
@@ -333,10 +333,10 @@ class SubscriptionEvents extends BaseModel {
         AND status = 'processed' 
         AND created_at < $1
       `;
-      
+
       const result = await database.query(query, [cutoffDate.toISOString()]);
       const deletedCount = result.rowCount || 0;
-      
+
       logger.info(`Cleaned up ${deletedCount} old processed events older than ${daysToKeep} days`);
       return deletedCount;
     } catch (error) {

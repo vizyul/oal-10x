@@ -86,7 +86,7 @@ class SubscriptionService {
 
       // Get current usage using model
       const currentUsage = await subscriptionUsage.getCurrentByUserId(pgUserId);
-      
+
       if (!currentUsage) {
         logger.info(`No current billing period usage record found for user ${pgUserId}`);
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
@@ -155,7 +155,7 @@ class SubscriptionService {
     try {
       // Get current usage using model
       const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
-      
+
       if (!currentUsage) {
         return 0;
       }
@@ -177,7 +177,7 @@ class SubscriptionService {
     try {
       // Get current usage using model
       const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
-      
+
       if (!currentUsage) {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
@@ -225,7 +225,7 @@ class SubscriptionService {
           period_start: new Date(activeSubscription.current_period_start),
           period_end: new Date(activeSubscription.current_period_end)
         };
-        
+
         await subscriptionUsage.createUsage(usageData);
         await subscriptionUsage.incrementUsage(subscriptionId, fieldName, increment);
       }
@@ -313,9 +313,9 @@ class SubscriptionService {
 
       // Use model method to check if usage limit has been exceeded
       const hasExceeded = await subscriptionUsage.hasExceededLimit(activeSubscription.id, 'videos_processed');
-      
+
       logger.debug(`User ${userId} video processing limit check: ${hasExceeded ? 'exceeded' : 'within limit'}`);
-      
+
       return !hasExceeded; // Return true if not exceeded
     } catch (error) {
       logger.error('Error checking video processing capability:', error);

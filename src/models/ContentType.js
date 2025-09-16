@@ -7,11 +7,11 @@ const BaseModel = require('./BaseModel');
 class ContentType extends BaseModel {
   constructor() {
     super('content_types');
-    
+
     // Define fillable fields (mass assignable)
     this.fillable = [
       'key',
-      'label', 
+      'label',
       'icon',
       'description',
       'display_order',
@@ -19,18 +19,18 @@ class ContentType extends BaseModel {
       'has_url_field',
       'is_active'
     ];
-    
+
     // Fields to hide from JSON output
     this.hidden = [];
-    
+
     // Type casting rules
     this.casts = {
       display_order: 'integer',
       requires_ai: 'boolean',
-      has_url_field: 'boolean', 
+      has_url_field: 'boolean',
       is_active: 'boolean'
     };
-    
+
     // Validation rules
     this.validationRules = {
       required: ['key', 'label'],
@@ -54,7 +54,7 @@ class ContentType extends BaseModel {
    */
   async getActive() {
     return await this.findAll(
-      { is_active: true }, 
+      { is_active: true },
       { orderBy: 'display_order ASC, key ASC' }
     );
   }
@@ -89,16 +89,16 @@ class ContentType extends BaseModel {
   async updateDisplayOrder(orderUpdates) {
     try {
       const updated = [];
-      
+
       for (const update of orderUpdates) {
-        const result = await this.update(update.id, { 
-          display_order: update.display_order 
+        const result = await this.update(update.id, {
+          display_order: update.display_order
         });
         if (result) {
           updated.push(result);
         }
       }
-      
+
       return updated;
     } catch (error) {
       throw new Error(`Failed to update display order: ${error.message}`);
@@ -127,7 +127,7 @@ class ContentType extends BaseModel {
         GROUP BY ct.id, ct.key, ct.label, ct.icon, ct.display_order
         ORDER BY ct.display_order ASC
       `;
-      
+
       const result = await this.query(query);
       return result.rows.map(row => ({
         ...row,
@@ -148,18 +148,18 @@ class ContentType extends BaseModel {
    */
   validate(data, isUpdate = false) {
     super.validate(data, isUpdate);
-    
+
     // Key format validation
     if (data.key) {
       if (!/^[a-z_]+$/.test(data.key)) {
         throw new Error('Content type key must contain only lowercase letters and underscores');
       }
-      
+
       if (!data.key.endsWith('_text')) {
         throw new Error('Content type key must end with "_text"');
       }
     }
-    
+
     // Display order validation
     if (data.display_order !== undefined) {
       const order = parseInt(data.display_order);
@@ -167,14 +167,14 @@ class ContentType extends BaseModel {
         throw new Error('Display order must be a positive integer');
       }
     }
-    
+
     // Icon validation (basic emoji check)
     if (data.icon) {
       if (data.icon.length > 10) {
         throw new Error('Icon must be 10 characters or less');
       }
     }
-    
+
     // Label validation
     if (data.label) {
       if (data.label.length < 2 || data.label.length > 100) {
@@ -196,12 +196,12 @@ class ContentType extends BaseModel {
         const result = await this.query(maxOrderQuery);
         data.display_order = result.rows[0].next_order;
       }
-      
+
       // Set defaults
       data.is_active = data.is_active !== undefined ? data.is_active : true;
       data.requires_ai = data.requires_ai !== undefined ? data.requires_ai : true;
       data.has_url_field = data.has_url_field !== undefined ? data.has_url_field : true;
-      
+
       return await this.create(data);
     } catch (error) {
       throw new Error(`Failed to create content type: ${error.message}`);
@@ -259,16 +259,16 @@ class ContentType extends BaseModel {
         WHERE ct.id = $1
         GROUP BY ct.id
       `;
-      
+
       const result = await this.query(query, [id]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       const contentType = this.formatOutput(result.rows[0]);
       contentType.ai_prompts = contentType.ai_prompts || [];
-      
+
       return contentType;
     } catch (error) {
       throw new Error(`Failed to get content type with prompts: ${error.message}`);

@@ -10,19 +10,19 @@ const { logger } = require('../utils');
 class YoutubeOauthTokens extends BaseModel {
   constructor() {
     super('youtube_oauth_tokens', 'id');
-    
+
     this.fillable = [
       'users_id', 'access_token', 'refresh_token', 'expires_at', 'scope',
       'token_type', 'is_active', 'last_used', 'channel_id', 'encrypted_data',
       'encrypted_tokens', 'encryption_iv', 'encryption_algorithm',
       'channel_name', 'channel_thumbnail', 'last_refreshed', 'token_expires_at'
     ];
-    
+
     // Hide sensitive token fields for security
     this.hidden = [
       'access_token', 'refresh_token', 'encrypted_tokens', 'encrypted_data', 'encryption_iv'
     ];
-    
+
     this.casts = {
       'users_id': 'integer',
       'is_active': 'boolean',
@@ -125,11 +125,11 @@ class YoutubeOauthTokens extends BaseModel {
   async getUserTokens(userId, options = {}) {
     try {
       const conditions = { users_id: userId };
-      
+
       if (options.activeOnly !== false) {
         conditions.is_active = true;
       }
-      
+
       return await this.findAll(conditions, {
         orderBy: 'created_at DESC',
         ...options
@@ -169,13 +169,13 @@ class YoutubeOauthTokens extends BaseModel {
         ORDER BY created_at DESC
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [userId, channelId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding token for user ${userId} and channel ${channelId}:`, error);
@@ -195,7 +195,7 @@ class YoutubeOauthTokens extends BaseModel {
         WHERE users_id = $1 AND is_active = true
         ORDER BY created_at DESC
       `;
-      
+
       const result = await database.query(query, [userId]);
       return result.rows;
     } catch (error) {
@@ -217,7 +217,7 @@ class YoutubeOauthTokens extends BaseModel {
         AND is_active = true 
         AND (token_expires_at IS NULL OR token_expires_at > CURRENT_TIMESTAMP)
       `;
-      
+
       const result = await database.query(query, [userId]);
       return parseInt(result.rows[0].count) > 0;
     } catch (error) {
@@ -243,7 +243,7 @@ class YoutubeOauthTokens extends BaseModel {
         )
         ORDER BY token_expires_at ASC
       `;
-      
+
       const result = await database.query(query);
       return result.rows;
     } catch (error) {
@@ -259,8 +259,8 @@ class YoutubeOauthTokens extends BaseModel {
    */
   async markAsUsed(tokenId) {
     try {
-      return await this.update(tokenId, { 
-        last_used: new Date() 
+      return await this.update(tokenId, {
+        last_used: new Date()
       });
     } catch (error) {
       logger.error(`Error marking token ${tokenId} as used:`, error);
@@ -275,8 +275,8 @@ class YoutubeOauthTokens extends BaseModel {
    */
   async deactivateToken(tokenId) {
     try {
-      return await this.update(tokenId, { 
-        is_active: false 
+      return await this.update(tokenId, {
+        is_active: false
       });
     } catch (error) {
       logger.error(`Error deactivating token ${tokenId}:`, error);
@@ -296,7 +296,7 @@ class YoutubeOauthTokens extends BaseModel {
         SET is_active = false, updated_at = CURRENT_TIMESTAMP
         WHERE users_id = $1 AND is_active = true
       `;
-      
+
       const result = await database.query(query, [userId]);
       return result.rowCount || 0;
     } catch (error) {
@@ -314,11 +314,11 @@ class YoutubeOauthTokens extends BaseModel {
   async updateChannelInfo(tokenId, channelInfo) {
     try {
       const updateData = {};
-      
+
       if (channelInfo.channelId) updateData.channel_id = channelInfo.channelId;
       if (channelInfo.channelName) updateData.channel_name = channelInfo.channelName;
       if (channelInfo.channelThumbnail) updateData.channel_thumbnail = channelInfo.channelThumbnail;
-      
+
       return await this.update(tokenId, updateData);
     } catch (error) {
       logger.error(`Error updating channel info for token ${tokenId}:`, error);
@@ -342,7 +342,7 @@ class YoutubeOauthTokens extends BaseModel {
           COUNT(*) FILTER (WHERE token_expires_at <= CURRENT_TIMESTAMP + INTERVAL '1 day') as expiring_soon
         FROM ${this.tableName}
       `;
-      
+
       const result = await database.query(query);
       return result.rows[0];
     } catch (error) {
@@ -363,14 +363,14 @@ class YoutubeOauthTokens extends BaseModel {
         WHERE is_active = false 
         AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${daysOld} days'
       `;
-      
+
       const result = await database.query(query);
       const deletedCount = result.rowCount || 0;
-      
+
       if (deletedCount > 0) {
         logger.info(`Cleaned up ${deletedCount} expired YouTube OAuth tokens`);
       }
-      
+
       return deletedCount;
     } catch (error) {
       logger.error('Error cleaning up expired tokens:', error);
@@ -393,10 +393,10 @@ class YoutubeOauthTokens extends BaseModel {
         ORDER BY channel_name ASC, created_at DESC
         ${options.limit ? `LIMIT ${parseInt(options.limit)}` : ''}
       `;
-      
+
       const searchPattern = `%${searchTerm}%`;
       const result = await database.query(query, [searchPattern]);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error searching tokens by channel name "${searchTerm}":`, error);
@@ -416,13 +416,13 @@ class YoutubeOauthTokens extends BaseModel {
       if (!tokenData.users_id) {
         throw new Error('users_id is required');
       }
-      
+
       // Require either encrypted tokens or individual tokens
       if (!tokenData.encrypted_tokens && !tokenData.access_token) {
         throw new Error('Either encrypted_tokens or access_token is required');
       }
     }
-    
+
     // Validate user ID
     if (tokenData.users_id !== undefined) {
       const userId = parseInt(tokenData.users_id);
@@ -430,7 +430,7 @@ class YoutubeOauthTokens extends BaseModel {
         throw new Error('users_id must be a positive integer');
       }
     }
-    
+
     // Validate dates
     const dateFields = ['expires_at', 'last_used', 'last_refreshed', 'token_expires_at'];
     for (const field of dateFields) {
@@ -441,7 +441,7 @@ class YoutubeOauthTokens extends BaseModel {
         }
       }
     }
-    
+
     // Validate encryption algorithm
     if (tokenData.encryption_algorithm && !['aes-256-cbc', 'aes-256-gcm'].includes(tokenData.encryption_algorithm)) {
       throw new Error('encryption_algorithm must be aes-256-cbc or aes-256-gcm');

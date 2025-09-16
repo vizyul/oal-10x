@@ -15,22 +15,35 @@ async function getAvailableContentTypes() {
   }
 
   try {
-    const { aiPrompts } = require('../models');
-    const availableTypes = await aiPrompts.getAvailableContentTypes();
-    
-    contentTypesCache = ['transcript', ...availableTypes.map(type => type.type)];
+    // Use the ContentType model as the single source of truth
+    const { contentType } = require('../models');
+    const availableTypes = await contentType.getActive();
+
+    contentTypesCache = availableTypes.map(type => type.key);
     cacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
     return contentTypesCache;
-  } catch {
-    // Fallback to hardcoded types if database query fails
-    contentTypesCache = ['transcript', 'summary_text', 'study_guide_text', 'discussion_guide_text', 'group_guide_text', 'social_media_text', 'quiz_text', 'chapters_text', 'ebook_text'];
-    cacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
-    return contentTypesCache;
+  } catch (error) {
+    console.error('Error loading content types from ContentType model:', error);
+    // If ContentType model fails, try aiPrompts as fallback
+    try {
+      const { aiPrompts } = require('../models');
+      const availableTypes = await aiPrompts.getAvailableContentTypes();
+      contentTypesCache = availableTypes.map(type => type.type);
+      cacheExpiry = now + (1 * 60 * 1000); // Short cache for fallback
+      return contentTypesCache;
+    } catch (fallbackError) {
+      console.error('Error loading content types from aiPrompts fallback:', fallbackError);
+      // Return empty array to prevent validation errors - let the application handle gracefully
+      return [];
+    }
   }
 }
 
 // Apply authentication middleware to all video routes
 router.use(authMiddleware);
+
+// Debug endpoint to check user authentication
+router.get('/debug-user', videosController.debugUser.bind(videosController));
 
 // Video validation rules
 const videoValidation = {

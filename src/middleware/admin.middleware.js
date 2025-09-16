@@ -25,7 +25,7 @@ const adminMiddleware = (req, res, next) => {
 
     // Log admin access for security auditing
     logger.info(`Admin access granted to user ${req.user.id} (${req.user.email}) for ${req.originalUrl}`);
-    
+
     next();
   } catch (error) {
     logger.error('Error in admin middleware:', error);

@@ -4,7 +4,7 @@ const contentController = require('../controllers/content.controller');
 const { authMiddleware } = require('../middleware');
 const { body, param, query } = require('express-validator');
 
-// Apply authentication individually to routes instead of using router.use 
+// Apply authentication individually to routes instead of using router.use
 
 /**
  * GET /api/content/types
@@ -16,7 +16,7 @@ router.get('/types', authMiddleware, contentController.getContentTypes);
  * GET /api/content/videos/:videoId
  * Get all content for a specific video
  */
-router.get('/videos/:videoId', 
+router.get('/videos/:videoId',
   authMiddleware,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   query('includeMetadata').optional().isBoolean().withMessage('includeMetadata must be boolean'),

@@ -619,3 +619,4 @@ ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Please stop trying to use the rm (remove) comand. This is a windows computer
 - Create a folder for all debugging and test scripts call adhoc and exclude this folder from source control. Then move all non project related files from the root of the project into that folder
+- NEVER use Javascript dialog boxes like alert, confirm, or prompt for any reason. Use modern enterprise alerting techniques only

@@ -7,11 +7,11 @@ const BaseModel = require('./BaseModel');
 class VideoContent extends BaseModel {
   constructor() {
     super('video_content');
-    
+
     // Define fillable fields (mass assignable)
     this.fillable = [
       'video_id',
-      'content_type_id', 
+      'content_type_id',
       'content_text',
       'content_url',
       'ai_provider',
@@ -27,15 +27,15 @@ class VideoContent extends BaseModel {
       'parent_content_id',
       'created_by_user_id'
     ];
-    
+
     // Fields to hide from JSON output
     this.hidden = [];
-    
+
     // Type casting rules
     this.casts = {
       video_id: 'integer',
       content_type_id: 'integer',
-      prompt_used_id: 'integer', 
+      prompt_used_id: 'integer',
       generation_duration_seconds: 'integer',
       content_quality_score: 'float',
       user_rating: 'integer',
@@ -46,7 +46,7 @@ class VideoContent extends BaseModel {
       generation_started_at: 'date',
       generation_completed_at: 'date'
     };
-    
+
     // Validation rules
     this.validationRules = {
       required: ['video_id', 'content_type_id']
@@ -62,7 +62,7 @@ class VideoContent extends BaseModel {
   async getByVideo(videoId, options = {}) {
     try {
       const { publishedOnly = true, includeMetadata = false } = options;
-      
+
       let query = `
         SELECT 
           vc.*,
@@ -85,7 +85,7 @@ class VideoContent extends BaseModel {
         AND ct.is_active = true
         ORDER BY ct.display_order ASC, vc.version DESC
       `;
-      
+
       const result = await this.query(query, [videoId]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -103,7 +103,7 @@ class VideoContent extends BaseModel {
   async getByVideoAndType(videoId, contentTypeKey, options = {}) {
     try {
       const { version = 1, publishedOnly = true } = options;
-      
+
       const query = `
         SELECT 
           vc.*,
@@ -119,7 +119,7 @@ class VideoContent extends BaseModel {
         ${publishedOnly ? 'AND vc.is_published = true' : ''}
         AND ct.is_active = true
       `;
-      
+
       const result = await this.query(query, [videoId, contentTypeKey, version]);
       return result.rows.length > 0 ? this.formatOutput(result.rows[0]) : null;
     } catch (error) {
@@ -140,17 +140,17 @@ class VideoContent extends BaseModel {
         FROM video_content 
         WHERE video_id = $1 AND content_type_id = $2
       `;
-      
+
       const existingResult = await this.query(existingQuery, [data.video_id, data.content_type_id]);
       const maxVersion = existingResult.rows[0].max_version || 0;
-      
+
       // Set version to max + 1
       data.version = maxVersion + 1;
-      
+
       // Set defaults
       data.generation_status = data.generation_status || 'completed';
       data.is_published = data.is_published !== undefined ? data.is_published : true;
-      
+
       return await this.create(data);
     } catch (error) {
       throw new Error(`Failed to create versioned content: ${error.message}`);
@@ -167,13 +167,13 @@ class VideoContent extends BaseModel {
   async updateGenerationStatus(id, status, metadata = {}) {
     try {
       const updateData = { generation_status: status };
-      
+
       // Set timestamps based on status
       if (status === 'generating') {
         updateData.generation_started_at = new Date();
       } else if (status === 'completed' || status === 'failed') {
         updateData.generation_completed_at = new Date();
-        
+
         // Calculate duration if we have start time
         const existing = await this.findById(id);
         if (existing && existing.generation_started_at) {
@@ -182,10 +182,10 @@ class VideoContent extends BaseModel {
           updateData.generation_duration_seconds = Math.round((endTime - startTime) / 1000);
         }
       }
-      
+
       // Add any additional metadata
       Object.assign(updateData, metadata);
-      
+
       return await this.update(id, updateData);
     } catch (error) {
       throw new Error(`Failed to update generation status: ${error.message}`);
@@ -277,7 +277,7 @@ class VideoContent extends BaseModel {
         WHERE vc.video_id = $1 AND vc.content_type_id = $2
         ORDER BY vc.version DESC
       `;
-      
+
       const result = await this.query(query, [videoId, contentTypeId]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -293,13 +293,13 @@ class VideoContent extends BaseModel {
   async getLegacyFormat(videoId) {
     try {
       const content = await this.getByVideo(videoId, { publishedOnly: true });
-      
+
       // Transform to old format expected by existing code
       const legacyFormat = {};
-      
+
       content.forEach(item => {
         const key = item.content_type_key;
-        
+
         // Map to old field names for backward compatibility
         if (key === 'chapters_text') {
           // Special case: chapters_text in API maps to chapter_text in old schema
@@ -310,7 +310,7 @@ class VideoContent extends BaseModel {
           legacyFormat[key.replace('_text', '_url')] = item.content_url;
         }
       });
-      
+
       return legacyFormat;
     } catch (error) {
       throw new Error(`Failed to get content in legacy format: ${error.message}`);
@@ -324,14 +324,14 @@ class VideoContent extends BaseModel {
    */
   validate(data, isUpdate = false) {
     super.validate(data, isUpdate);
-    
+
     // Must have either content_text or content_url
     if (!isUpdate || data.content_text !== undefined || data.content_url !== undefined) {
       if (!data.content_text && !data.content_url) {
         throw new Error('Either content_text or content_url must be provided');
       }
     }
-    
+
     // Quality score validation
     if (data.content_quality_score !== undefined) {
       const score = parseFloat(data.content_quality_score);
@@ -339,7 +339,7 @@ class VideoContent extends BaseModel {
         throw new Error('Content quality score must be between 0 and 5');
       }
     }
-    
+
     // User rating validation
     if (data.user_rating !== undefined) {
       const rating = parseInt(data.user_rating);
@@ -347,7 +347,7 @@ class VideoContent extends BaseModel {
         throw new Error('User rating must be between 1 and 5');
       }
     }
-    
+
     // Generation status validation
     if (data.generation_status) {
       const validStatuses = ['pending', 'generating', 'completed', 'failed'];
@@ -355,7 +355,7 @@ class VideoContent extends BaseModel {
         throw new Error(`Generation status must be one of: ${validStatuses.join(', ')}`);
       }
     }
-    
+
     // AI provider validation
     if (data.ai_provider) {
       const validProviders = ['gemini', 'chatgpt', 'claude', 'none'];

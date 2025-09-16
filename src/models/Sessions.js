@@ -10,22 +10,22 @@ const crypto = require('crypto');
 class Sessions extends BaseModel {
   constructor() {
     super('sessions', 'id');
-    
+
     this.fillable = [
       'users_id', 'session_id', 'session_data', 'ip_address', 'user_agent',
       'is_active', 'expires_at', 'device_info', 'location_data', 'device_type',
       'login_method', 'status', 'user_email', 'browser', 'os', 'last_activity_at',
       'location', 'timezone', 'duration', 'ended_at', 'last_accessed'
     ];
-    
+
     this.hidden = [
       'session_data', 'device_info', 'location_data', 'ip_address'
     ];
-    
+
     this.casts = {
       'is_active': 'boolean',
       'session_data': 'json',
-      'device_info': 'json', 
+      'device_info': 'json',
       'location_data': 'json',
       'duration': 'decimal',
       'expires_at': 'date',
@@ -65,7 +65,7 @@ class Sessions extends BaseModel {
 
       const session = await this.create(sessionData);
       logger.info(`Session created for user ${sessionData.users_id}: ${session.session_id}`);
-      
+
       return session;
     } catch (error) {
       logger.error('Error creating session:', error);
@@ -159,7 +159,7 @@ class Sessions extends BaseModel {
       }
 
       const now = new Date();
-      const durationSeconds = session.created_at ? 
+      const durationSeconds = session.created_at ?
         Math.floor((now - new Date(session.created_at)) / 1000) : 0;
 
       const updateData = {
@@ -172,7 +172,7 @@ class Sessions extends BaseModel {
 
       const updatedSession = await this.update(session.id, updateData);
       logger.info(`Session ended: ${sessionId} (${endReason})`);
-      
+
       return updatedSession;
     } catch (error) {
       logger.error(`Error ending session ${sessionId}:`, error);

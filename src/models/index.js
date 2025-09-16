@@ -48,7 +48,7 @@ module.exports = {
   VideoContent,
   YoutubeOauthTokens,
   UserYoutubeChannels,
-  
+
   // Pre-initialized instances for convenience
   aiPrompts: aiPromptsModel,
   apiKeys: apiKeysModel,

@@ -14,7 +14,7 @@ class ContentController {
   async getContentTypes(req, res) {
     try {
       const contentTypes = await contentService.getAvailableContentTypes();
-      
+
       res.json({
         success: true,
         data: {
@@ -29,7 +29,7 @@ class ContentController {
           }))
         }
       });
-      
+
     } catch (error) {
       logger.error('Error getting content types:', error);
       res.status(500).json({
@@ -152,8 +152,8 @@ class ContentController {
       }
 
       const content = await contentService.getVideoContentByType(
-        videoId, 
-        contentType, 
+        videoId,
+        contentType,
         { version: parseInt(version), publishedOnly: true }
       );
 
@@ -271,7 +271,7 @@ class ContentController {
 
     } catch (error) {
       logger.error('Error creating video content:', error);
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
@@ -346,7 +346,7 @@ class ContentController {
 
     } catch (error) {
       logger.error('Error updating video content:', error);
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,

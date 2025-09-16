@@ -8,18 +8,18 @@ const { logger } = require('../utils');
 class UserPreferences extends BaseModel {
   constructor() {
     super('user_preferences', 'id');
-    
+
     this.fillable = [
       'users_id', 'theme', 'language', 'timezone', 'email_notifications',
       'push_notifications', 'marketing_emails', 'privacy_level', 'preferences_data',
       'airtable_id', 'marketing_communications', 'is_active', 'preference_value',
       'weekly_digest', 'llm'
     ];
-    
+
     this.hidden = [
       // No sensitive data to hide in preferences
     ];
-    
+
     this.casts = {
       'email_notifications': 'boolean',
       'push_notifications': 'boolean',
@@ -71,7 +71,7 @@ class UserPreferences extends BaseModel {
   async getWithDefaults(userId) {
     try {
       const preferences = await this.getByUserId(userId);
-      
+
       if (!preferences) {
         // Return defaults if no preferences exist
         return {
@@ -141,7 +141,7 @@ class UserPreferences extends BaseModel {
       }
 
       const preferences = await this.getByUserId(userId);
-      
+
       if (!preferences) {
         // Create preferences if they don't exist
         return await this.setUserPreferences(userId, { [field]: value });
@@ -169,7 +169,7 @@ class UserPreferences extends BaseModel {
   async getNotificationPreferences(userId) {
     try {
       const preferences = await this.getWithDefaults(userId);
-      
+
       return {
         email_notifications: preferences.email_notifications,
         push_notifications: preferences.push_notifications,
@@ -219,7 +219,7 @@ class UserPreferences extends BaseModel {
   async getDisplayPreferences(userId) {
     try {
       const preferences = await this.getWithDefaults(userId);
-      
+
       return {
         theme: preferences.theme,
         language: preferences.language,
@@ -274,7 +274,7 @@ class UserPreferences extends BaseModel {
   async getAiPreferences(userId) {
     try {
       const preferences = await this.getWithDefaults(userId);
-      
+
       return {
         llm: preferences.llm,
         privacy_level: preferences.privacy_level
@@ -329,7 +329,7 @@ class UserPreferences extends BaseModel {
   async updateCustomData(userId, customData) {
     try {
       const preferences = await this.getByUserId(userId);
-      
+
       let updatedData;
       if (preferences && preferences.preferences_data) {
         // Merge with existing data
@@ -358,7 +358,7 @@ class UserPreferences extends BaseModel {
   async deleteUserPreferences(userId) {
     try {
       const preferences = await this.getByUserId(userId);
-      
+
       if (preferences) {
         await this.delete(preferences.id);
         logger.info(`Deleted preferences for user ${userId}`);

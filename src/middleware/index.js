@@ -58,10 +58,10 @@ const securityMiddleware = [
     legacyHeaders: false,
     skip: (req) => {
       // Skip rate limiting for health check, static assets, and logout
-      return req.path === '/health' || 
+      return req.path === '/health' ||
              req.path === '/auth/logout' ||
-             req.path.startsWith('/css') || 
-             req.path.startsWith('/js') || 
+             req.path.startsWith('/css') ||
+             req.path.startsWith('/js') ||
              req.path.startsWith('/images');
     }
   })

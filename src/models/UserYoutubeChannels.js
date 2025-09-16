@@ -10,15 +10,15 @@ const { logger } = require('../utils');
 class UserYoutubeChannels extends BaseModel {
   constructor() {
     super('user_youtube_channels', 'id');
-    
+
     this.fillable = [
       'users_id', 'channel_id', 'channel_name', 'channel_handle', 'subscriber_count',
-      'is_active', 'channel_data', 'last_sync', 'channel_description', 
+      'is_active', 'channel_data', 'last_sync', 'channel_description',
       'channel_thumbnail', 'is_primary', 'video_count', 'last_synced'
     ];
-    
+
     this.hidden = [];
-    
+
     this.casts = {
       'users_id': 'integer',
       'subscriber_count': 'integer',
@@ -115,11 +115,11 @@ class UserYoutubeChannels extends BaseModel {
   async getUserChannels(userId, options = {}) {
     try {
       const conditions = { users_id: userId };
-      
+
       if (options.activeOnly !== false) {
         conditions.is_active = true;
       }
-      
+
       return await this.findAll(conditions, {
         orderBy: 'is_primary DESC, created_at DESC',
         ...options
@@ -137,10 +137,10 @@ class UserYoutubeChannels extends BaseModel {
    */
   async getUserPrimaryChannel(userId) {
     try {
-      const channels = await this.findAll({ 
-        users_id: userId, 
-        is_primary: true, 
-        is_active: true 
+      const channels = await this.findAll({
+        users_id: userId,
+        is_primary: true,
+        is_active: true
       });
       return channels.length > 0 ? channels[0] : null;
     } catch (error) {
@@ -192,13 +192,13 @@ class UserYoutubeChannels extends BaseModel {
         WHERE users_id = $1 AND channel_id = $2
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [userId, youtubeChannelId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding user channel for user ${userId} and channel ${youtubeChannelId}:`, error);
@@ -289,7 +289,7 @@ class UserYoutubeChannels extends BaseModel {
         )
         ORDER BY last_synced ASC NULLS FIRST
       `;
-      
+
       const result = await database.query(query);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -305,9 +305,9 @@ class UserYoutubeChannels extends BaseModel {
    */
   async deactivateChannel(channelId) {
     try {
-      return await this.update(channelId, { 
+      return await this.update(channelId, {
         is_active: false,
-        is_primary: false 
+        is_primary: false
       });
     } catch (error) {
       logger.error(`Error deactivating channel ${channelId}:`, error);
@@ -327,7 +327,7 @@ class UserYoutubeChannels extends BaseModel {
         SET is_active = false, is_primary = false, updated_at = CURRENT_TIMESTAMP
         WHERE users_id = $1 AND is_active = true
       `;
-      
+
       const result = await database.query(query, [userId]);
       return result.rowCount || 0;
     } catch (error) {
@@ -358,10 +358,10 @@ class UserYoutubeChannels extends BaseModel {
           created_at DESC
         ${options.limit ? `LIMIT ${parseInt(options.limit)}` : ''}
       `;
-      
+
       const searchPattern = `%${searchTerm}%`;
       const params = options.userId ? [searchPattern, options.userId] : [searchPattern];
-      
+
       const result = await database.query(query, params);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -388,7 +388,7 @@ class UserYoutubeChannels extends BaseModel {
           COUNT(*) FILTER (WHERE last_synced > CURRENT_TIMESTAMP - INTERVAL '24 hours') as recently_synced
         FROM ${this.tableName}
       `;
-      
+
       const result = await database.query(query);
       return result.rows[0];
     } catch (error) {
@@ -422,7 +422,7 @@ class UserYoutubeChannels extends BaseModel {
   async bulkSyncChannels(channelsData) {
     try {
       const results = [];
-      
+
       for (const channelData of channelsData) {
         try {
           if (channelData.id && channelData.syncData) {
@@ -430,14 +430,14 @@ class UserYoutubeChannels extends BaseModel {
             results.push({ success: true, channelId: channelData.id, result });
           }
         } catch (error) {
-          results.push({ 
-            success: false, 
-            channelId: channelData.id, 
-            error: error.message 
+          results.push({
+            success: false,
+            channelId: channelData.id,
+            error: error.message
           });
         }
       }
-      
+
       return results;
     } catch (error) {
       logger.error('Error in bulk sync channels:', error);
@@ -459,12 +459,12 @@ class UserYoutubeChannels extends BaseModel {
         WHERE users_id = $1 AND is_primary = true
       `;
       const params = [userId];
-      
+
       if (excludeChannelId) {
         query += ' AND id != $2';
         params.push(excludeChannelId);
       }
-      
+
       await database.query(query, params);
     } catch (error) {
       logger.error(`Error ensuring single primary for user ${userId}:`, error);
@@ -484,12 +484,12 @@ class UserYoutubeChannels extends BaseModel {
       if (!channelData.users_id) {
         throw new Error('users_id is required');
       }
-      
+
       if (!channelData.channel_id && !channelData.channel_name) {
         throw new Error('Either channel_id or channel_name is required');
       }
     }
-    
+
     // Validate user ID
     if (channelData.users_id !== undefined) {
       const userId = parseInt(channelData.users_id);
@@ -497,7 +497,7 @@ class UserYoutubeChannels extends BaseModel {
         throw new Error('users_id must be a positive integer');
       }
     }
-    
+
     // Validate counts
     if (channelData.subscriber_count !== undefined) {
       const count = parseInt(channelData.subscriber_count);
@@ -505,19 +505,19 @@ class UserYoutubeChannels extends BaseModel {
         throw new Error('subscriber_count must be a non-negative integer');
       }
     }
-    
+
     if (channelData.video_count !== undefined) {
       const count = parseInt(channelData.video_count);
       if (isNaN(count) || count < 0) {
         throw new Error('video_count must be a non-negative integer');
       }
     }
-    
+
     // Validate channel handle format
     if (channelData.channel_handle && !channelData.channel_handle.startsWith('@')) {
       throw new Error('channel_handle must start with @');
     }
-    
+
     // Validate dates
     const dateFields = ['last_sync', 'last_synced'];
     for (const field of dateFields) {

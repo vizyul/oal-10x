@@ -10,14 +10,14 @@ const { logger } = require('../utils');
 class AiPrompts extends BaseModel {
   constructor() {
     super('ai_prompts', 'id');
-    
+
     this.fillable = [
       'name', 'description', 'ai_provider', 'content_type_id', 'prompt_text',
       'system_message', 'temperature', 'max_tokens', 'is_active'
     ];
-    
+
     this.hidden = [];
-    
+
     this.casts = {
       'content_type_id': 'integer',
       'temperature': 'float',
@@ -117,13 +117,13 @@ class AiPrompts extends BaseModel {
         ORDER BY ap.created_at DESC
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [aiProvider, contentTypeId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding prompt for ${aiProvider}/${contentTypeId}:`, error);
@@ -146,7 +146,7 @@ class AiPrompts extends BaseModel {
         logger.warn(`Content type not found: ${contentTypeKey}`);
         return null;
       }
-      
+
       return await this.findByProviderAndContentType(aiProvider, ct.id);
     } catch (error) {
       logger.error(`Error finding prompt for ${aiProvider}/${contentTypeKey}:`, error);
@@ -174,9 +174,9 @@ class AiPrompts extends BaseModel {
         ${options.includeInactive !== true ? 'AND ap.is_active = true AND ct.is_active = true' : ''}
         ORDER BY ap.created_at DESC
       `;
-      
+
       const result = await database.query(query, [aiProvider]);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error getting prompts for provider ${aiProvider}:`, error);
@@ -194,7 +194,7 @@ class AiPrompts extends BaseModel {
     try {
       let query;
       let params;
-      
+
       if (typeof contentType === 'number') {
         // Handle legacy case where contentType is actually an ID
         query = `
@@ -226,9 +226,9 @@ class AiPrompts extends BaseModel {
         `;
         params = [contentType];
       }
-      
+
       const result = await database.query(query, params);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error getting prompts for content type ${contentType}:`, error);
@@ -243,7 +243,7 @@ class AiPrompts extends BaseModel {
    * @param {object} options - Query options
    * @returns {Promise<Array>} Array of user prompts (currently returns empty array)
    */
-  async getUserPrompts(userId, options = {}) {
+  async getUserPrompts(userId, _options = {}) {
     try {
       logger.info(`getUserPrompts called for user ${userId} - feature not yet implemented`);
       // TODO: Implement once users_id column is added to ai_prompts table
@@ -272,9 +272,9 @@ class AiPrompts extends BaseModel {
         ${options.includeInactive !== true ? 'WHERE ap.is_active = true AND ct.is_active = true' : ''}
         ORDER BY ap.created_at DESC
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error('Error getting system prompts:', error);
@@ -294,9 +294,9 @@ class AiPrompts extends BaseModel {
         WHERE is_active = true 
         ORDER BY ai_provider
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows.map(row => row.ai_provider);
     } catch (error) {
       logger.error('Error getting available AI providers:', error);
@@ -317,9 +317,9 @@ class AiPrompts extends BaseModel {
         WHERE ap.is_active = true AND ct.is_active = true
         ORDER BY ct.display_order ASC, ct.key ASC
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows;
     } catch (error) {
       logger.error('Error getting available content types:', error);
@@ -341,7 +341,7 @@ class AiPrompts extends BaseModel {
         GROUP BY ct.key, ct.display_order
         ORDER BY ct.display_order ASC, ct.key ASC
       `;
-      
+
       const result = await database.query(query);
       return result.rows;
     } catch (error) {
@@ -371,7 +371,7 @@ class AiPrompts extends BaseModel {
    * @param {number} displayOrder - New display order (ignored)
    * @returns {Promise<object>} Updated prompt
    */
-  async updateDisplayOrder(promptId, displayOrder) {
+  async updateDisplayOrder(promptId, _displayOrder) {
     try {
       logger.warn(`updateDisplayOrder called but display_order column no longer exists. Prompt ID: ${promptId}`);
       // Return the prompt without modification since display_order no longer exists
@@ -438,12 +438,12 @@ class AiPrompts extends BaseModel {
           created_at DESC
         ${options.limit ? `LIMIT ${parseInt(options.limit)}` : ''}
       `;
-      
+
       const searchPattern = `%${searchTerm}%`;
       const params = [searchPattern];
-      
+
       const result = await database.query(query, params);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error searching prompts with term "${searchTerm}":`, error);
@@ -467,9 +467,9 @@ class AiPrompts extends BaseModel {
           COUNT(DISTINCT content_type_id) as unique_content_types
         FROM ${this.tableName}
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows[0];
     } catch (error) {
       logger.error('Error getting prompt statistics:', error);
@@ -490,9 +490,9 @@ class AiPrompts extends BaseModel {
           COUNT(DISTINCT ai_provider) as providers
         FROM ${this.tableName}
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows[0];
     } catch (error) {
       logger.error('Error getting prompts statistics:', error);
@@ -515,9 +515,9 @@ class AiPrompts extends BaseModel {
         LEFT JOIN content_types ct ON ap.content_type_id = ct.id
         ORDER BY ct.display_order ASC, ap.ai_provider ASC, ap.name ASC
       `;
-      
+
       const result = await database.query(query);
-      
+
       return result.rows;
     } catch (error) {
       logger.error('Error getting prompts grouped by content type:', error);
@@ -534,7 +534,7 @@ class AiPrompts extends BaseModel {
   validatePromptData(promptData, isCreate = true) {
     const requiredFields = ['ai_provider', 'content_type_id', 'prompt_text'];
     const validProviders = ['openai', 'google', 'claude', 'gemini', 'chatgpt'];
-    
+
     if (isCreate) {
       // Check required fields for creation
       for (const field of requiredFields) {
@@ -542,17 +542,17 @@ class AiPrompts extends BaseModel {
           throw new Error(`${field} is required`);
         }
       }
-      
+
       if (!promptData.name) {
         throw new Error('name is required');
       }
     }
-    
+
     // Validate AI provider
     if (promptData.ai_provider && !validProviders.includes(promptData.ai_provider.toLowerCase())) {
       throw new Error(`Invalid AI provider. Must be one of: ${validProviders.join(', ')}`);
     }
-    
+
     // Validate temperature
     if (promptData.temperature !== undefined) {
       const temp = parseFloat(promptData.temperature);
@@ -560,7 +560,7 @@ class AiPrompts extends BaseModel {
         throw new Error('Temperature must be a number between 0 and 2');
       }
     }
-    
+
     // Validate max_tokens
     if (promptData.max_tokens !== undefined) {
       const tokens = parseInt(promptData.max_tokens);
@@ -568,7 +568,7 @@ class AiPrompts extends BaseModel {
         throw new Error('Max tokens must be a number between 1 and 100000');
       }
     }
-    
+
     // Note: display_order validation removed since column no longer exists
   }
 }

@@ -1122,22 +1122,16 @@ async function loadCompletedVideos() {
             contentTypes = [];
           }
 
-          // Generate content field mapping dynamically with special cases
-          const contentFieldMap = {};
-          contentTypes.forEach(ct => {
-            // Special case for chapters: API uses chapters_text but DB field is chapter_text
-            if (ct.key === 'chapters_text') {
-              contentFieldMap[ct.key] = 'chapter_text';
-            } else {
-              contentFieldMap[ct.key] = ct.key; // Default: same as key
-            }
-          });
+          // Content is now stored in the normalized video_content table
+          // No need for field mapping - use content_data JSON directly
 
-          // Find available content
+          // Find available content - use new normalized content_data structure
           const availableContent = contentTypes.filter(type => {
-            const fieldName = contentFieldMap[type.key] || type.key;
-            const content = video[fieldName];
-            return content && content.trim() !== '';
+            if (video.content_data && video.content_data[type.key]) {
+              const content = video.content_data[type.key];
+              return content && content.trim() !== '';
+            }
+            return false;
           });
 
           return `

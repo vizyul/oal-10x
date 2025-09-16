@@ -22,7 +22,8 @@
     "lint:fix": "eslint src/ --fix",
     "pretest": "npm run lint",
     "validate": "npm run lint && npm run test:ci",
-    "test:comprehensive": "node scripts/test-comprehensive.js"
+    "test:comprehensive": "node scripts/test-comprehensive.js",
+    "upgrade:claude": "npm upgrade -g @anthropic-ai/claude-code"
   },
   "keywords": [
     "nodejs",

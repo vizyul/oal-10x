@@ -6,7 +6,7 @@ const { logger } = require('../utils');
  * Replaces the fixed-column approach in the videos table
  */
 class ContentService {
-  
+
   /**
    * Get all content for a specific video
    * @param {number} videoId - Video ID
@@ -23,7 +23,7 @@ class ContentService {
       throw error;
     }
   }
-  
+
   /**
    * Get specific content type for a video
    * @param {number} videoId - Video ID
@@ -34,20 +34,20 @@ class ContentService {
   async getVideoContentByType(videoId, contentTypeKey, options = {}) {
     try {
       const content = await videoContent.getByVideoAndType(videoId, contentTypeKey, options);
-      
+
       if (content) {
         logger.info(`Retrieved ${contentTypeKey} content for video ${videoId}`);
       } else {
         logger.info(`No ${contentTypeKey} content found for video ${videoId}`);
       }
-      
+
       return content;
     } catch (error) {
       logger.error(`Error getting ${contentTypeKey} content for video ${videoId}:`, error);
       throw error;
     }
   }
-  
+
   /**
    * Create new content for a video
    * @param {object} contentData - Content data
@@ -68,13 +68,13 @@ class ContentService {
         generationDurationSeconds = null,
         contentQualityScore = null
       } = contentData;
-      
+
       // Get content type
       const contentTypeRecord = await this.getContentTypeByKey(contentTypeKey);
       if (!contentTypeRecord) {
         throw new Error(`Content type '${contentTypeKey}' not found`);
       }
-      
+
       // Prepare data for model
       const modelData = {
         video_id: videoId,
@@ -89,19 +89,19 @@ class ContentService {
         generation_duration_seconds: generationDurationSeconds,
         content_quality_score: contentQualityScore
       };
-      
+
       // Use model's versioned create method
       const createdContent = await videoContent.createVersioned(modelData);
-      
+
       logger.info(`Created ${contentTypeKey} content for video ${videoId} (version ${createdContent.version})`);
       return createdContent;
-      
+
     } catch (error) {
       logger.error('Error creating video content:', error);
       throw error;
     }
   }
-  
+
   /**
    * Update existing video content
    * @param {number} contentId - Content ID
@@ -118,54 +118,54 @@ class ContentService {
         contentQualityScore,
         userRating
       } = updateData;
-      
+
       // Prepare data for model update
       const modelUpdateData = {};
-      
+
       if (contentText !== undefined) {
         modelUpdateData.content_text = contentText;
       }
-      
+
       if (contentUrl !== undefined) {
         modelUpdateData.content_url = contentUrl;
       }
-      
+
       if (generationStatus !== undefined) {
         modelUpdateData.generation_status = generationStatus;
       }
-      
+
       if (isPublished !== undefined) {
         modelUpdateData.is_published = isPublished;
       }
-      
+
       if (contentQualityScore !== undefined) {
         modelUpdateData.content_quality_score = contentQualityScore;
       }
-      
+
       if (userRating !== undefined) {
         modelUpdateData.user_rating = userRating;
       }
-      
+
       if (Object.keys(modelUpdateData).length === 0) {
         throw new Error('No fields to update');
       }
-      
+
       // Use model's update method
       const updatedContent = await videoContent.update(contentId, modelUpdateData);
-      
+
       if (!updatedContent) {
         throw new Error(`Content with ID ${contentId} not found`);
       }
-      
+
       logger.info(`Updated video content ${contentId}`);
       return updatedContent;
-      
+
     } catch (error) {
       logger.error(`Error updating video content ${contentId}:`, error);
       throw error;
     }
   }
-  
+
   /**
    * Delete video content
    * @param {number} contentId - Content ID
@@ -174,21 +174,21 @@ class ContentService {
   async deleteVideoContent(contentId) {
     try {
       const deleted = await videoContent.delete(contentId);
-      
+
       if (deleted) {
         logger.info(`Deleted video content ${contentId}`);
       } else {
         logger.warn(`No content found with ID ${contentId} to delete`);
       }
-      
+
       return deleted;
-      
+
     } catch (error) {
       logger.error(`Error deleting video content ${contentId}:`, error);
       throw error;
     }
   }
-  
+
   /**
    * Get content type by key
    * @param {string} key - Content type key
@@ -202,7 +202,7 @@ class ContentService {
       throw error;
     }
   }
-  
+
   /**
    * Get all available content types
    * @returns {Promise<Array>} Array of content types
@@ -217,7 +217,7 @@ class ContentService {
       throw error;
     }
   }
-  
+
   /**
    * Get content statistics for analytics
    * @param {object} options - Query options
@@ -226,21 +226,21 @@ class ContentService {
   async getContentStatistics(options = {}) {
     try {
       const { userId = null, startDate = null, endDate = null } = options;
-      
+
       // Use model's statistics method with filters
       const filters = {};
       if (userId) filters.userId = userId;
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
-      
+
       const stats = await videoContent.getStatistics(filters);
-      
+
       logger.info('Retrieved content generation statistics');
       return {
         contentTypes: stats,
         totalItems: stats.reduce((sum, row) => sum + row.total_generated, 0)
       };
-      
+
     } catch (error) {
       logger.error('Error getting content statistics:', error);
       throw error;
@@ -257,16 +257,16 @@ class ContentService {
     try {
       // Use model's legacy format method
       const legacyFormat = await videoContent.getLegacyFormat(videoId);
-      
+
       logger.info(`Retrieved video content in legacy format for video ${videoId}`);
       return legacyFormat;
-      
+
     } catch (error) {
       logger.error(`Error getting video content in legacy format for video ${videoId}:`, error);
       throw error;
     }
   }
-  
+
 }
 
 module.exports = new ContentService();

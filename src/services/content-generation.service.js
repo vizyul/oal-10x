@@ -1,4 +1,5 @@
 const aiChatService = require('./ai-chat.service');
+const promptSanitizer = require('../utils/prompt-sanitizer');
 const { aiPrompts, video: videoModel } = require('../models');
 const { logger } = require('../utils');
 const database = require('./database.service');
@@ -81,7 +82,7 @@ class ContentGenerationService {
       logger.debug('Getting active prompts', { provider, contentType });
 
       let prompts;
-      
+
       if (provider && contentType) {
         // Get specific prompt for provider and content type
         const prompt = await aiPrompts.findByProviderAndType(provider.toLowerCase(), contentType.toLowerCase());
@@ -148,8 +149,8 @@ class ContentGenerationService {
         throw new Error(`AI provider ${prompt.ai_provider} not available`);
       }
 
-      // Process the prompt template
-      const processedPrompt = aiChatService.processPromptTemplate(prompt.prompt_text, {
+      // Process the prompt template with sanitization
+      const processedPrompt = promptSanitizer.processTemplate(prompt.prompt_text, {
         TRANSCRIPT: transcript,
         VIDEO_ID: videoId
       });
@@ -356,10 +357,10 @@ class ContentGenerationService {
       // No batch update needed here since each generateContent call writes to database immediately
 
       logger.info(`Content generation completed for video ${videoId}`, results.summary);
-      
+
       // Check if we should mark the video as completed in the database
       await this.checkAndUpdateVideoCompletion(videoRecordId, videoId);
-      
+
       return results;
 
     } catch (error) {
@@ -415,31 +416,31 @@ class ContentGenerationService {
             FROM content_types 
             WHERE key = $1 AND is_active = true
           `;
-          
+
           const contentTypeResult = await database.query(contentTypeQuery, [contentType]);
-          
+
           if (contentTypeResult.rows.length === 0) {
             logger.warn(`Content type '${contentType}' not found in content_types table, skipping`);
             continue;
           }
-          
+
           const contentTypeRecord = contentTypeResult.rows[0];
-          
+
           // Check if content already exists for this video and content type
           const existingContentQuery = `
             SELECT id 
             FROM video_content 
             WHERE video_id = $1 AND content_type_id = $2
           `;
-          
+
           const existingContentResult = await database.query(existingContentQuery, [actualVideoId, contentTypeRecord.id]);
-          
+
           const now = new Date();
-          
+
           if (existingContentResult.rows.length > 0) {
             // Update existing record
             const existingContentId = existingContentResult.rows[0].id;
-            
+
             const updateQuery = `
               UPDATE video_content 
               SET 
@@ -452,16 +453,16 @@ class ContentGenerationService {
                 version = COALESCE(version, 0) + 1
               WHERE id = $4
             `;
-            
+
             await database.query(updateQuery, [
               data.content,
               data.provider || 'unknown',
               now,
               existingContentId
             ]);
-            
+
             logger.debug(`Updated existing video_content record ID ${existingContentId} for video ${actualVideoId} content type ${contentType}`);
-            
+
           } else {
             // Insert new record
             const insertQuery = `
@@ -478,7 +479,7 @@ class ContentGenerationService {
                 updated_at
               ) VALUES ($1, $2, $3, $4, 'completed', $5, true, 1, $5, $5)
             `;
-            
+
             await database.query(insertQuery, [
               actualVideoId,
               contentTypeRecord.id,
@@ -486,10 +487,10 @@ class ContentGenerationService {
               data.provider || 'unknown',
               now
             ]);
-            
+
             logger.debug(`Created new video_content record for video ${actualVideoId} content type ${contentType}`);
           }
-          
+
         } catch (contentError) {
           logger.error(`Error saving content type ${contentType} for video ${actualVideoId}:`, contentError.message);
           // Continue with other content types rather than failing completely
@@ -662,7 +663,7 @@ class ContentGenerationService {
       const { video: videoModel } = require('../models');
       const database = require('./database.service');
       const { logger } = require('../utils');
-      
+
       // Check if video has transcript
       const video = await videoModel.findById(videoRecordId);
       if (!video || !video.transcript_text || video.transcript_text.trim() === '') {
@@ -676,21 +677,21 @@ class ContentGenerationService {
         FROM video_content 
         WHERE video_id = $1 AND content_text IS NOT NULL AND content_text != ''
       `;
-      
+
       const contentResult = await database.query(contentQuery, [videoRecordId]);
       const contentCount = parseInt(contentResult.rows[0].content_count);
-      
+
       if (contentCount > 0) {
         // Video has both transcript and some generated content, mark as completed
         await videoModel.updateStatus(videoRecordId, 'completed', {
           processed_at: new Date().toISOString()
         });
-        
+
         logger.info(`✅ Video ${videoId} marked as completed - has transcript and ${contentCount} content items`);
       } else {
         logger.debug(`Video ${videoId} has transcript but no generated content yet, keeping status as processing`);
       }
-      
+
     } catch (error) {
       const { logger } = require('../utils');
       logger.error(`Error checking video completion for ${videoId}:`, error);

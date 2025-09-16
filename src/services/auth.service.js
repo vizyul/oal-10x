@@ -1,4 +1,4 @@
-const database = require('./database.service');
+// const database = require('./database.service'); // TODO: Remove if not needed
 const { user: UserModel } = require('../models');
 const jwt = require('jsonwebtoken');
 const { logger } = require('../utils');
@@ -152,7 +152,7 @@ class AuthService {
       logger.info('Finding most recent Apple user as fallback');
 
       // Get the most recent Apple user
-      const appleUsers = await UserModel.getActiveUsers({ 
+      const appleUsers = await UserModel.getActiveUsers({
         provider: 'apple',
         limit: 1,
         orderBy: 'updated_at DESC'
@@ -288,7 +288,7 @@ class AuthService {
         status: 'active'
       });
 
-      logger.info(`Email verified for user: ${user.id}`);
+      logger.info(`Email verified for user: ${updatedUser.id}`);
       return updatedUser;
     } catch (error) {
       logger.error('Error verifying email token:', error);

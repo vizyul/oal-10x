@@ -60,7 +60,14 @@ class DatabaseService {
       }
       return result;
     } catch (error) {
-      logger.error('Database query error:', { error: error.message, sql: text, params });
+      logger.error('Database query error:', {
+        error: error.message,
+        code: error.code,
+        detail: error.detail,
+        constraint: error.constraint,
+        sql: text,
+        params
+      });
       throw error;
     }
   }

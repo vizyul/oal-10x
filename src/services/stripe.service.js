@@ -739,7 +739,7 @@ class StripeService {
   async canAccessFeature(userId, feature) {
     const user = await UserModel.findById(parseInt(userId));
     if (!user) return false;
-    
+
     const tierConfig = stripeConfig.getTierConfig(user.subscription_tier || 'free');
 
     if (!tierConfig) return false;

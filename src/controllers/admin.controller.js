@@ -12,7 +12,7 @@ class AdminController {
       // Get system statistics for dashboard
       const contentTypeStats = await contentType.getUsageStatistics();
       const promptStats = await aiPrompts.getPromptsStatistics();
-      
+
       res.render('admin/dashboard', {
         title: 'Admin Dashboard',
         user: req.user,
@@ -38,7 +38,7 @@ class AdminController {
   async contentTypesIndex(req, res) {
     try {
       const { page = 1, limit = 20, search, status } = req.query;
-      
+
       // Get content types with pagination
       const options = {
         page: parseInt(page),
@@ -167,7 +167,7 @@ class AdminController {
         const promptKeys = Object.keys(prompts);
         for (const promptKey of promptKeys) {
           const promptData = prompts[promptKey];
-          
+
           // Skip empty or invalid prompts
           if (!promptData.name || !promptData.ai_provider || !promptData.prompt_text) {
             continue;
@@ -208,7 +208,7 @@ class AdminController {
       res.redirect(`/admin/content-types/${newContentType.id}`);
     } catch (error) {
       logger.error('Error creating content type:', error);
-      
+
       // Handle unique constraint errors
       if (error.code === '23505') { // PostgreSQL unique violation
         req.flash('error', 'A content type with that key already exists.');
@@ -238,7 +238,7 @@ class AdminController {
     try {
       const { id } = req.params;
       logger.info(`Showing content type with ID: ${id}`);
-      
+
       const ct = await contentType.findById(id);
       if (!ct) {
         logger.warn(`Content type with ID ${id} not found`);
@@ -253,7 +253,7 @@ class AdminController {
       // Get associated AI prompts
       const prompts = await aiPrompts.getByContentType(id);
       logger.info(`Found ${prompts.length} prompts for content type ${id}`);
-      
+
       res.render('admin/content-types/show', {
         title: `Content Type: ${ct.label}`,
         user: req.user,
@@ -279,7 +279,7 @@ class AdminController {
   async editContentType(req, res) {
     try {
       const { id } = req.params;
-      
+
       const ct = await contentType.findById(id);
       if (!ct) {
         return res.status(404).render('errors/404', {
@@ -378,7 +378,7 @@ class AdminController {
         const existingPromptKeys = Object.keys(existing_prompts);
         for (const promptId of existingPromptKeys) {
           const promptData = existing_prompts[promptId];
-          
+
           if (!promptData.name || !promptData.ai_provider || !promptData.prompt_text) {
             continue;
           }
@@ -412,7 +412,7 @@ class AdminController {
         const promptKeys = Object.keys(prompts);
         for (const promptKey of promptKeys) {
           const promptData = prompts[promptKey];
-          
+
           if (!promptData.name || !promptData.ai_provider || !promptData.prompt_text) {
             continue;
           }
@@ -465,7 +465,7 @@ class AdminController {
   async managePrompts(req, res) {
     try {
       const { id } = req.params;
-      
+
       const ct = await contentType.findById(id);
       if (!ct) {
         return res.status(404).render('errors/404', {
@@ -518,7 +518,7 @@ class AdminController {
       }
 
       if (!errors.isEmpty()) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Validation failed',
           details: errors.array()
         });
@@ -553,8 +553,8 @@ class AdminController {
         adminUserId: req.user.id
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'AI prompt created successfully!',
         prompt: newPrompt
       });
@@ -602,9 +602,9 @@ class AdminController {
         adminUserId: req.user.id
       });
 
-      res.json({ 
-        success: true, 
-        message: 'AI prompt updated successfully!' 
+      res.json({
+        success: true,
+        message: 'AI prompt updated successfully!'
       });
     } catch (error) {
       logger.error('Error updating AI prompt:', error);
@@ -619,7 +619,7 @@ class AdminController {
   async deletePrompt(req, res) {
     try {
       const { promptId } = req.params;
-      
+
       const prompt = await aiPrompts.findById(promptId);
       if (!prompt) {
         return res.status(404).json({ error: 'Prompt not found' });
@@ -632,9 +632,9 @@ class AdminController {
         adminUserId: req.user.id
       });
 
-      res.json({ 
-        success: true, 
-        message: 'AI prompt deleted successfully!' 
+      res.json({
+        success: true,
+        message: 'AI prompt deleted successfully!'
       });
     } catch (error) {
       logger.error('Error deleting AI prompt:', error);
@@ -650,7 +650,7 @@ class AdminController {
   async getContentTypeData(req, res) {
     try {
       const { id } = req.params;
-      
+
       const ct = await contentType.findById(id);
       if (!ct) {
         return res.status(404).json({ error: 'Content type not found' });
@@ -676,7 +676,7 @@ class AdminController {
   async getPromptData(req, res) {
     try {
       const { promptId } = req.params;
-      
+
       const prompt = await aiPrompts.findById(promptId);
       if (!prompt) {
         return res.status(404).json({ error: 'Prompt not found' });

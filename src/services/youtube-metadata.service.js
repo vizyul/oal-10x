@@ -43,6 +43,9 @@ class YouTubeMetadataService {
         throw new Error('Invalid YouTube URL');
       }
 
+      // Normalize URL to standard format for consistent processing
+      const normalizedUrl = `https://youtube.com/watch?v=${videoId}`;
+
       logger.info(`Extracting metadata for video: ${videoId}`);
 
       // Get video details from YouTube API
@@ -71,7 +74,7 @@ class YouTubeMetadataService {
 
       const metadata = {
         videoId,
-        url: videoUrl,
+        url: normalizedUrl,
         title: videoData.snippet.title,
         description: videoData.snippet.description,
         channelId: videoData.snippet.channelId,
@@ -81,7 +84,7 @@ class YouTubeMetadataService {
         duration: this.parseDuration(videoData.contentDetails.duration),
         thumbnails: this.formatThumbnails(videoData.snippet.thumbnails),
         highResThumbnail: this.getHighResThumbnailUrl(videoId, videoData.snippet.thumbnails),
-        tags: videoData.snippet.tags || [],
+        tags: (videoData.snippet.tags && videoData.snippet.tags.length > 0) ? videoData.snippet.tags : null,
         categoryId: videoData.snippet.categoryId,
         defaultLanguage: videoData.snippet.defaultLanguage,
         defaultAudioLanguage: videoData.snippet.defaultAudioLanguage,
@@ -433,10 +436,11 @@ class YouTubeMetadataService {
    */
   extractVideoId(url) {
     const patterns = [
-      /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
+      /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube live URLs with query params
     ];
 
     for (const pattern of patterns) {

@@ -25,11 +25,11 @@ class BaseModel {
     try {
       const query = `SELECT * FROM ${this.tableName} WHERE ${this.primaryKey} = $1`;
       const result = await database.query(query, [id]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding ${this.tableName} by ID ${id}:`, error);
@@ -47,7 +47,7 @@ class BaseModel {
     try {
       const query = `SELECT * FROM ${this.tableName} WHERE ${field} = $1`;
       const result = await database.query(query, [value]);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error finding ${this.tableName} by ${field}:`, error);
@@ -77,7 +77,7 @@ class BaseModel {
             paramIndex++;
           }
         });
-        
+
         if (whereConditions.length > 0) {
           query += ` WHERE ${whereConditions.join(' AND ')}`;
         }
@@ -118,27 +118,27 @@ class BaseModel {
     try {
       // Validate data
       this.validate(data);
-      
+
       // Filter fillable fields
       const filteredData = this.filterFillable(data);
-      
+
       // Cast data types
       const castedData = this.castData(filteredData);
-      
+
       // Prepare query
       const fields = Object.keys(castedData);
       const values = Object.values(castedData);
       const placeholders = fields.map((_, index) => `$${index + 1}`).join(', ');
-      
+
       const query = `
         INSERT INTO ${this.tableName} (${fields.join(', ')}) 
         VALUES (${placeholders}) 
         RETURNING *
       `;
-      
+
       const result = await database.query(query, values);
       const created = this.formatOutput(result.rows[0]);
-      
+
       logger.info(`Created ${this.tableName} record with ID: ${created[this.primaryKey]}`);
       return created;
     } catch (error) {
@@ -157,27 +157,27 @@ class BaseModel {
     try {
       // Validate data
       this.validate(data, true);
-      
+
       // Filter fillable fields
       const filteredData = this.filterFillable(data);
-      
+
       if (Object.keys(filteredData).length === 0) {
         throw new Error('No valid fields to update');
       }
-      
+
       // Cast data types
       const castedData = this.castData(filteredData);
-      
+
       // Add updated_at if it exists
       if (await this.hasField('updated_at')) {
         castedData.updated_at = new Date();
       }
-      
+
       // Prepare query
       const fields = Object.keys(castedData);
       const values = Object.values(castedData);
       const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
-      
+
       values.push(id);
       const query = `
         UPDATE ${this.tableName} 
@@ -185,13 +185,13 @@ class BaseModel {
         WHERE ${this.primaryKey} = $${values.length}
         RETURNING *
       `;
-      
+
       const result = await database.query(query, values);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       const updated = this.formatOutput(result.rows[0]);
       logger.info(`Updated ${this.tableName} record ID: ${id}`);
       return updated;
@@ -210,12 +210,12 @@ class BaseModel {
     try {
       const query = `DELETE FROM ${this.tableName} WHERE ${this.primaryKey} = $1`;
       const result = await database.query(query, [id]);
-      
+
       const deleted = result.rowCount > 0;
       if (deleted) {
         logger.info(`Deleted ${this.tableName} record ID: ${id}`);
       }
-      
+
       return deleted;
     } catch (error) {
       logger.error(`Error deleting ${this.tableName} ID ${id}:`, error);
@@ -243,7 +243,7 @@ class BaseModel {
             paramIndex++;
           }
         });
-        
+
         if (whereConditions.length > 0) {
           query += ` WHERE ${whereConditions.join(' AND ')}`;
         }
@@ -281,14 +281,14 @@ class BaseModel {
     if (this.fillable.length === 0) {
       return data; // If no fillable specified, allow all fields
     }
-    
+
     const filtered = {};
     this.fillable.forEach(field => {
       if (data.hasOwnProperty(field)) {
         filtered[field] = data[field];
       }
     });
-    
+
     return filtered;
   }
 
@@ -299,7 +299,7 @@ class BaseModel {
    */
   castData(data) {
     const casted = { ...data };
-    
+
     Object.entries(this.casts).forEach(([field, type]) => {
       if (casted.hasOwnProperty(field) && casted[field] !== null) {
         switch (type) {
@@ -323,7 +323,7 @@ class BaseModel {
         }
       }
     });
-    
+
     return casted;
   }
 
@@ -336,12 +336,12 @@ class BaseModel {
     if (this.hidden.length === 0) {
       return data;
     }
-    
+
     const output = { ...data };
     this.hidden.forEach(field => {
       delete output[field];
     });
-    
+
     return output;
   }
 
@@ -433,7 +433,7 @@ class BaseModel {
             return condition;
           }
         });
-        
+
         if (searchConditions.length > 0) {
           whereConditions.push(`(${searchConditions.join(' OR ')})`);
           // Add the same search parameter for each field

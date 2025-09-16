@@ -11,7 +11,7 @@ class UserSubscription extends BaseModel {
     super();
     this.tableName = 'user_subscriptions';
     this.primaryKey = 'id';
-    
+
     // Define subscription-specific validation rules
     this.validationRules = {
       users_id: { required: true, type: 'integer' },
@@ -48,9 +48,9 @@ class UserSubscription extends BaseModel {
         ORDER BY created_at DESC 
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [actualUserId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -73,7 +73,7 @@ class UserSubscription extends BaseModel {
 
       const query = `SELECT * FROM ${this.tableName} WHERE stripe_subscription_id = $1`;
       const result = await database.query(query, [stripeSubscriptionId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -100,7 +100,7 @@ class UserSubscription extends BaseModel {
         WHERE users_id = $1 
         ORDER BY created_at DESC
       `;
-      
+
       const result = await database.query(query, [actualUserId]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -132,7 +132,7 @@ class UserSubscription extends BaseModel {
       if (processedData.subscription_tier && !this.allowedTiers.includes(processedData.subscription_tier)) {
         throw new Error(`Invalid subscription tier. Allowed values: ${this.allowedTiers.join(', ')}`);
       }
-      
+
       if (processedData.status && !this.allowedStatuses.includes(processedData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
       }
@@ -158,7 +158,7 @@ class UserSubscription extends BaseModel {
       delete safeUpdateData.id;
       delete safeUpdateData.created_at;
       delete safeUpdateData.users_id; // Don't allow changing user association
-      
+
       // Set updated timestamp
       safeUpdateData.updated_at = new Date().toISOString();
 
@@ -166,7 +166,7 @@ class UserSubscription extends BaseModel {
       if (safeUpdateData.subscription_tier && !this.allowedTiers.includes(safeUpdateData.subscription_tier)) {
         throw new Error(`Invalid subscription tier. Allowed values: ${this.allowedTiers.join(', ')}`);
       }
-      
+
       if (safeUpdateData.status && !this.allowedStatuses.includes(safeUpdateData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
       }
@@ -193,8 +193,8 @@ class UserSubscription extends BaseModel {
       };
 
       if (cancelReason) {
-        updateData.metadata = { 
-          ...updateData.metadata, 
+        updateData.metadata = {
+          ...updateData.metadata,
           cancel_reason: cancelReason,
           cancelled_at: new Date().toISOString()
         };

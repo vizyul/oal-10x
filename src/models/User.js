@@ -9,7 +9,7 @@ const { logger } = require('../utils');
 class User extends BaseModel {
   constructor() {
     super('users', 'id');
-    
+
     this.fillable = [
       'email', 'first_name', 'last_name', 'password', 'status', 'role',
       'oauth_provider', 'oauth_id', 'email_verified', 'profile_image_url',
@@ -19,12 +19,12 @@ class User extends BaseModel {
       'trial_end', 'two_factor_enabled', 'api_key_hash', 'session_token',
       'magic_link_token', 'monthly_usage_limit', 'airtable_id'
     ];
-    
+
     this.hidden = [
       'password', 'api_key_hash', 'session_token', 'magic_link_token',
       'email_verification_token', 'email_verification_expires'
     ];
-    
+
     this.casts = {
       'email_verified': 'boolean',
       'two_factor_enabled': 'boolean',
@@ -67,11 +67,11 @@ class User extends BaseModel {
 
       const query = `SELECT * FROM ${this.tableName} WHERE email = $1`;
       const result = await database.query(query, [email]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       // Return raw data without hiding password field
       return result.rows[0];
     } catch (error) {
@@ -108,11 +108,11 @@ class User extends BaseModel {
         WHERE oauth_provider = $1 AND oauth_id = $2
       `;
       const result = await database.query(query, [provider, oauthId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding user by OAuth ${provider}:${oauthId}:`, error);
@@ -135,19 +135,19 @@ class User extends BaseModel {
         const user = await this.findById(pgUserId);
         return user ? pgUserId : null;
       }
-      
+
       // If it's an Airtable record ID
       if (typeof userId === 'string' && userId.startsWith('rec')) {
         const user = await this.findByAirtableId(userId);
         return user ? user.id : null;
       }
-      
+
       // If it's an email address
       if (typeof userId === 'string' && userId.includes('@')) {
         const user = await this.findByEmail(userId);
         return user ? user.id : null;
       }
-      
+
       logger.warn(`Unrecognized userId format: ${userId} (type: ${typeof userId})`);
       return null;
     } catch (error) {
@@ -181,13 +181,13 @@ class User extends BaseModel {
         ORDER BY us.created_at DESC
         LIMIT 1
       `;
-      
+
       const result = await database.query(query, [userId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
-      
+
       return this.formatOutput(result.rows[0]);
     } catch (error) {
       logger.error(`Error finding user with subscription ${userId}:`, error);
@@ -235,13 +235,13 @@ class User extends BaseModel {
       if (!user) {
         return null;
       }
-      
+
       // Remove sensitive fields for profile view
       const profile = { ...user };
       this.hidden.forEach(field => {
         delete profile[field];
       });
-      
+
       return profile;
     } catch (error) {
       logger.error(`Error getting user profile ${userId}:`, error);

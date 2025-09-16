@@ -11,7 +11,7 @@ class Video extends BaseModel {
     super();
     this.tableName = 'videos';
     this.primaryKey = 'id';
-    
+
     // Define video-specific validation rules
     this.validationRules = {
       videoid: { required: true, type: 'string' },
@@ -89,33 +89,33 @@ class Video extends BaseModel {
       if (includeContent) {
         // Join with video_content table to get content data
         const database = require('../services/database.service');
-        
+
         // Build the query with content joins
         let whereClause = `v.users_id = $1`;
         let params = [actualUserId];
         let paramIndex = 2;
-        
+
         if (status && this.allowedStatuses.includes(status)) {
           whereClause += ` AND v.status = $${paramIndex}`;
           params.push(status);
           paramIndex++;
         }
-        
+
         if (category && this.allowedCategories.includes(category)) {
           whereClause += ` AND v.category = $${paramIndex}`;
           params.push(category);
           paramIndex++;
         }
-        
+
         if (search && search.trim()) {
           whereClause += ` AND (v.video_title ILIKE $${paramIndex} OR v.description ILIKE $${paramIndex} OR v.channel_name ILIKE $${paramIndex})`;
           params.push(`%${search.trim()}%`);
           paramIndex++;
         }
-        
+
         // Calculate offset and add pagination
         const offset = (page - 1) * limit;
-        
+
         // Query to get videos with aggregated content (includes transcript from videos table)
         const videosQuery = `
           SELECT v.*,
@@ -136,9 +136,9 @@ class Video extends BaseModel {
           ORDER BY v.created_at DESC
           LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
         `;
-        
+
         params.push(limit, offset);
-        
+
         // Get total count (use same whereClause and params except limit/offset)
         const countQuery = `
           SELECT COUNT(DISTINCT v.id) as total
@@ -146,32 +146,36 @@ class Video extends BaseModel {
           WHERE ${whereClause}
         `;
         const countParams = params.slice(0, -2); // Remove limit and offset
-        
+
         const [videosResult, countResult] = await Promise.all([
           database.query(videosQuery, params),
           database.query(countQuery, countParams)
         ]);
-        
+
         const videos = videosResult.rows.map(row => {
           const { content_data, ...videoData } = row;
-          // Merge content data into the video object for compatibility
-          // Also include transcript from videos table if it exists
+
+          // Create a copy of content_data to modify
+          const enhancedContentData = { ...content_data };
+
+          // Add transcript from videos table if it exists and not already in content_data
+          if (videoData.transcript_text && videoData.transcript_text.trim() && !enhancedContentData.transcript_text) {
+            enhancedContentData.transcript_text = videoData.transcript_text;
+          }
+
+          // Merge content data into the video object for compatibility AND preserve content_data for dashboard
           const mergedData = {
             ...videoData,
-            ...content_data
+            ...enhancedContentData,
+            content_data: enhancedContentData // Preserve the enhanced content_data structure for dashboard
           };
-          
-          // Add transcript from videos table if it exists
-          if (videoData.transcript_text && videoData.transcript_text.trim()) {
-            mergedData.transcript_text = videoData.transcript_text;
-          }
-          
+
           return mergedData;
         });
-        
+
         const totalRecords = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalRecords / limit);
-        
+
         result = {
           data: videos,
           pagination: {
@@ -210,7 +214,7 @@ class Video extends BaseModel {
 
       const query = `SELECT * FROM ${this.tableName} WHERE videoid = $1`;
       const result = await database.query(query, [videoId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -233,7 +237,7 @@ class Video extends BaseModel {
 
       const query = `SELECT * FROM ${this.tableName} WHERE videoid = $1 ORDER BY created_at DESC`;
       const result = await database.query(query, [videoId]);
-      
+
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
       logger.error(`Error finding videos by videoid ${videoId}:`, error);
@@ -253,7 +257,7 @@ class Video extends BaseModel {
       const actualUserId = parseInt(userId);
       const query = `SELECT * FROM ${this.tableName} WHERE id = $1 AND users_id = $2`;
       const result = await database.query(query, [videoId, actualUserId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -285,15 +289,21 @@ class Video extends BaseModel {
         ...videoData
       };
 
+      // Fix tags field - ensure it's null if empty string or empty array
+      if (processedData.tags === '' || processedData.tags === undefined ||
+          (Array.isArray(processedData.tags) && processedData.tags.length === 0)) {
+        processedData.tags = null;
+      }
+
       // Validate status, category, privacy_setting
       if (processedData.status && !this.allowedStatuses.includes(processedData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
       }
-      
+
       if (processedData.category && !this.allowedCategories.includes(processedData.category)) {
         throw new Error(`Invalid category. Allowed values: ${this.allowedCategories.join(', ')}`);
       }
-      
+
       if (processedData.privacy_setting && !this.allowedPrivacySettings.includes(processedData.privacy_setting)) {
         throw new Error(`Invalid privacy setting. Allowed values: ${this.allowedPrivacySettings.join(', ')}`);
       }
@@ -319,7 +329,7 @@ class Video extends BaseModel {
       delete safeUpdateData.id;
       delete safeUpdateData.created_at;
       delete safeUpdateData.users_id; // Don't allow changing ownership
-      
+
       // Set updated timestamp
       safeUpdateData.updated_at = new Date().toISOString();
 
@@ -327,11 +337,11 @@ class Video extends BaseModel {
       if (safeUpdateData.status && !this.allowedStatuses.includes(safeUpdateData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
       }
-      
+
       if (safeUpdateData.category && !this.allowedCategories.includes(safeUpdateData.category)) {
         throw new Error(`Invalid category. Allowed values: ${this.allowedCategories.join(', ')}`);
       }
-      
+
       if (safeUpdateData.privacy_setting && !this.allowedPrivacySettings.includes(safeUpdateData.privacy_setting)) {
         throw new Error(`Invalid privacy setting. Allowed values: ${this.allowedPrivacySettings.join(', ')}`);
       }
@@ -406,7 +416,7 @@ class Video extends BaseModel {
         ORDER BY created_at DESC 
         LIMIT $2
       `;
-      
+
       const result = await database.query(query, [status, limit]);
       return result.rows.map(row => this.formatOutput(row));
     } catch (error) {
@@ -428,7 +438,7 @@ class Video extends BaseModel {
         GROUP BY ai_provider
         ORDER BY count DESC
       `;
-      
+
       const result = await database.query(query);
       return result.rows;
     } catch (error) {
@@ -442,7 +452,7 @@ class Video extends BaseModel {
    */
   formatVideoResponse(record) {
     const formatted = this.formatOutput(record);
-    
+
     // Add any additional formatting for API responses
     return {
       ...formatted,
