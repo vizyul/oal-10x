@@ -86,6 +86,13 @@
         <p>Connect your YouTube account to select and import videos</p>
       </div>
       
+      <!-- Amplify button above the YouTube auth section -->
+      <div class="amplify-button-container">
+        <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
+          Amplify Selected Videos
+        </button>
+      </div>
+
       <div id="youtube-auth-section">
         <div id="youtube-not-connected" class="youtube-connection-status">
           <div class="connect-youtube">
@@ -131,22 +138,20 @@
                   <button type="button" id="clear-selection-btn" class="btn btn-secondary btn-small">Clear</button>
                 </div>
               </div>
-              <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
-                Amplify Selected Videos
-              </button>
               <div class="videos-container" id="videos-container">
                 <!-- Video items will be loaded here -->
               </div>
-              
+
               <div class="load-more-container hidden" id="load-more-container">
                 <button type="button" id="load-more-btn" class="btn btn-secondary">Load More Videos</button>
                 <div class="video-count-info" id="video-count-info">
                   <span id="loaded-count">0</span> of <span id="total-count">0</span> videos loaded
                 </div>
               </div>
-              
-              
+
+
             </div>
+
           </div>
         </div>
       </div>
@@ -183,7 +188,7 @@ https://www.youtube.com/watch?v=..."
       </form>
     </div>
   </div>
-  
+
   <div id="upload-progress" class="upload-progress hidden">
     <div class="progress-container">
       <h4 id="progress-title">Processing Videos...</h4>
@@ -251,16 +256,19 @@ document.addEventListener('DOMContentLoaded', function() {
   // URL Processing Functions
   function processURLInput() {
     const text = youtubeUrlsTextarea.value.trim();
+    console.log('processURLInput called with text:', text);
 
     // Clear existing URLs from selection
     selectedUrls.clear();
 
     if (!text) {
+      console.log('No text, calling updateSelectionUI');
       updateSelectionUI();
       return;
     }
 
     const { urls, errors, invalidUrls, duplicates } = parseURLs(text);
+    console.log('parseURLs result:', { urls, errors, invalidUrls, duplicates });
 
     // Check subscription limits before processing
     const currentSelected = selectedVideos.size;
@@ -275,6 +283,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // Add all valid URLs
       urls.forEach(url => selectedUrls.add(url));
     }
+
+    console.log('selectedUrls after processing:', selectedUrls);
 
     // Show detailed messages for errors and duplicates
     let hasIssues = errors.length > 0 || duplicates.length > 0;
@@ -322,10 +332,16 @@ document.addEventListener('DOMContentLoaded', function() {
   if (contentTypeError) {
     contentTypeError.classList.add('hidden');
   }
-  
-  checkYouTubeConnection();
+
+  // Initialize core functionality first (independent of OAuth)
   loadSubscriptionInfo();
   loadContentTypes();
+
+  // Initialize YouTube OAuth status (non-blocking)
+  checkYouTubeConnection().catch(error => {
+    console.warn('YouTube OAuth check failed, but continuing with URL import functionality:', error);
+    showDisconnectedState();
+  });
   
   // YouTube OAuth Functions
   async function checkYouTubeConnection() {
@@ -651,18 +667,27 @@ document.addEventListener('DOMContentLoaded', function() {
       selectedVideos.delete(videoId);
     }
 
+    console.log('About to call updateSelectionUI');
     updateSelectionUI();
   }
-  
+
   function updateSelectionUI() {
     const selectionCount = document.querySelector('.selection-count');
     const totalSelected = selectedVideos.size + selectedUrls.size;
+    console.log('updateSelectionUI called - selectedVideos.size:', selectedVideos.size, 'selectedUrls.size:', selectedUrls.size, 'totalSelected:', totalSelected);
+    console.log('DOM elements found:', {
+      videoGrid: !!videoGrid,
+      importSelectedBtn: !!importSelectedBtn,
+      videoGridClasses: videoGrid?.className,
+      importBtnClasses: importSelectedBtn?.className
+    });
 
-    // Show video grid if we have any selections (YouTube videos or URLs)
-    if (totalSelected > 0) {
+    // Show video grid only when there are YouTube OAuth videos selected
+    if (selectedVideos.size > 0) {
+      console.log('Showing video grid for YouTube videos');
       videoGrid.classList.remove('hidden');
-    } else if (selectedVideos.size === 0 && selectedUrls.size === 0) {
-      // Only hide if no YouTube videos are selected either
+    } else {
+      console.log('Hiding video grid - no YouTube videos selected');
       videoGrid.classList.add('hidden');
     }
 
@@ -682,9 +707,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (totalSelected > 0) {
-      importSelectedBtn.classList.remove('hidden');
+      console.log('Showing import button');
+      if (importSelectedBtn) {
+        importSelectedBtn.classList.remove('hidden');
+
+        // Check parent container hierarchy
+        const parentContainer = importSelectedBtn.parentElement;
+        const grandParent = parentContainer?.parentElement;
+        const greatGrandParent = grandParent?.parentElement;
+
+        console.log('DOM hierarchy:', {
+          parent: {
+            className: parentContainer?.className,
+            offsetHeight: parentContainer?.offsetHeight,
+            offsetWidth: parentContainer?.offsetWidth,
+            display: parentContainer ? window.getComputedStyle(parentContainer).display : 'none'
+          },
+          grandParent: {
+            className: grandParent?.className,
+            offsetHeight: grandParent?.offsetHeight,
+            offsetWidth: grandParent?.offsetWidth,
+            display: grandParent ? window.getComputedStyle(grandParent).display : 'none'
+          },
+          greatGrandParent: {
+            className: greatGrandParent?.className,
+            offsetHeight: greatGrandParent?.offsetHeight,
+            offsetWidth: greatGrandParent?.offsetWidth,
+            display: greatGrandParent ? window.getComputedStyle(greatGrandParent).display : 'none'
+          }
+        });
+
+        console.log('Button after removing hidden class:', {
+          classes: importSelectedBtn.className,
+          style: importSelectedBtn.style.cssText,
+          offsetHeight: importSelectedBtn.offsetHeight,
+          offsetWidth: importSelectedBtn.offsetWidth,
+          display: window.getComputedStyle(importSelectedBtn).display,
+          visibility: window.getComputedStyle(importSelectedBtn).visibility,
+          position: window.getComputedStyle(importSelectedBtn).position
+        });
+      } else {
+        console.error('importSelectedBtn not found!');
+      }
     } else {
-      importSelectedBtn.classList.add('hidden');
+      console.log('Hiding import button');
+      importSelectedBtn?.classList.add('hidden');
     }
   }
   
@@ -755,16 +822,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const contentTypes = Array.from(selectedContentTypes);
-    showProgress('Amplifying Videos...', `Processing ${totalSelected} video(s) with ${contentTypes.length} content type(s)...`);
+    showProgress('Starting Video Processing...', `Initializing ${totalSelected} video(s) for processing...`);
     importSelectedBtn.disabled = true;
 
     try {
-      let importPromises = [];
+      // Start processing immediately without waiting for completion
+      const processingPromises = [];
 
       // Process YouTube OAuth selected videos
       if (selectedVideos.size > 0) {
         const videoIds = Array.from(selectedVideos);
-        importPromises.push(
+        processingPromises.push(
           fetch('/api/youtube/videos/import', {
             method: 'POST',
             headers: {
@@ -781,7 +849,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Process URL-based videos
       if (selectedUrls.size > 0) {
         const urls = Array.from(selectedUrls);
-        importPromises.push(
+        processingPromises.push(
           fetch('/api/videos/batch', {
             method: 'POST',
             headers: {
@@ -795,32 +863,40 @@ document.addEventListener('DOMContentLoaded', function() {
         );
       }
 
-      // Wait for all imports to complete
-      const responses = await Promise.all(importPromises);
+      // Start processing asynchronously - redirect immediately, handle count updates in background
+      Promise.all(processingPromises).then(responses => {
+        // Process responses in background after redirect
+        let createdCount = 0;
+        responses.forEach(async (response) => {
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+              if (result.data?.imported !== undefined) {
+                createdCount += result.data.imported;
+              } else if (result.data?.processedVideos) {
+                createdCount += result.data.processedVideos.length;
+              } else if (result.data?.summary?.successful) {
+                createdCount += result.data.summary.successful;
+              } else {
+                createdCount += 1;
+              }
+            }
+          }
+        });
+        console.log(`Background processing: ${createdCount} videos created successfully`);
+      }).catch(error => {
+        console.error('Background processing error:', error);
+      });
 
-      // Check if all responses are successful
-      let allSuccessful = true;
-      let errorMessages = [];
+      // Immediate redirect - don't wait for API responses
+      progressMessage.textContent = 'Redirecting to Video Dashboard...';
+      setTimeout(() => {
+        window.location.href = `/videos?processing=true&count=${totalSelected}&contentTypes=${contentTypes.join(',')}`;
+      }, 500);
 
-      for (const response of responses) {
-        const result = await response.json();
-        if (!result.success) {
-          allSuccessful = false;
-          errorMessages.push(result.message || 'Import failed');
-        }
-      }
-
-      if (allSuccessful) {
-        progressMessage.textContent = 'Videos amplified successfully!';
-        setTimeout(() => {
-          window.location.href = `/videos?imported=true&success=Videos amplified successfully`;
-        }, 2000);
-      } else {
-        throw new Error(errorMessages.join('; '));
-      }
     } catch (error) {
       console.error('Import error:', error);
-      showError(error.message || 'Failed to amplify videos. Please try again.');
+      showError(error.message || 'Failed to start video processing. Please try again.');
       hideProgress();
       importSelectedBtn.disabled = false;
     }

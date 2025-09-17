@@ -400,10 +400,18 @@ class ProcessingStatusManager {
         <div class="accordion-header-wrapper">
           <button class="accordion-header" data-accordion-toggle="${video.videoId}">
             <div class="video-info">
-              <div class=" stretch" title="${videoTitle}">${videoTitle}</div>
+              <div class="video-title-stretch" title="${videoTitle}">${videoTitle}</div>
               <div class="video-meta">
                 <span class="video-time">${videoTime}</span>
                 <span class="video-progress">${overallProgress.completed}/${overallProgress.total} completed</span>
+              </div>
+            </div>
+            <div class="progress-section">
+              <div class="progress-bar-container">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: ${Math.round((overallProgress.completed / overallProgress.total) * 100)}%"></div>
+                </div>
+                <span class="progress-percentage">${Math.round((overallProgress.completed / overallProgress.total) * 100)}%</span>
               </div>
             </div>
             <div class="accordion-chevron">▼</div>

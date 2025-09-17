@@ -234,13 +234,25 @@ class YouTubeOAuthService {
         expiresAt: expiresAt
       };
     } catch (error) {
-      logger.error('Error refreshing access token:', error.message || 'Unknown error');
-      logger.error('Full refresh error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack?.substring(0, 500)
-      });
-      throw new Error(`Token refresh failed: ${error.message || 'Unknown error'}`);
+      // Handle common OAuth errors more gracefully
+      if (error.message === 'invalid_grant') {
+        logger.info(`OAuth refresh token expired/invalid for user ${userId}, requiring re-authentication`);
+        // Mark tokens as inactive when refresh fails due to invalid grant
+        try {
+          await this.deactivateUserTokens(userId);
+        } catch (deactivateError) {
+          logger.warn('Failed to deactivate invalid tokens:', deactivateError.message);
+        }
+        throw new Error('Refresh token expired - re-authentication required');
+      } else {
+        logger.error('Error refreshing access token:', error.message || 'Unknown error');
+        logger.error('Full refresh error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack?.substring(0, 500)
+        });
+        throw new Error(`Token refresh failed: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
@@ -495,8 +507,8 @@ class YouTubeOAuthService {
         try {
           await this.refreshAccessToken(userId);
           return { valid: true, refreshed: true };
-        // eslint-disable-next-line no-unused-vars
-        } catch (_refreshError) {
+        } catch (refreshError) {
+          logger.debug(`Token refresh failed for user ${userId}: ${refreshError.message}`);
           return { valid: false, reason: 'Token expired and refresh failed' };
         }
       }
