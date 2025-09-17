@@ -1046,16 +1046,19 @@ class VideosController {
 
       // Use the new video_content table architecture instead of columns in videos table
       // First, find the content type in the content_types table
+      // Handle 'transcript' alias for 'transcript_text'
+      const lookupContentType = contentType === 'transcript' ? 'transcript_text' : contentType;
+
       const contentTypeQuery = `
-        SELECT id, key, label 
-        FROM content_types 
+        SELECT id, key, label
+        FROM content_types
         WHERE key = $1 AND is_active = true
       `;
 
-      const contentTypeResult = await database.query(contentTypeQuery, [contentType]);
+      const contentTypeResult = await database.query(contentTypeQuery, [lookupContentType]);
 
       if (contentTypeResult.rows.length === 0) {
-        logger.error(`Content type '${contentType}' not found in content_types table`);
+        logger.error(`Content type '${lookupContentType}' not found in content_types table`);
         return res.status(400).json({
           success: false,
           message: 'Invalid content type'

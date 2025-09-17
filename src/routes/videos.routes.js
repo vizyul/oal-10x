@@ -227,8 +227,11 @@ router.get('/:id/content/:contentType',
   param('contentType')
     .custom(async (value) => {
       const availableTypes = await getAvailableContentTypes();
-      if (!availableTypes.includes(value)) {
-        throw new Error(`Invalid content type. Available types: ${availableTypes.join(', ')}`);
+      // Allow 'transcript' as an alias for 'transcript_text' for backward compatibility
+      const isValidType = availableTypes.includes(value) ||
+                         (value === 'transcript' && availableTypes.includes('transcript_text'));
+      if (!isValidType) {
+        throw new Error(`Invalid content type. Available types: ${availableTypes.join(', ')}, transcript`);
       }
       return true;
     }),
