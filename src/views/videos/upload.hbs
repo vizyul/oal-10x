@@ -1114,6 +1114,9 @@ Upgrade your plan to import more videos.`);
       availableContentTypes.forEach(contentType => {
         selectedContentTypes.add(contentType.key);
       });
+
+      // Ensure transcript is always included (redundant but explicit)
+      selectedContentTypes.add('transcript_text');
       updateContentSelectionUI();
 
     } catch (error) {
@@ -1128,35 +1131,41 @@ Upgrade your plan to import more videos.`);
     // Ensure error message is hidden when we successfully render content
     contentTypeError.classList.add('hidden');
 
-    contentTypesGrid.innerHTML = availableContentTypes.map(contentType => `
-      <div class="content-type-compact">
-        <label class="content-type-compact-label">
-          <input 
-            type="checkbox" 
-            id="content-${contentType.key}"
-            value="${contentType.key}"
-            data-content-type="${contentType.key}"
-            checked
-          />
-          <div class="content-type-compact-content">
-            <span class="content-type-compact-icon">${contentType.icon}</span>
-            <span class="content-type-compact-text">${contentType.label}</span>
-            <span class="content-type-compact-check">✓</span>
-          </div>
-        </label>
-      </div>
-    `).join('');
+    contentTypesGrid.innerHTML = availableContentTypes.map(contentType => {
+      const isTranscript = contentType.key === 'transcript_text';
+
+      return `
+        <div class="content-type-compact ${isTranscript ? 'transcript-always-enabled' : ''}">
+          <label class="content-type-compact-label">
+            <input
+              type="checkbox"
+              id="content-${contentType.key}"
+              value="${contentType.key}"
+              data-content-type="${contentType.key}"
+              checked
+              ${isTranscript ? 'disabled title="Transcript is always included - required for AI content generation"' : ''}
+            />
+            <div class="content-type-compact-content">
+              <span class="content-type-compact-icon">${contentType.icon}</span>
+              <span class="content-type-compact-text">${contentType.label}</span>
+              <span class="content-type-compact-check">✓</span>
+            </div>
+          </label>
+        </div>
+      `;
+    }).join('');
 
     // Initialize all labels as checked and add event listeners
     availableContentTypes.forEach(contentType => {
       const checkbox = document.getElementById(`content-${contentType.key}`);
       const label = checkbox?.closest('.content-type-compact-label');
-      
+
       if (label) {
         label.classList.add('checked');
       }
-      
-      if (checkbox) {
+
+      if (checkbox && contentType.key !== 'transcript_text') {
+        // Only add change listener to non-transcript types
         checkbox.addEventListener('change', function() {
           handleContentTypeChange(contentType.key);
         });
@@ -1192,7 +1201,8 @@ Upgrade your plan to import more videos.`);
     availableContentTypes.forEach(contentType => {
       selectedContentTypes.add(contentType.key);
       const checkbox = document.getElementById(`content-${contentType.key}`);
-      if (checkbox) {
+      if (checkbox && contentType.key !== 'transcript_text') {
+        // Don't change transcript checkbox state - it's disabled
         checkbox.checked = true;
         const label = checkbox.closest('.content-type-compact-label');
         label.classList.add('checked');
@@ -1202,10 +1212,14 @@ Upgrade your plan to import more videos.`);
   });
 
   clearAllContentBtn.addEventListener('click', function() {
+    // Clear all except transcript
     selectedContentTypes.clear();
+    selectedContentTypes.add('transcript_text'); // Always keep transcript
+
     availableContentTypes.forEach(contentType => {
       const checkbox = document.getElementById(`content-${contentType.key}`);
-      if (checkbox) {
+      if (checkbox && contentType.key !== 'transcript_text') {
+        // Don't change transcript checkbox state - it's disabled and always checked
         checkbox.checked = false;
         const label = checkbox.closest('.content-type-compact-label');
         label.classList.remove('checked');

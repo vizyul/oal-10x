@@ -68,10 +68,15 @@ io.on('connection', (socket) => {
 
   // Handle status request
   socket.on('request-status', () => {
+    logger.info(`Socket.IO: User ${userId} requested processing status`);
     const processingVideos = processingStatusService.getUserProcessingVideos(userId);
+    logger.info(`Socket.IO: Sending ${processingVideos.length} processing videos to user ${userId}`);
     socket.emit('processing-status-batch', processingVideos);
   });
 });
+
+// Make io available to the app
+app.set('io', io);
 
 // Handle server startup
 const startServer = () => {
@@ -110,7 +115,13 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  logger.error('💥 Unhandled Rejection stack:', reason.stack);
+  // Temporarily don't exit during debugging
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  } else {
+    logger.warn('🚧 Development mode: Server continuing despite unhandled rejection');
+  }
 });
 
 // Start the server

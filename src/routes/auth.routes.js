@@ -257,81 +257,117 @@ router.get('/apple', (req, res, next) => {
 // Apple OAuth uses POST for callback, not GET
 router.post('/apple/callback', async (req, res, _next) => {
   const oauthService = require('../services/oauth.service');
-  logger.info('Apple OAuth callback route hit', {
+  logger.info('🍎 APPLE OAUTH CALLBACK STARTED', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
     query: req.query,
     body: req.body,
     bodyKeys: Object.keys(req.body || {}),
     hasIdToken: !!req.body?.id_token,
     hasUser: !!req.body?.user,
+    hasState: !!req.body?.state,
+    hasCode: !!req.body?.code,
     headers: {
       'user-agent': req.get('User-Agent'),
-      'content-type': req.get('Content-Type')
+      'content-type': req.get('Content-Type'),
+      'referer': req.get('Referer'),
+      'origin': req.get('Origin')
+    },
+    cookies: {
+      hasAuthToken: !!req.cookies?.auth_token,
+      sessionKeys: Object.keys(req.cookies || {})
     }
   });
 
   oauthService.handleAppleCallback()(req, res, async (err) => {
     if (err) {
-      logger.error('Apple OAuth callback error:', {
+      logger.error('🍎 APPLE OAUTH CALLBACK ERROR:', {
+        timestamp: new Date().toISOString(),
         error: err.message,
         stack: err.stack,
         query: req.query,
-        body: req.body
+        body: req.body,
+        errorType: err.constructor.name
       });
 
       // Special handling for Apple subsequent login issues
       if (err.message && err.message.includes('subsequent login')) {
+        logger.warn('🍎 Apple subsequent login detected - redirecting to re-auth');
         return res.redirect('/auth/sign-in?error=apple_reauth_required&message=' + encodeURIComponent('Apple Sign In requires re-authentication. Please try signing in again.'));
       }
 
+      logger.warn('🍎 Apple OAuth failed - redirecting to sign-in with error');
       return res.redirect('/auth/sign-in?error=oauth_failed');
     }
 
-    logger.info('Apple OAuth callback success', {
+    logger.info('🍎 APPLE OAUTH CALLBACK SUCCESS', {
+      timestamp: new Date().toISOString(),
       user: req.user ? 'User object present' : 'No user object',
       pendingVerification: req.user?.pendingVerification,
+      pendingAppleReauth: req.user?.pendingAppleReauth,
       userId: req.user?.id,
       userEmail: req.user?.email,
+      userStatus: req.user?.status,
+      userEmailVerified: req.user?.emailVerified,
       userKeys: req.user ? Object.keys(req.user) : []
     });
 
     if (req.user && req.user.pendingAppleReauth) {
-      logger.info('Apple OAuth requires re-authentication - redirecting with message');
+      logger.info('🍎 Apple OAuth requires re-authentication - redirecting with message');
       return res.redirect('/auth/sign-in?error=apple_reauth_required&message=' + encodeURIComponent(req.user.message));
     }
 
     if (req.user && req.user.pendingVerification) {
-      logger.info(`Redirecting to Apple social verification for email: ${req.user.email}`);
+      logger.info(`🍎 Redirecting to Apple social verification for email: ${req.user.email}`);
       const redirectUrl = `/auth/social-verify?email=${encodeURIComponent(req.user.email)}&provider=apple${req.user.isApplePrivateEmail ? '&privateEmail=true' : ''}`;
       return res.redirect(redirectUrl);
     }
 
     if (req.user) {
       // Debug log the user object before token generation
-      logger.info('Apple OAuth callback - user object for token generation:', {
+      logger.info('🍎 APPLE OAUTH - Preparing for login:', {
         id: req.user.id,
         email: req.user.email,
         emailVerified: req.user.emailVerified,
         status: req.user.status,
         firstName: req.user.firstName,
+        subscriptionTier: req.user.subscription_tier,
         userKeys: Object.keys(req.user)
       });
 
-      // Set JWT token in cookie and redirect to dashboard
-      const token = authService.generateToken(req.user.id, req.user.email, req.user);
-      res.cookie('auth_token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
+      try {
+        // Set JWT token in cookie and redirect to dashboard
+        const token = authService.generateToken(req.user.id, req.user.email, req.user);
+        logger.info(`🍎 JWT token generated successfully (length: ${token.length})`);
 
-      // Record OAuth login session
-      await sessionService.recordLogin(req.user, req, 'apple');
+        res.cookie('auth_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+        logger.info('🍎 Auth cookie set successfully');
 
-      logger.info(`Apple OAuth user logged in successfully: ${req.user.email}`);
-      return res.redirect(getPostAuthRedirectUrl(req.user));
+        // Record OAuth login session
+        await sessionService.recordLogin(req.user, req, 'apple');
+        logger.info('🍎 Session recorded successfully');
+
+        const redirectUrl = getPostAuthRedirectUrl(req.user);
+        logger.info(`🍎 APPLE OAUTH LOGIN SUCCESSFUL - redirecting to: ${redirectUrl}`);
+        return res.redirect(redirectUrl);
+
+      } catch (loginError) {
+        logger.error('🍎 Error during Apple OAuth login completion:', {
+          error: loginError.message,
+          stack: loginError.stack,
+          userId: req.user.id,
+          userEmail: req.user.email
+        });
+        return res.redirect('/auth/sign-in?error=login_completion_failed');
+      }
     }
 
-    logger.warn('Apple OAuth callback completed but no user found');
+    logger.warn('🍎 APPLE OAUTH CALLBACK COMPLETED BUT NO USER FOUND');
     res.redirect('/auth/sign-in?error=oauth_failed');
   });
 });
