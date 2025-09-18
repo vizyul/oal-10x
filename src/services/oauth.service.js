@@ -176,31 +176,10 @@ class OAuthService {
         }
 
         if (!appleUserId) {
-          // Final fallback: For Apple subsequent logins, try to find the most recent Apple user
-          logger.warn('No Apple user ID found - checking for recent Apple users as fallback');
+          // SECURITY FIX: Never use fallback to most recent user - this is a serious security vulnerability
+          logger.error('SECURITY: Apple authentication failed - no user ID found and no valid fallback available');
 
-          try {
-            // Find the most recent Apple user (assumes single Apple user or most recent login)
-            const recentAppleUser = await authService.findMostRecentAppleUser();
-
-            if (recentAppleUser) {
-              logger.info(`Using most recent Apple user as fallback: ${recentAppleUser.email}`);
-              return done(null, recentAppleUser);
-            } else {
-              logger.warn('No Apple users found in database - this might be first-time login treated as subsequent');
-              // Instead of throwing error, create a special user object that triggers re-auth flow
-              return done(null, {
-                pendingAppleReauth: true,
-                provider: 'apple',
-                message: 'Apple Sign In requires re-authentication. Please try signing in again.',
-                code: req.body.code || req.query.code,
-                state: req.body.state || req.query.state
-              });
-            }
-          } catch (fallbackError) {
-            logger.error('Fallback Apple user lookup failed:', fallbackError);
-            return done(new Error('Apple subsequent login failed. Please try signing up again.'), null);
-          }
+          return done(new Error('Apple authentication failed: Unable to identify user. Please try signing in again or contact support if this persists.'), null);
         }
 
         // Find existing user by Apple ID

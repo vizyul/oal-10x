@@ -143,35 +143,9 @@ class AuthService {
     }
   }
 
-  /**
-   * Find most recent Apple user (fallback for Apple subsequent login issues)
-   * @returns {Promise<Object|null>} Most recent Apple user or null
-   */
-  async findMostRecentAppleUser() {
-    try {
-      logger.info('Finding most recent Apple user as fallback');
-
-      // Get the most recent Apple user
-      const appleUsers = await UserModel.getActiveUsers({
-        provider: 'apple',
-        limit: 1,
-        orderBy: 'updated_at DESC'
-      });
-
-      if (!appleUsers || appleUsers.length === 0) {
-        logger.info('No active Apple users found');
-        return null;
-      }
-
-      const userRecord = this.formatUserRecord(appleUsers[0]);
-      logger.info(`Found most recent Apple user: ${userRecord.email}`);
-
-      return userRecord;
-    } catch (error) {
-      logger.error('Error finding most recent Apple user:', error);
-      throw new Error('Failed to find Apple user');
-    }
-  }
+  // REMOVED: findMostRecentAppleUser() function
+  // This was a serious security vulnerability that could log users into wrong accounts.
+  // Apple OAuth now properly fails when user identification is not possible.
 
   /**
    * Find user by ID
