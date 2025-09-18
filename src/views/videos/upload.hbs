@@ -86,12 +86,7 @@
         <p>Connect your YouTube account to select and import videos</p>
       </div>
       
-      <!-- Amplify button above the YouTube auth section -->
-      <div class="amplify-button-container">
-        <button type="button" id="import-selected-btn" class="btn btn-primary btn-large hidden">
-          Amplify Selected Videos
-        </button>
-      </div>
+      <!-- Amplify button moved to floating position -->
 
       <div id="youtube-auth-section">
         <div id="youtube-not-connected" class="youtube-connection-status">
@@ -189,6 +184,17 @@ https://www.youtube.com/watch?v=..."
     </div>
   </div>
 
+  <!-- Floating Action Button -->
+  <div id="floating-amplify-btn" class="floating-action-button hidden">
+    <button type="button" id="import-selected-btn" class="floating-btn">
+      <div class="floating-btn-icon">⚡</div>
+      <div class="floating-btn-content">
+        <div class="floating-btn-text">Amplify Videos</div>
+        <div class="floating-btn-count" id="floating-btn-count">0 selected</div>
+      </div>
+    </button>
+  </div>
+
   <div id="upload-progress" class="upload-progress hidden">
     <div class="progress-container">
       <h4 id="progress-title">Processing Videos...</h4>
@@ -268,23 +274,55 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const { urls, errors, invalidUrls, duplicates } = parseURLs(text);
-    console.log('parseURLs result:', { urls, errors, invalidUrls, duplicates });
+    console.log('parseURLs result:', {
+      urls: urls.length,
+      urlsArray: urls,
+      errors: errors.length,
+      invalidUrls: invalidUrls.length,
+      duplicates: duplicates.length,
+      duplicatesArray: duplicates
+    });
 
     // Check subscription limits before processing
     const currentSelected = selectedVideos.size;
     const maxAllowed = subscriptionLimits ? subscriptionLimits.remainingVideos : Infinity;
     const availableSlots = maxAllowed - currentSelected;
 
+    console.log('Subscription check:', {
+      currentSelected,
+      maxAllowed,
+      availableSlots,
+      urlsLength: urls.length,
+      subscriptionLimits
+    });
+
     if (subscriptionLimits && urls.length > availableSlots) {
-      showUrlError(`You can only import ${availableSlots} more video(s) with your current subscription. You tried to add ${urls.length} URLs.`);
+      console.log('Subscription limit hit - adding only', availableSlots, 'URLs');
+      const droppedCount = urls.length - availableSlots;
+      const droppedUrls = urls.slice(availableSlots);
+
+      // Show prominent error message with details
+      showUrlError(`⚠️ SUBSCRIPTION LIMIT REACHED
+
+You tried to import ${urls.length} videos, but your plan allows only ${availableSlots} more.
+
+✅ Added: ${availableSlots} videos
+❌ Dropped: ${droppedCount} videos
+
+Dropped URLs:
+${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
+
+Upgrade your plan to import more videos.`);
+
       // Only add what we can
       urls.slice(0, availableSlots).forEach(url => selectedUrls.add(url));
     } else {
+      console.log('Adding all', urls.length, 'valid URLs');
       // Add all valid URLs
       urls.forEach(url => selectedUrls.add(url));
     }
 
-    console.log('selectedUrls after processing:', selectedUrls);
+    console.log('selectedUrls after processing:', selectedUrls.size, 'URLs:', Array.from(selectedUrls));
 
     // Show detailed messages for errors and duplicates
     let hasIssues = errors.length > 0 || duplicates.length > 0;
@@ -674,21 +712,18 @@ document.addEventListener('DOMContentLoaded', function() {
   function updateSelectionUI() {
     const selectionCount = document.querySelector('.selection-count');
     const totalSelected = selectedVideos.size + selectedUrls.size;
+    const floatingAmplifyBtn = document.getElementById('floating-amplify-btn');
+    const floatingBtnCount = document.getElementById('floating-btn-count');
+
     console.log('updateSelectionUI called - selectedVideos.size:', selectedVideos.size, 'selectedUrls.size:', selectedUrls.size, 'totalSelected:', totalSelected);
-    console.log('DOM elements found:', {
-      videoGrid: !!videoGrid,
-      importSelectedBtn: !!importSelectedBtn,
-      videoGridClasses: videoGrid?.className,
-      importBtnClasses: importSelectedBtn?.className
-    });
 
     // Show video grid only when there are YouTube OAuth videos selected
     if (selectedVideos.size > 0) {
       console.log('Showing video grid for YouTube videos');
-      videoGrid.classList.remove('hidden');
+      videoGrid?.classList.remove('hidden');
     } else {
       console.log('Hiding video grid - no YouTube videos selected');
-      videoGrid.classList.add('hidden');
+      videoGrid?.classList.add('hidden');
     }
 
     let countText = '';
@@ -706,52 +741,23 @@ document.addEventListener('DOMContentLoaded', function() {
       selectionCount.textContent = countText;
     }
 
+    // Update floating action button
     if (totalSelected > 0) {
-      console.log('Showing import button');
-      if (importSelectedBtn) {
-        importSelectedBtn.classList.remove('hidden');
+      console.log('Showing floating amplify button');
+      floatingAmplifyBtn?.classList.remove('hidden');
 
-        // Check parent container hierarchy
-        const parentContainer = importSelectedBtn.parentElement;
-        const grandParent = parentContainer?.parentElement;
-        const greatGrandParent = grandParent?.parentElement;
-
-        console.log('DOM hierarchy:', {
-          parent: {
-            className: parentContainer?.className,
-            offsetHeight: parentContainer?.offsetHeight,
-            offsetWidth: parentContainer?.offsetWidth,
-            display: parentContainer ? window.getComputedStyle(parentContainer).display : 'none'
-          },
-          grandParent: {
-            className: grandParent?.className,
-            offsetHeight: grandParent?.offsetHeight,
-            offsetWidth: grandParent?.offsetWidth,
-            display: grandParent ? window.getComputedStyle(grandParent).display : 'none'
-          },
-          greatGrandParent: {
-            className: greatGrandParent?.className,
-            offsetHeight: greatGrandParent?.offsetHeight,
-            offsetWidth: greatGrandParent?.offsetWidth,
-            display: greatGrandParent ? window.getComputedStyle(greatGrandParent).display : 'none'
-          }
-        });
-
-        console.log('Button after removing hidden class:', {
-          classes: importSelectedBtn.className,
-          style: importSelectedBtn.style.cssText,
-          offsetHeight: importSelectedBtn.offsetHeight,
-          offsetWidth: importSelectedBtn.offsetWidth,
-          display: window.getComputedStyle(importSelectedBtn).display,
-          visibility: window.getComputedStyle(importSelectedBtn).visibility,
-          position: window.getComputedStyle(importSelectedBtn).position
-        });
-      } else {
-        console.error('importSelectedBtn not found!');
+      // Update count text in floating button
+      if (floatingBtnCount) {
+        const maxVideos = subscriptionLimits ? subscriptionLimits.remainingVideos : Infinity;
+        if (subscriptionLimits && totalSelected >= maxVideos) {
+          floatingBtnCount.textContent = `${totalSelected} selected (limit reached)`;
+        } else {
+          floatingBtnCount.textContent = `${totalSelected} selected`;
+        }
       }
     } else {
-      console.log('Hiding import button');
-      importSelectedBtn?.classList.add('hidden');
+      console.log('Hiding floating amplify button');
+      floatingAmplifyBtn?.classList.add('hidden');
     }
   }
   

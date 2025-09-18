@@ -1416,21 +1416,110 @@
   margin: 1rem 0;
 }
 
-/* Amplify Button Container */
-.amplify-button-container {
+/* Floating Action Button */
+.floating-action-button {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.floating-action-button.hidden {
+  opacity: 0;
+  transform: translateY(100px);
+  pointer-events: none;
+}
+
+.floating-btn {
   display: flex;
-  justify-content: center;
-  margin: 1rem 0;
-  padding: 1rem;
-  min-height: 60px; /* Ensure container has height */
   align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 16px 24px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+  transition: all 0.2s ease;
+  animation: gentle-pulse 3s ease-in-out infinite;
+}
+
+.floating-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(16, 185, 129, 0.5);
+  animation: none;
+}
+
+.floating-btn:active {
+  transform: translateY(-1px);
+}
+
+.floating-btn-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.floating-btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.floating-btn-text {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.floating-btn-count {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* Gentle pulse animation */
+@keyframes gentle-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6);
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .floating-action-button {
+    bottom: 15px;
+    left: 15px;
+  }
+
+  .floating-btn {
+    padding: 14px 20px;
+    border-radius: 40px;
+  }
+
+  .floating-btn-icon {
+    font-size: 1.3rem;
+  }
+
+  .floating-btn-text {
+    font-size: 0.9rem;
+  }
+
+  .floating-btn-count {
+    font-size: 0.8rem;
+  }
 }
 
 /* Video Processing Progress Bars */
 .progress-section {
-  flex: 1;
-  margin: 0 1rem;
-  max-width: 300px;
+  width: 100%; /* Take full width of grid section */
+  margin: 0; /* Remove margins for grid layout */
 }
 
 .progress-bar-container {
@@ -1473,11 +1562,12 @@
 }
 
 .progress-percentage {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 1.675rem;
+  /* font-weight: 600; */
   color: #374151;
   min-width: 3rem;
   text-align: right;
+  margin-bottom: 20px;
 }
 
 .video-title-stretch {

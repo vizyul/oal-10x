@@ -398,7 +398,7 @@ class ProcessingStatusManager {
     return `
       <div class="video-accordion" data-video-id="${video.videoId}">
         <div class="accordion-header-wrapper">
-          <button class="accordion-header" data-accordion-toggle="${video.videoId}">
+          <div class="accordion-section-1">
             <div class="video-info">
               <div class="video-title-stretch" title="${videoTitle}">${videoTitle}</div>
               <div class="video-meta">
@@ -406,6 +406,8 @@ class ProcessingStatusManager {
                 <span class="video-progress">${overallProgress.completed}/${overallProgress.total} completed</span>
               </div>
             </div>
+          </div>
+          <div class="accordion-section-2">
             <div class="progress-section">
               <div class="progress-bar-container">
                 <div class="progress-bar">
@@ -414,11 +416,20 @@ class ProcessingStatusManager {
                 <span class="progress-percentage">${Math.round((overallProgress.completed / overallProgress.total) * 100)}%</span>
               </div>
             </div>
-            <div class="accordion-chevron">▼</div>
-          </button>
-          <button class="cancel-button" data-cancel-video="${video.videoId}" title="Cancel processing">
-            Cancel
-          </button>
+          </div>
+          <div class="accordion-section-3">
+            <button class="accordion-toggle" data-accordion-toggle="${video.videoId}" title="Expand/Collapse details">
+              <div class="accordion-chevron">▼</div>
+            </button>
+          </div>
+          <div class="accordion-section-4">
+            <button class="cancel-button"
+                    data-cancel-video="${video.videoId}"
+                    title="${overallProgress.completed === overallProgress.total ? 'Processing complete - cannot cancel' : 'Cancel processing'}"
+                    ${overallProgress.completed === overallProgress.total ? 'disabled' : ''}>
+              Cancel
+            </button>
+          </div>
         </div>
         <div class="accordion-content hidden" id="accordion-${video.videoId}">
           <ul class="processing-list">
@@ -458,11 +469,11 @@ class ProcessingStatusManager {
 
   setupAccordionEventListeners() {
     // Set up accordion toggle listeners
-    const accordionHeaders = document.querySelectorAll('[data-accordion-toggle]');
-    accordionHeaders.forEach(header => {
-      header.addEventListener('click', (e) => {
+    const accordionToggles = document.querySelectorAll('[data-accordion-toggle]');
+    accordionToggles.forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
         e.preventDefault();
-        const videoId = header.getAttribute('data-accordion-toggle');
+        const videoId = toggle.getAttribute('data-accordion-toggle');
         this.toggleVideoAccordion(videoId);
       });
     });
@@ -472,6 +483,10 @@ class ProcessingStatusManager {
     cancelButtons.forEach(button => {
       button.addEventListener('click', (e) => {
         e.preventDefault();
+        // Don't allow canceling if button is disabled (100% complete)
+        if (button.disabled) {
+          return;
+        }
         const videoId = button.getAttribute('data-cancel-video');
         this.cancelVideoProcessing(videoId);
       });
@@ -493,22 +508,23 @@ class ProcessingStatusManager {
 
   toggleVideoAccordion(videoId, forceExpand = false) {
     const accordionContent = document.getElementById(`accordion-${videoId}`);
-    const header = accordionContent?.previousElementSibling?.querySelector('.accordion-header');
-    const chevron = header?.querySelector('.accordion-chevron');
-    
+    const wrapper = accordionContent?.previousElementSibling;
+    const chevron = wrapper?.querySelector('.accordion-chevron');
+    const toggle = wrapper?.querySelector('.accordion-toggle');
+
     if (accordionContent) {
       const isCurrentlyOpen = !accordionContent.classList.contains('hidden');
-      
+
       if (forceExpand || !isCurrentlyOpen) {
         // Expand
         accordionContent.classList.remove('hidden');
         if (chevron) chevron.textContent = '▲';
-        header?.classList.add('expanded');
+        toggle?.classList.add('expanded');
       } else if (!forceExpand && isCurrentlyOpen) {
         // Collapse (only if not forcing expand)
         accordionContent.classList.add('hidden');
         if (chevron) chevron.textContent = '▼';
-        header?.classList.remove('expanded');
+        toggle?.classList.remove('expanded');
       }
     }
   }
@@ -1501,39 +1517,115 @@ async function populateProcessingTable() {
   border-bottom: none;
 }
 
-/* Accordion Header Wrapper */
+/* Accordion Header Wrapper - Four responsive divs */
 .accordion-header-wrapper {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  grid-template-areas: "section1 section2 section3 section4";
   background-color: #f8f9fa;
   border: none;
-}
-
-/* Accordion Header Button */
-.accordion-header {
-  flex: 1;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start; /* Change from center to flex-start for multi-line titles */
+  align-items: center;
   padding: 15px 20px;
+  gap: 15px;
+  min-height: 60px;
+}
+
+/* Section 1: Video Title and Meta */
+.accordion-section-1 {
+  grid-area: section1;
+  min-width: 0; /* Allow shrinking */
+  /* Removed max-width to allow full title display on desktop */
+}
+
+/* Section 2: Progress Bar */
+.accordion-section-2 {
+  grid-area: section2;
+  min-width: 150px; /* Minimum width for progress bar */
+  display: flex;
+  align-items: center; /* Center progress bar vertically */
+  margin-top: 10px; /* Move progress bar down 10 pixels */
+}
+
+/* Section 3: Expand/Collapse Button */
+.accordion-section-3 {
+  grid-area: section3;
+}
+
+/* Section 4: Cancel Button */
+.accordion-section-4 {
+  grid-area: section4;
+}
+
+/* Accordion Toggle Button (replaces the old accordion-header) */
+.accordion-toggle {
   background: none;
-  border: none;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 16px;
-  text-align: left;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  color: #6b7280;
 }
 
-.accordion-header:hover {
-  background-color: #e9ecef;
+.accordion-toggle:hover {
+  border-color: var(--accent-color, #C39D43);
+  color: var(--accent-color, #C39D43);
+  background-color: rgba(195, 157, 67, 0.1);
 }
 
-.accordion-header.expanded {
-  background-color: #e9ecef;
+.accordion-toggle.expanded {
+  border-color: var(--accent-color, #C39D43);
+  color: var(--accent-color, #C39D43);
+  background-color: rgba(195, 157, 67, 0.2);
+}
+
+/* Mobile responsive layout - stack vertically */
+@media (max-width: 768px) {
+  .accordion-header-wrapper {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "section1"
+      "section2"
+      "section3"
+      "section4";
+    gap: 10px;
+    padding: 15px;
+    align-items: stretch;
+  }
+
+  .accordion-section-1,
+  .accordion-section-2,
+  .accordion-section-3,
+  .accordion-section-4 {
+    width: 100%;
+  }
+
+  .accordion-section-2 {
+    min-width: auto;
+    max-width: none;
+    margin-top: 0; /* Reset margin on mobile for proper stacking */
+  }
+
+  .accordion-section-3,
+  .accordion-section-4 {
+    display: flex;
+    justify-content: center;
+  }
+
+  .accordion-toggle,
+  .cancel-button {
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto;
+  }
 }
 
 /* Video Info */
 .video-info {
-  flex: 0.2;
   min-width: 0; /* Allow flex item to shrink smaller than its content */
 }
 
@@ -1567,11 +1659,8 @@ async function populateProcessingTable() {
 /* Chevron */
 .accordion-chevron {
   font-size: 14px;
-  color: #718096;
-  margin-left: 15px;
-  margin-top: 2px; /* Add slight top margin to align with first line of title */
+  color: inherit;
   transition: transform 0.2s ease;
-  flex-shrink: 0; /* Prevent chevron from shrinking */
 }
 
 /* Cancel Button */
@@ -1587,8 +1676,20 @@ async function populateProcessingTable() {
   border-radius: 0;
 }
 
-.cancel-button:hover {
+.cancel-button:hover:not(:disabled) {
   background-color: #c82333;
+}
+
+.cancel-button:disabled {
+  background-color: #6c757d;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cancel-button:disabled:hover {
+  background-color: #6c757d;
+  transform: none;
 }
 
 /* Accordion Content */
