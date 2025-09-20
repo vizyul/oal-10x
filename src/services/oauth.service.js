@@ -208,6 +208,33 @@ class OAuthService {
           }
         }
 
+        // Method 5: Try to decode the profile if it's a JWT token string
+        if (!appleUserId && profile && typeof profile === 'string' && profile.startsWith('eyJ')) {
+          try {
+            logger.info('Method 5 - Profile appears to be a JWT token, attempting to decode');
+            const jwt = require('jsonwebtoken');
+            // Decode without verification to inspect content (Apple uses different keys)
+            const decoded = jwt.decode(profile);
+            logger.info('Method 5 - Decoded profile JWT token:', decoded);
+
+            if (decoded && decoded.sub) {
+              appleUserId = decoded.sub;
+              logger.info('Method 5 - Found Apple user ID in profile JWT token:', appleUserId);
+            }
+            if (decoded && decoded.email) {
+              logger.info('Method 5 - Found email in profile JWT token, will lookup by email:', decoded.email);
+              const existingUserByEmail = await authService.findUserByEmail(decoded.email);
+
+              if (existingUserByEmail) {
+                logger.info(`Method 5 - Found existing Apple user by email: ${existingUserByEmail.email}`);
+                return done(null, existingUserByEmail);
+              }
+            }
+          } catch (tokenError) {
+            logger.warn('Method 5 - Failed to decode profile JWT token:', tokenError.message);
+          }
+        }
+
         // SECURITY FIX: Removed dangerous hardcoded email fallback that was matching all Apple users
         // to dwight.taylor@vizyul.com account
 
