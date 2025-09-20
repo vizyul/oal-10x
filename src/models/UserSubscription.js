@@ -17,7 +17,6 @@ class UserSubscription extends BaseModel {
       users_id: { required: true, type: 'integer' },
       stripe_subscription_id: { required: false, type: 'string' },
       plan_name: { required: false, type: 'string' },
-      subscription_tier: { required: false, type: 'string', default: 'free' },
       price_id: { required: false, type: 'string' },
       status: { required: false, type: 'string', default: 'active' },
       current_period_start: { required: false, type: 'date' },
@@ -28,7 +27,7 @@ class UserSubscription extends BaseModel {
     };
 
     // Define allowed values
-    this.allowedTiers = ['free', 'premium', 'enterprise'];
+    // Note: allowedTiers removed - subscription_tier is now on users table
     this.allowedStatuses = ['active', 'cancelled', 'past_due', 'unpaid', 'trialing'];
   }
 
@@ -121,18 +120,13 @@ class UserSubscription extends BaseModel {
 
       // Set defaults
       const processedData = {
-        subscription_tier: 'free',
         status: 'active',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         ...subscriptionData
       };
 
-      // Validate tier and status
-      if (processedData.subscription_tier && !this.allowedTiers.includes(processedData.subscription_tier)) {
-        throw new Error(`Invalid subscription tier. Allowed values: ${this.allowedTiers.join(', ')}`);
-      }
-
+      // Validate status
       if (processedData.status && !this.allowedStatuses.includes(processedData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
       }
@@ -162,10 +156,7 @@ class UserSubscription extends BaseModel {
       // Set updated timestamp
       safeUpdateData.updated_at = new Date().toISOString();
 
-      // Validate tier and status if provided
-      if (safeUpdateData.subscription_tier && !this.allowedTiers.includes(safeUpdateData.subscription_tier)) {
-        throw new Error(`Invalid subscription tier. Allowed values: ${this.allowedTiers.join(', ')}`);
-      }
+      // Validate status if provided
 
       if (safeUpdateData.status && !this.allowedStatuses.includes(safeUpdateData.status)) {
         throw new Error(`Invalid status. Allowed values: ${this.allowedStatuses.join(', ')}`);
@@ -225,8 +216,10 @@ class UserSubscription extends BaseModel {
    */
   async getUserTier(userId) {
     try {
-      const subscription = await this.getActiveByUserId(userId);
-      return subscription ? subscription.subscription_tier : 'free';
+      // Note: subscription_tier is now stored on the users table, not user_subscriptions
+      // This method should probably be moved to the User model
+      logger.warn('getUserTier called on UserSubscription model - subscription_tier is now on users table');
+      return 'free'; // Default fallback
     } catch (error) {
       logger.error(`Error getting user tier for user ${userId}:`, error);
       return 'free'; // Default to free on error
@@ -247,10 +240,7 @@ class UserSubscription extends BaseModel {
       errors.push('users_id must be a valid integer');
     }
 
-    // Enum validation
-    if (data.subscription_tier && !this.allowedTiers.includes(data.subscription_tier)) {
-      errors.push(`subscription_tier must be one of: ${this.allowedTiers.join(', ')}`);
-    }
+    // Note: subscription_tier validation removed - field is now on users table
 
     if (data.status && !this.allowedStatuses.includes(data.status)) {
       errors.push(`status must be one of: ${this.allowedStatuses.join(', ')}`);

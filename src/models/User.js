@@ -17,7 +17,10 @@ class User extends BaseModel {
       'social_links', 'preferences', 'metadata', 'stripe_customer_id',
       'subscription_status', 'subscription_plan', 'subscription_tier',
       'trial_end', 'two_factor_enabled', 'api_key_hash', 'session_token',
-      'magic_link_token', 'monthly_usage_limit', 'airtable_id'
+      'magic_link_token', 'monthly_usage_limit', 'airtable_id',
+      'email_verification_token', 'email_verification_expires', 'terms_accepted',
+      'privacy_accepted', 'registration_method', 'last_login', 'welcome_email_sent',
+      'welcome_email_sent_at'
     ];
 
     this.hidden = [

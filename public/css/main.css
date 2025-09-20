@@ -172,6 +172,11 @@ body {
   overflow: hidden;
 }
 
+.hero .container {
+  max-width: none;
+  width: 95%;
+}
+
 .hero::before {
   content: '';
   position: absolute;
@@ -197,7 +202,7 @@ body {
 }
 
 .hero-content {
-  max-width: 1080px;
+  width: 100%;
   margin: 0 auto;
   position: relative;
   z-index: 3;
@@ -213,6 +218,41 @@ body {
   color: var(--white);
 }
 
+/* Typing Effect Styles */
+.typing-line-1 {
+  display: inline;
+}
+
+.typing-line-2 {
+  display: inline;
+  color: #10b981;
+  position: relative;
+}
+
+.typing-line-2::after {
+  content: '|';
+  color: #10b981;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.typewriter-text {
+  overflow: hidden;
+  white-space: nowrap;
+  display: inline-block;
+  animation: typewriter 2s steps(40, end);
+}
+
 .hero-subtitle {
   font-size: clamp(1.1rem, 2.5vw, 1.4rem);
   color: var(--white);
@@ -222,6 +262,11 @@ body {
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.hero-type {
+  font-size: 2.7rem;
+  margin: -20px;
 }
 
 .hero-cta {
@@ -603,7 +648,8 @@ body {
     font-size: 1.1rem;
     margin-bottom: var(--space-6);
   }
-  
+
+
   .hero-cta {
     gap: 16px;
     flex-direction: column;
@@ -616,8 +662,17 @@ body {
   }
 }
 
+@media (max-width: 768px) {
+  .hero-content {
+    width: 100%;
+    margin: 0 var(--space-4);
+    padding: var(--space-12) var(--space-6);
+  }
+}
+
 @media (max-width: 480px) {
   .hero-content {
+    width: 100%;
     margin: 0 var(--space-2);
     padding: var(--space-8) var(--space-4);
   }
@@ -741,6 +796,12 @@ section:nth-child(even) {
   width: 60px;
   height: auto;
   filter: brightness(0);
+}
+
+.path-icon svg {
+  width: 50%;
+  height: auto;
+  color: #000000;
 }
 
 .path-title {

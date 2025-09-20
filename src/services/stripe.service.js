@@ -301,7 +301,7 @@ class StripeService {
     if (subscriptionRecord) {
       // Update existing record
       subscriptionRecord = await userSubscription.updateSubscription(subscriptionRecord.id, {
-        users_id: parseInt(userId),
+        users_id: pgUserId,
         stripe_customer_id: subscription.customer,
         status: subscription.status,
         current_period_start: startDate,
@@ -314,7 +314,7 @@ class StripeService {
     } else {
       // Create new subscription record
       subscriptionRecord = await userSubscription.createSubscription({
-        users_id: parseInt(userId),
+        users_id: pgUserId,
         stripe_customer_id: subscription.customer,
         stripe_subscription_id: subscription.id,
         status: subscription.status,
@@ -665,7 +665,7 @@ class StripeService {
 
       await subscriptionEvents.createEvent({
         stripe_event_id: event.id,
-        users_id: parseInt(userId),
+        users_id: pgUserId,
         event_type: event.type,
         stripe_subscription_id: event.data.object.id,
         event_data: JSON.stringify(event.data.object, null, 2),

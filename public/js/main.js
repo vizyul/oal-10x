@@ -193,11 +193,83 @@ class ProfileDropdown {
   }
 }
 
+// Typing Effect Manager
+class TypingEffect {
+  constructor() {
+    this.element = document.getElementById('typingText');
+    this.texts = [
+      'Funnel Scripts',
+      'Social Media Posts',
+      'Video Chapters',
+      'Blogs',
+      'Podcast Scripts',
+      'Discussion Guides',
+      'Quizzes',
+      'Newsletters',
+      'LinkedIn Articles'
+      
+    ];
+    this.currentIndex = 0;
+    this.isDeleting = false;
+    this.charIndex = 0;
+    this.typingSpeed = 100;
+    this.deletingSpeed = 50;
+    this.pauseDuration = 2000;
+
+    if (this.element) {
+      this.init();
+    }
+  }
+
+  init() {
+    // Start typing effect after a short delay
+    setTimeout(() => {
+      this.type();
+    }, 1000);
+  }
+
+  type() {
+    const currentText = this.texts[this.currentIndex];
+
+    if (this.isDeleting) {
+      // Deleting text
+      this.charIndex--;
+      this.element.textContent = currentText.substring(0, this.charIndex);
+
+      if (this.charIndex === 0) {
+        this.isDeleting = false;
+        this.currentIndex = (this.currentIndex + 1) % this.texts.length;
+        setTimeout(() => this.type(), 500);
+        return;
+      }
+
+      setTimeout(() => this.type(), this.deletingSpeed);
+    } else {
+      // Typing text
+      this.charIndex++;
+      this.element.textContent = currentText.substring(0, this.charIndex);
+
+      if (this.charIndex === currentText.length) {
+        setTimeout(() => {
+          this.isDeleting = true;
+          this.type();
+        }, this.pauseDuration);
+        return;
+      }
+
+      setTimeout(() => this.type(), this.typingSpeed);
+    }
+  }
+}
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize theme manager
   window.themeManager = new ThemeManager();
-  
+
   // Initialize profile dropdown
   window.profileDropdown = new ProfileDropdown();
+
+  // Initialize typing effect
+  window.typingEffect = new TypingEffect();
 });

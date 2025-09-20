@@ -208,17 +208,8 @@ class OAuthService {
           }
         }
 
-        // Method 5: Use the known user email as fallback for this specific development case
-        if (!appleUserId) {
-          logger.info('Method 5 - Final fallback: Looking up known Apple user by email');
-          const knownAppleEmail = 'dwight.taylor@vizyul.com';
-          const existingUserByEmail = await authService.findUserByEmail(knownAppleEmail);
-
-          if (existingUserByEmail && existingUserByEmail.oauthProvider === 'apple') {
-            logger.info(`Method 5 - Found known Apple user: ${existingUserByEmail.email}`);
-            return done(null, existingUserByEmail);
-          }
-        }
+        // SECURITY FIX: Removed dangerous hardcoded email fallback that was matching all Apple users
+        // to dwight.taylor@vizyul.com account
 
         if (!appleUserId) {
           // SECURITY FIX: Never use fallback to most recent user - this is a serious security vulnerability
@@ -592,19 +583,31 @@ class OAuthService {
 
   async completeSocialVerification(email, code) {
     try {
+      logger.info(`Social verification attempt for ${email} with code ${code}`);
       const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
-      const user = await authService.findUserByEmail(email);
+      logger.info(`Hashed code: ${hashedCode}`);
+
+      const user = await authService.findUserByEmailForAuth(email);
 
       if (!user) {
+        logger.error(`User not found for email: ${email}`);
         throw new Error('User not found');
       }
 
+      logger.info(`User found: ${user.email}, emailVerificationToken: ${user.emailVerificationToken}, emailVerificationExpires: ${user.emailVerificationExpires}`);
+
       const tokenExpires = new Date(user.emailVerificationExpires);
-      if (tokenExpires < new Date()) {
+      const now = new Date();
+      logger.info(`Token expires: ${tokenExpires}, Current time: ${now}`);
+
+      if (tokenExpires < now) {
+        logger.error(`Verification code has expired. Expires: ${tokenExpires}, Now: ${now}`);
         throw new Error('Verification code has expired');
       }
 
+      logger.info(`Comparing tokens - Stored: ${user.emailVerificationToken}, Provided: ${hashedCode}`);
       if (user.emailVerificationToken !== hashedCode) {
+        logger.error(`Token mismatch - Stored: ${user.emailVerificationToken}, Provided: ${hashedCode}`);
         throw new Error('Invalid verification code');
       }
 

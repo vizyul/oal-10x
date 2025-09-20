@@ -187,10 +187,8 @@ class AuthService {
       if (updateData.email) mappedData.email = updateData.email;
       if (updateData.password) mappedData.password = updateData.password;
       if (updateData.emailVerified !== undefined) mappedData.email_verified = updateData.emailVerified;
-      if (updateData.emailVerificationToken) mappedData.email_verification_token = updateData.emailVerificationToken;
-      if (updateData.emailVerificationExpires) mappedData.email_verification_expires = updateData.emailVerificationExpires;
-      if (updateData.emailVerificationToken === null) mappedData.email_verification_token = null;
-      if (updateData.emailVerificationExpires === null) mappedData.email_verification_expires = null;
+      if (updateData.emailVerificationToken !== undefined) mappedData.email_verification_token = updateData.emailVerificationToken;
+      if (updateData.emailVerificationExpires !== undefined) mappedData.email_verification_expires = updateData.emailVerificationExpires;
       if (updateData.status) mappedData.status = updateData.status;
       if (updateData.lastLoginAt) mappedData.last_login = updateData.lastLoginAt;
       if (updateData.termsAccepted !== undefined) mappedData.terms_accepted = updateData.termsAccepted;
