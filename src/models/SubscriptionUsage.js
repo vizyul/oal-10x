@@ -71,6 +71,36 @@ class SubscriptionUsage extends BaseModel {
   }
 
   /**
+   * Find usage record by user ID and subscription ID
+   * Used by webhook processing to check for existing usage records
+   */
+  async findByUserAndSubscription(userId, subscriptionId) {
+    try {
+      if (!userId || !subscriptionId) {
+        throw new Error('Both user ID and subscription ID are required');
+      }
+
+      const query = `
+        SELECT * FROM ${this.tableName}
+        WHERE user_id = $1 AND user_subscriptions_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+
+      const result = await database.query(query, [parseInt(userId), parseInt(subscriptionId)]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return this.formatOutput(result.rows[0]);
+    } catch (error) {
+      logger.error(`Error finding usage for user ${userId} and subscription ${subscriptionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get usage by user ID (PostgreSQL)
    */
   async getCurrentByUserId(userId) {
@@ -202,6 +232,28 @@ class SubscriptionUsage extends BaseModel {
       return updatedUsage;
     } catch (error) {
       logger.error(`Error incrementing ${resource} usage for subscription ${subscriptionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update usage record with new data
+   * Used by webhook processing to update period dates
+   */
+  async updateUsage(usageId, updateData) {
+    try {
+      if (!usageId) {
+        throw new Error('Usage ID is required');
+      }
+
+      const processedData = {
+        ...updateData,
+        updated_at: new Date().toISOString()
+      };
+
+      return await this.update(usageId, processedData);
+    } catch (error) {
+      logger.error(`Error updating usage record ${usageId}:`, error);
       throw error;
     }
   }

@@ -337,7 +337,7 @@ class StripeService {
     forceTokenRefresh(pgUserId);
 
     // Create initial usage record for the subscription
-    await this.createUsageRecord(userId, subscription, subscriptionRecord);
+    await this.createUsageRecord(userId, subscription, subscriptionRecord, tier);
 
     logger.info('Subscription created:', {
       subscriptionId: subscription.id,
@@ -502,7 +502,8 @@ class StripeService {
       const userId = subscription.metadata.user_id;
 
       // Create usage record for new billing period (will find subscription record internally)
-      await this.createUsageRecord(userId, subscription);
+      const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
+      await this.createUsageRecord(userId, subscription, null, tier);
 
       logger.info('Payment succeeded:', {
         invoiceId: invoice.id,
@@ -562,7 +563,7 @@ class StripeService {
   /**
    * Create usage record for new billing period
    */
-  async createUsageRecord(userId, subscription, subscriptionRecord = null) {
+  async createUsageRecord(userId, subscription, subscriptionRecord = null, tier = null) {
     try {
       // If subscriptionRecord is not provided, find it
       if (!subscriptionRecord) {
@@ -620,11 +621,22 @@ class StripeService {
         return;
       }
 
+      // Determine usage limits based on subscription tier
+      const tierLimits = {
+        'free': 2,
+        'basic': 5,
+        'premium': 20,
+        'enterprise': -1  // unlimited
+      };
+
+      const usageLimit = tier ? tierLimits[tier] || 5 : 10; // Default to 5 if tier not provided
+
       const usageRecord = await subscriptionUsage.createUsage({
         user_id: parseInt(userId),
         user_subscriptions_id: parseInt(subscriptionRecordId), // Use the user_subscriptions record ID, not Stripe subscription ID
         period_start: periodStart,
         period_end: periodEnd,
+        usage_limit: usageLimit,
         videos_processed: 0,
         api_calls_made: 0,
         storage_used_mb: 0,
