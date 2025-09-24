@@ -138,11 +138,12 @@ class ContentGenerationService {
    */
   async generateContent(videoId, videoRecordId, transcript, prompt, _userId = null) {
     const processingStatusService = require('./processing-status.service');
+    const generationStartTime = new Date();
 
     try {
 
-      // Update content status to pending
-      processingStatusService.updateContentStatus(videoId, prompt.content_type, 'pending');
+      // Update content status to generating and set start timestamp
+      processingStatusService.updateContentStatus(videoId, prompt.content_type, 'generating');
 
       // Validate provider availability
       if (!aiChatService.isProviderAvailable(prompt.ai_provider)) {
@@ -156,7 +157,7 @@ class ContentGenerationService {
       });
 
       // Generate content with retry logic
-      const generatedContent = await aiChatService.generateContentWithRetry(
+      const generationResult = await aiChatService.generateContentWithRetry(
         prompt.ai_provider,
         {
           prompt: processedPrompt,
@@ -167,11 +168,18 @@ class ContentGenerationService {
         2 // Max retries
       );
 
+      // Handle both old string format and new object format for backward compatibility
+      const generatedContent = typeof generationResult === 'string' ? generationResult : generationResult.text;
+      const metrics = typeof generationResult === 'object' ? generationResult.metrics : null;
+
       // Write content to database immediately
       try {
         const contentUpdate = {
           [prompt.content_type]: {
-            content: generatedContent
+            content: generatedContent,
+            provider: prompt.ai_provider,
+            generationStartTime: generationStartTime,
+            metrics: metrics
           }
         };
         await this.updateVideoWithGeneratedContent(videoRecordId, contentUpdate);
@@ -197,7 +205,8 @@ class ContentGenerationService {
         contentType: prompt.content_type,
         provider: prompt.ai_provider,
         promptName: prompt.name,
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        metrics: metrics
       };
 
     } catch (error) {
@@ -412,8 +421,8 @@ class ContentGenerationService {
         try {
           // Look up content type ID from content_types table
           const contentTypeQuery = `
-            SELECT id, label 
-            FROM content_types 
+            SELECT id, label
+            FROM content_types
             WHERE key = $1 AND is_active = true
           `;
 
@@ -428,36 +437,48 @@ class ContentGenerationService {
 
           // Check if content already exists for this video and content type
           const existingContentQuery = `
-            SELECT id 
-            FROM video_content 
+            SELECT id
+            FROM video_content
             WHERE video_id = $1 AND content_type_id = $2
           `;
 
           const existingContentResult = await database.query(existingContentQuery, [actualVideoId, contentTypeRecord.id]);
 
           const now = new Date();
+          const startTime = data.generationStartTime || now;
+          const responseLength = data.metrics?.responseLength || null;
+          const tokensUsed = data.metrics?.tokensUsed || null;
+          const durationSeconds = Math.round((now - startTime) / 1000);
 
           if (existingContentResult.rows.length > 0) {
             // Update existing record
             const existingContentId = existingContentResult.rows[0].id;
 
             const updateQuery = `
-              UPDATE video_content 
-              SET 
+              UPDATE video_content
+              SET
                 content_text = $1,
                 ai_provider = $2,
                 generation_status = 'completed',
-                generation_completed_at = $3,
-                updated_at = $3,
+                generation_started_at = $3,
+                generation_completed_at = $4,
+                generation_duration_seconds = $5,
+                response_length = $6,
+                tokens_used = $7,
+                updated_at = $4,
                 is_published = true,
                 version = COALESCE(version, 0) + 1
-              WHERE id = $4
+              WHERE id = $8
             `;
 
             await database.query(updateQuery, [
               data.content,
               data.provider || 'unknown',
+              startTime,
               now,
+              durationSeconds,
+              responseLength,
+              tokensUsed,
               existingContentId
             ]);
 
@@ -472,12 +493,16 @@ class ContentGenerationService {
                 content_text,
                 ai_provider,
                 generation_status,
+                generation_started_at,
                 generation_completed_at,
+                generation_duration_seconds,
+                response_length,
+                tokens_used,
                 is_published,
                 version,
                 created_at,
                 updated_at
-              ) VALUES ($1, $2, $3, $4, 'completed', $5, true, 1, $5, $5)
+              ) VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8, $9, true, 1, $6, $6)
             `;
 
             await database.query(insertQuery, [
@@ -485,7 +510,11 @@ class ContentGenerationService {
               contentTypeRecord.id,
               data.content,
               data.provider || 'unknown',
-              now
+              startTime,
+              now,
+              durationSeconds,
+              responseLength,
+              tokensUsed
             ]);
 
             logger.debug(`Created new video_content record for video ${actualVideoId} content type ${contentType}`);

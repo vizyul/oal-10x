@@ -91,6 +91,7 @@ class AIChatService {
         maxOutputTokens: maxTokens,
       };
 
+      const startTime = Date.now();
       const result = await genAI.generateContent({
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         generationConfig
@@ -98,13 +99,20 @@ class AIChatService {
 
       const response = await result.response;
       const text = response.text();
+      const endTime = Date.now();
+      const duration = endTime - startTime;
 
-      logger.debug('Gemini generation successful', {
+      const metrics = {
         responseLength: text.length,
-        tokensUsed: response.usageMetadata?.totalTokenCount || 'unknown'
-      });
+        tokensUsed: response.usageMetadata?.totalTokenCount || null,
+        inputTokens: response.usageMetadata?.promptTokenCount || null,
+        outputTokens: response.usageMetadata?.candidatesTokenCount || null,
+        duration: duration
+      };
 
-      return text;
+      logger.debug('Gemini generation successful', metrics);
+
+      return { text, metrics };
 
     } catch (error) {
       logger.error('Error generating content with Gemini:', {
@@ -150,6 +158,7 @@ class AIChatService {
 
       messages.push({ role: 'user', content: prompt });
 
+      const startTime = Date.now();
       const completion = await this.openai.chat.completions.create({
         model,
         messages,
@@ -159,18 +168,25 @@ class AIChatService {
       });
 
       const text = completion.choices[0]?.message?.content;
+      const endTime = Date.now();
+      const duration = endTime - startTime;
 
       if (!text) {
         throw new Error('No content generated from ChatGPT');
       }
 
-      logger.debug('ChatGPT generation successful', {
+      const metrics = {
         responseLength: text.length,
-        tokensUsed: completion.usage?.total_tokens || 'unknown',
-        finishReason: completion.choices[0]?.finish_reason
-      });
+        tokensUsed: completion.usage?.total_tokens || null,
+        inputTokens: completion.usage?.prompt_tokens || null,
+        outputTokens: completion.usage?.completion_tokens || null,
+        finishReason: completion.choices[0]?.finish_reason,
+        duration: duration
+      };
 
-      return text;
+      logger.debug('ChatGPT generation successful', metrics);
+
+      return { text, metrics };
 
     } catch (error) {
       logger.error('Error generating content with ChatGPT:', {
@@ -212,6 +228,7 @@ class AIChatService {
       const messages = [];
       messages.push({ role: 'user', content: prompt });
 
+      const startTime = Date.now();
       const completion = await this.anthropic.messages.create({
         model,
         max_tokens: maxTokens,
@@ -221,18 +238,25 @@ class AIChatService {
       });
 
       const text = completion.content[0]?.text;
+      const endTime = Date.now();
+      const duration = endTime - startTime;
 
       if (!text) {
         throw new Error('No content generated from Claude');
       }
 
-      logger.debug('Claude generation successful', {
+      const metrics = {
         responseLength: text.length,
-        tokensUsed: completion.usage?.input_tokens + completion.usage?.output_tokens || 'unknown',
-        stopReason: completion.stop_reason
-      });
+        tokensUsed: (completion.usage?.input_tokens || 0) + (completion.usage?.output_tokens || 0) || null,
+        inputTokens: completion.usage?.input_tokens || null,
+        outputTokens: completion.usage?.output_tokens || null,
+        stopReason: completion.stop_reason,
+        duration: duration
+      };
 
-      return text;
+      logger.debug('Claude generation successful', metrics);
+
+      return { text, metrics };
 
     } catch (error) {
       logger.error('Error generating content with Claude:', {
@@ -378,8 +402,10 @@ class AIChatService {
         temperature: 0.1
       });
 
-      const success = response.toLowerCase().includes('hello');
-      logger.info(`${provider} test ${success ? 'passed' : 'failed'}:`, response.substring(0, 100));
+      // Handle both old string format and new object format
+      const text = typeof response === 'string' ? response : response.text;
+      const success = text.toLowerCase().includes('hello');
+      logger.info(`${provider} test ${success ? 'passed' : 'failed'}:`, text.substring(0, 100));
       return success;
     } catch (error) {
       logger.error(`${provider} test failed:`, error.message);
