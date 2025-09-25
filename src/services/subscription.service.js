@@ -373,6 +373,143 @@ class SubscriptionService {
     }
   }
 
+  /**
+   * Check if free user has used their trial video
+   * @param {string|number} userId - User identifier
+   * @returns {Promise<boolean>} Whether free video has been used
+   */
+  async hasFreeVideoBeenUsed(userId) {
+    try {
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.debug(`No user found for identifier ${userId}`);
+        return true; // If user not found, assume trial used to be safe
+      }
+
+      const database = require('./database.service');
+      const result = await database.query('SELECT free_video_used FROM users WHERE id = $1', [pgUserId]);
+
+      if (result.rows.length === 0) {
+        logger.warn(`User ${pgUserId} not found in database`);
+        return true; // Safe default
+      }
+
+      const freeVideoUsed = result.rows[0].free_video_used;
+      logger.debug(`User ${pgUserId} free video used status: ${freeVideoUsed}`);
+
+      return freeVideoUsed === true;
+    } catch (error) {
+      logger.error('Error checking free video usage status:', error);
+      return true; // Safe default - assume used if error
+    }
+  }
+
+  /**
+   * Mark free video as used for user
+   * @param {string|number} userId - User identifier
+   * @returns {Promise<boolean>} Whether the operation was successful
+   */
+  async markFreeVideoAsUsed(userId) {
+    try {
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.warn(`No user found for identifier ${userId}`);
+        return false;
+      }
+
+      const database = require('./database.service');
+      const result = await database.query(
+        'UPDATE users SET free_video_used = TRUE WHERE id = $1 AND free_video_used = FALSE RETURNING id',
+        [pgUserId]
+      );
+
+      if (result.rows.length === 0) {
+        logger.warn(`Could not mark free video as used for user ${pgUserId} - already used or user not found`);
+        return false;
+      }
+
+      logger.info(`✅ Marked free video as used for user ${pgUserId}`);
+      return true;
+    } catch (error) {
+      logger.error('Error marking free video as used:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user can process a video (enhanced with free trial logic)
+   * @param {string|number} userId - User identifier
+   * @returns {Promise<{canProcess: boolean, reason?: string, requiresUpgrade?: boolean}>}
+   */
+  async canProcessVideoEnhanced(userId) {
+    try {
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.debug(`No user found for identifier ${userId}`);
+        return { canProcess: false, reason: 'User not found' };
+      }
+
+      // Get user's subscription tier
+      const database = require('./database.service');
+      const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [pgUserId]);
+
+      if (userResult.rows.length === 0) {
+        return { canProcess: false, reason: 'User not found' };
+      }
+
+      const user = userResult.rows[0];
+      const userTier = user.subscription_tier || 'free';
+      const freeVideoUsed = user.free_video_used;
+
+      logger.debug(`User ${pgUserId} tier: ${userTier}, free video used: ${freeVideoUsed}`);
+
+      // Handle free tier users
+      if (userTier === 'free') {
+        if (freeVideoUsed === true) {
+          return {
+            canProcess: false,
+            reason: 'Free video credit has been used. Upgrade to continue processing videos.',
+            requiresUpgrade: true
+          };
+        } else {
+          return { canProcess: true, reason: 'Free video available' };
+        }
+      }
+
+      // For paid subscribers, use existing logic
+      const activeSubscription = await this.getUserActiveSubscriptionByPgId(pgUserId);
+      if (!activeSubscription) {
+        return {
+          canProcess: false,
+          reason: 'No active subscription found. Please subscribe or renew.',
+          requiresUpgrade: true
+        };
+      }
+
+      // Use existing limit checking for paid users
+      const { subscriptionUsage } = require('../models');
+      const hasExceeded = await subscriptionUsage.hasExceededLimit(activeSubscription.id, 'videos_processed');
+
+      if (hasExceeded) {
+        return {
+          canProcess: false,
+          reason: 'Monthly video limit reached. Upgrade your plan or wait for next billing cycle.',
+          requiresUpgrade: true
+        };
+      }
+
+      return { canProcess: true, reason: 'Within subscription limits' };
+
+    } catch (error) {
+      logger.error('Error checking enhanced video processing capability:', error);
+      // In case of error, allow processing (fail-safe) but log the issue
+      return { canProcess: true, reason: 'Error during check - allowing processing' };
+    }
+  }
+
 }
 
 module.exports = new SubscriptionService();

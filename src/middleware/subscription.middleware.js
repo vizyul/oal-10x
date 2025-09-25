@@ -30,8 +30,8 @@ const subscriptionMiddleware = {
         const userStatus = req.user.subscription_status || 'none';
 
         // Check if user has sufficient tier
-        const userTierLevel = TIER_HIERARCHY[userTier] || 0;
-        const requiredTierLevel = TIER_HIERARCHY[minTier] || 1;
+        const userTierLevel = TIER_HIERARCHY[userTier] !== undefined ? TIER_HIERARCHY[userTier] : 0;
+        const requiredTierLevel = TIER_HIERARCHY[minTier] !== undefined ? TIER_HIERARCHY[minTier] : 1;
 
         if (userTierLevel < requiredTierLevel) {
           return handleSubscriptionError(req, res, 'Subscription upgrade required', 403, {
@@ -75,7 +75,35 @@ const subscriptionMiddleware = {
         const userId = req.user.id;
         const userTier = req.user.subscription_tier || 'free';
 
-        // Get tier configuration
+        // Special handling for free tier users with video resources
+        if (userTier === 'free' && resource === 'videos') {
+          const subscriptionService = require('../services/subscription.service');
+          const freeVideoUsed = await subscriptionService.hasFreeVideoBeenUsed(userId);
+
+          if (freeVideoUsed) {
+            return handleSubscriptionError(req, res, 'Free video credit used. Upgrade to continue.', 429, {
+              current_usage: 1,
+              limit: 1,
+              resource_type: resource,
+              upgrade_url: '/subscription/upgrade',
+              free_credit_used: true
+            });
+          }
+
+          // Free user has credit available, store special flag for later processing
+          req.usageInfo = {
+            userId,
+            resource,
+            increment,
+            currentUsage: 0,
+            limit: 1,
+            isFreeTrialUser: true
+          };
+
+          return next();
+        }
+
+        // Get tier configuration for paid users
         const tierConfig = stripeConfig.getTierConfig(userTier);
         if (!tierConfig) {
           return handleSubscriptionError(req, res, 'Invalid subscription tier', 500);
@@ -125,11 +153,19 @@ const subscriptionMiddleware = {
   incrementUsage: async (req, res, next) => {
     try {
       if (req.usageInfo) {
-        await incrementUserUsage(
-          req.usageInfo.userId,
-          req.usageInfo.resource,
-          req.usageInfo.increment
-        );
+        // Special handling for free trial users
+        if (req.usageInfo.isFreeTrialUser) {
+          const subscriptionService = require('../services/subscription.service');
+          await subscriptionService.markFreeVideoAsUsed(req.usageInfo.userId);
+          logger.info(`Marked free video as used for user ${req.usageInfo.userId}`);
+        } else {
+          // Regular paid subscription usage tracking
+          await incrementUserUsage(
+            req.usageInfo.userId,
+            req.usageInfo.resource,
+            req.usageInfo.increment
+          );
+        }
       }
       next();
     } catch (error) {

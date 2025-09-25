@@ -97,6 +97,33 @@ class AuthService {
   }
 
   /**
+   * Find user by email address (including verification fields for signup/verification)
+   * @param {string} email - User email address
+   * @returns {Promise<Object|null>} User object with verification fields or null if not found
+   */
+  async findUserByEmailForVerification(email) {
+    try {
+      // Use the method that returns raw data (doesn't hide verification fields)
+      const foundUser = await UserModel.findByEmailWithPassword(email);
+
+      if (!foundUser) {
+        return null;
+      }
+
+      // Format the record but preserve verification fields
+      const formatted = this.formatUserRecord(foundUser);
+      // Add back the verification fields that were hidden
+      formatted.emailVerificationToken = foundUser.email_verification_token;
+      formatted.emailVerificationExpires = foundUser.email_verification_expires;
+
+      return formatted;
+    } catch (error) {
+      logger.error('Error finding user by email for verification:', error.message || error);
+      return null;
+    }
+  }
+
+  /**
    * Find user by email address (including password for authentication)
    * @param {string} email - User email address
    * @returns {Promise<Object|null>} User object with password or null if not found
@@ -329,7 +356,8 @@ class AuthService {
       welcomeEmailSentAt: fields.welcome_email_sent_at,
       subscription_tier: fields.subscription_tier || 'free',
       subscription_status: fields.subscription_status || 'none',
-      stripe_customer_id: fields.stripe_customer_id
+      stripe_customer_id: fields.stripe_customer_id,
+      free_video_used: fields.free_video_used || false
     };
   }
 

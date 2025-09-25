@@ -148,7 +148,7 @@ router.get('/:id',
  * @access  Private - Requires Basic subscription
  */
 router.post('/',
-  subscriptionMiddleware.requireSubscription('basic'),
+  subscriptionMiddleware.requireSubscription('free'),
   subscriptionMiddleware.checkUsageLimit('videos'),
   videoValidation.create,
   videosController.createVideo.bind(videosController),
@@ -192,7 +192,7 @@ router.get('/:id/status',
  * @access  Private - Requires Basic subscription
  */
 router.post('/:id/process',
-  subscriptionMiddleware.requireSubscription('basic'),
+  subscriptionMiddleware.requireSubscription('free'),
   videoValidation.params,
   videosController.processVideo.bind(videosController)
 );
@@ -244,7 +244,7 @@ router.get('/:id/content/:contentType',
  * @access  Private - Requires Basic subscription
  */
 router.post('/batch',
-  subscriptionMiddleware.requireSubscription('basic'),
+  subscriptionMiddleware.requireSubscription('free'),
   subscriptionMiddleware.checkUsageLimit('videos'),
   [
     body('urls')

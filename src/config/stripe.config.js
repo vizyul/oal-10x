@@ -77,8 +77,8 @@ const stripeConfig = {
     free: {
       name: 'Free',
       priceId: null,
-      features: ['Browse content', 'Basic AI summaries', 'Community support'],
-      videoLimit: 0,
+      features: ['1 free video', 'Basic AI summaries', 'Community support'],
+      videoLimit: 1,
       analyticsAccess: false,
       apiAccess: false
     },

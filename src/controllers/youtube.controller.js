@@ -320,6 +320,46 @@ class YouTubeController {
         actualUserId = parseInt(userId);
       }
 
+      // Check if user can process videos and handle free tier limitations
+      const database = require('../services/database.service');
+      const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [actualUserId]);
+      const user = userResult.rows[0];
+      const userTier = user?.subscription_tier || 'free';
+      const freeVideoUsed = user?.free_video_used;
+
+      // Special handling for free tier users
+      if (userTier === 'free') {
+        if (freeVideoUsed) {
+          return res.status(403).json({
+            success: false,
+            message: 'Free video credit has been used. Upgrade to continue processing videos.',
+            requiresUpgrade: true,
+            upgradeUrl: '/subscription/upgrade'
+          });
+        }
+
+        // Free users can only import 1 video at a time
+        if (videoIds.length > 1) {
+          return res.status(400).json({
+            success: false,
+            message: 'Free tier users can only import 1 video. Please select a single video or upgrade your subscription.',
+            requiresUpgrade: true,
+            upgradeUrl: '/subscription/upgrade'
+          });
+        }
+      } else {
+        // For paid users, check regular subscription limits
+        const canProcessCheck = await subscriptionService.canProcessVideoEnhanced(actualUserId);
+        if (!canProcessCheck.canProcess) {
+          return res.status(canProcessCheck.requiresUpgrade ? 403 : 429).json({
+            success: false,
+            message: canProcessCheck.reason,
+            requiresUpgrade: canProcessCheck.requiresUpgrade,
+            upgradeUrl: '/subscription/upgrade'
+          });
+        }
+      }
+
       // Import video details directly using database services
       const importedVideos = [];
       const failedVideos = [];
@@ -453,12 +493,24 @@ class YouTubeController {
 
           // Record results
           if (postgresRecord) {
-            // Database write succeeded - increment subscription usage
+            // Database write succeeded - handle usage tracking for both free and paid users
             try {
-              await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
-              logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+              // Check if user is free tier and handle accordingly
+              const database = require('../services/database.service');
+              const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
+              const userTier = userResult.rows[0]?.subscription_tier || 'free';
+
+              if (userTier === 'free') {
+                // Mark free video as used
+                await subscriptionService.markFreeVideoAsUsed(actualUserId);
+                logger.info(`✅ Marked free video as used for user ${actualUserId}`);
+              } else {
+                // Regular subscription usage tracking for paid users
+                await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+                logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+              }
             } catch (usageError) {
-              logger.warn(`⚠️  Failed to increment video usage for user ${actualUserId}:`, usageError.message);
+              logger.warn(`⚠️  Failed to update usage for user ${actualUserId}:`, usageError.message);
             }
 
             const video = this.formatPostgresVideoResponse(postgresRecord);

@@ -124,6 +124,8 @@ scripts/
 
 # Adhoc debugging and test scripts
 adhoc/
+migration-docs/
+migration-scripts/
 
 # Stripe webhook test files
 test-subscription-*.json
