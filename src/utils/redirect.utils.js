@@ -8,15 +8,8 @@
  * @returns {string} - Redirect URL
  */
 function getPostAuthRedirectUrl(user) {
-  const subscriptionTier = user?.subscription_tier || 'free';
-
-  // Free subscription users should go to upgrade page
-  if (subscriptionTier === 'free') {
-    return '/subscription/upgrade';
-  }
-
-  // All other subscription tiers go to videos page
-  return '/videos';
+  // All users go to video upload page after authentication
+  return '/videos/upload';
 }
 
 module.exports = {

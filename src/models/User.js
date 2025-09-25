@@ -20,7 +20,7 @@ class User extends BaseModel {
       'magic_link_token', 'monthly_usage_limit', 'airtable_id',
       'email_verification_token', 'email_verification_expires', 'terms_accepted',
       'privacy_accepted', 'registration_method', 'last_login', 'welcome_email_sent',
-      'welcome_email_sent_at'
+      'welcome_email_sent_at', 'free_video_used'
     ];
 
     this.hidden = [

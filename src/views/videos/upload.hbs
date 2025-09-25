@@ -159,12 +159,12 @@
     <div class="upload-method url-method">
       <div class="method-header">
         <h1>Import by URL</h1>
-        <p>Paste YouTube video URLs to import and process</p>
+        <!-- <p>Paste YouTube video URLs to import and process</p> -->
       </div>
       
       <form id="url-upload-form" class="upload-form">
         <div class="form-group">
-          <label for="youtube-urls">YouTube Video URLs</label>
+          <label for="youtube-urls">Paste YouTube Video URLs</label>
           <textarea 
             id="youtube-urls" 
             name="youtube_urls" 
@@ -186,7 +186,7 @@ https://www.youtube.com/watch?v=..."
 
   <!-- Floating Action Button -->
   <div id="floating-amplify-btn" class="floating-action-button hidden">
-    <button type="button" id="import-selected-btn" class="floating-btn">
+    <button type="button" id="import-selected-btn" class="floating-btn throb">
       <div class="floating-btn-icon">⚡</div>
       <div class="floating-btn-content">
         <div class="floating-btn-text">Amplify Videos</div>
@@ -194,6 +194,12 @@ https://www.youtube.com/watch?v=..."
       </div>
     </button>
   </div>
+
+  <!-- Attention-grabbing arrow pointing to the button 
+  <div id="attention-arrow" class="attention-arrow debug-visible">
+    <div class="click-here-text">CLICK HERE</div>
+    <img src="/images/white_arrow-min.png" class="arrow-image" alt="Click here arrow" />
+  </div> -->
 
   <div id="upload-progress" class="upload-progress hidden">
     <div class="progress-container">
@@ -755,9 +761,33 @@ Upgrade your plan to import more videos.`);
           floatingBtnCount.textContent = `${totalSelected} selected`;
         }
       }
+
+      // Add attention-grabbing animations
+      const importBtn = document.getElementById('import-selected-btn');
+      const attentionArrow = document.getElementById('attention-arrow');
+
+      if (importBtn) {
+        importBtn.classList.add('attention-grabbing');
+      }
+
+      if (attentionArrow) {
+        attentionArrow.classList.add('visible');
+      }
     } else {
       console.log('Hiding floating amplify button');
       floatingAmplifyBtn?.classList.add('hidden');
+
+      // Remove attention-grabbing animations
+      const importBtn = document.getElementById('import-selected-btn');
+      const attentionArrow = document.getElementById('attention-arrow');
+
+      if (importBtn) {
+        importBtn.classList.remove('attention-grabbing');
+      }
+
+      if (attentionArrow) {
+        attentionArrow.classList.remove('visible');
+      }
     }
   }
   
@@ -814,6 +844,18 @@ Upgrade your plan to import more videos.`);
   async function importSelectedVideos() {
     const totalSelected = selectedVideos.size + selectedUrls.size;
     if (totalSelected === 0) return;
+
+    // Remove attention-grabbing animations immediately when user clicks
+    const importBtn = document.getElementById('import-selected-btn');
+    const attentionArrow = document.getElementById('attention-arrow');
+
+    if (importBtn) {
+      importBtn.classList.remove('attention-grabbing');
+    }
+
+    if (attentionArrow) {
+      attentionArrow.classList.remove('visible');
+    }
 
     // Final validation: Check subscription limits for combined total
     if (subscriptionLimits && totalSelected > subscriptionLimits.remainingVideos) {

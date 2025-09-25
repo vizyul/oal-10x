@@ -52,7 +52,7 @@ router.get('/socket-token', (req, res) => {
  * @access  Private - Requires Basic subscription
  */
 router.get('/upload',
-  subscriptionMiddleware.requireSubscription('basic'),
+  subscriptionMiddleware.requireSubscription('free'),
   (req, res) => {
     res.render('videos/upload', {
       title: 'Upload Video - Our AI Legacy',

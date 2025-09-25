@@ -42,7 +42,7 @@ class AuthController {
       logger.info(`Sending verification code to: ${email}`);
 
       // Check if user already exists (only if Airtable is configured)
-      const existingUser = await authService.findUserByEmail(email);
+      const existingUser = await authService.findUserByEmailForVerification(email);
       if (existingUser && existingUser.emailVerified) {
         return res.status(400).json({
           success: false,
@@ -167,7 +167,7 @@ class AuthController {
       logger.info(`Verifying code for email: ${email}`);
 
       // Find pending user
-      const user = await authService.findUserByEmail(email);
+      const user = await authService.findUserByEmailForVerification(email);
       if (!user) {
         return res.status(400).json({
           success: false,
@@ -255,7 +255,7 @@ class AuthController {
       }
 
       // Verify temp token
-      const user = await authService.findUserByEmail(email);
+      const user = await authService.findUserByEmailForVerification(email);
       if (!user || user.emailVerificationToken !== token) {
         req.flash('error', 'Invalid or expired verification link.');
         return res.redirect('/auth/sign-up');
@@ -298,7 +298,7 @@ class AuthController {
       logger.info(`Completing registration for email: ${email}`);
 
       // Find and verify user
-      const user = await authService.findUserByEmail(email);
+      const user = await authService.findUserByEmailForVerification(email);
       if (!user || user.emailVerificationToken !== token) {
         return res.status(400).json({
           success: false,
@@ -430,7 +430,7 @@ class AuthController {
       logger.info(`Resending verification code to: ${email}`);
 
       // Find user
-      const user = await authService.findUserByEmail(email);
+      const user = await authService.findUserByEmailForVerification(email);
       if (!user) {
         return res.status(400).json({
           success: false,
