@@ -1,28 +1,15 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 
 const { authMiddleware, validationMiddleware } = require('../middleware');
+const { apiLimit } = require('../middleware/rate-limiting.middleware');
 const { authService, airtableService } = require('../services');
 const { logger } = require('../utils');
 
 const router = express.Router();
 
-// API rate limiting (more restrictive than web routes)
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 500 : 200, // More generous limits: 500 for dev, 200 for prod
-  message: {
-    success: false,
-    message: 'Too many API requests. Please try again later.',
-    error: 'RATE_LIMIT_EXCEEDED'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Apply rate limiting to all API routes
-router.use(apiLimiter);
+// Apply centralized API rate limiting with user-tier awareness
+router.use(apiLimit);
 
 // API health check
 router.get('/health', (req, res) => {

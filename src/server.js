@@ -60,6 +60,12 @@ io.on('connection', (socket) => {
     logger.info(`Socket.IO: Sending ${processingVideos.length} processing videos to user ${userId}`);
     socket.emit('processing-status-batch', processingVideos);
   });
+
+  // Handle clear processing videos request (when user leaves videos page)
+  socket.on('clear-processing-videos', () => {
+    logger.info(`Socket.IO: User ${userId} requested to clear processing videos`);
+    processingStatusService.clearUserProcessingVideos(userId);
+  });
 });
 
 // Make io available to the app

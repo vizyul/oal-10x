@@ -17,8 +17,10 @@
       </div>
 
       <div class="dashboard-actions">
-        {{#if (gt subscription.limits.videos 0)}}
+        {{#if (gt subscription.remainingVideos 0)}}
         <a href="/videos/upload" class="btn btn-primary" id="amplify-videos-btn">Amplify Videos</a>
+        {{else if (gt subscription.limits.videos 0)}}
+        <a href="/subscription/upgrade" class="btn btn-primary">Upgrade Plan - Videos Used</a>
         {{else}}
         <a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>
         {{/if}}
@@ -1078,6 +1080,22 @@ class ProcessingStatusManager {
 
 // Initialize processing status manager
 statusManager = new ProcessingStatusManager();
+
+// Add cleanup when user leaves the videos page
+window.addEventListener('beforeunload', () => {
+  if (statusManager && statusManager.socket) {
+    statusManager.socket.emit('clear-processing-videos');
+    statusManager.socket.disconnect();
+  }
+});
+
+// Also cleanup on page navigation (for single-page navigation)
+window.addEventListener('pagehide', () => {
+  if (statusManager && statusManager.socket) {
+    statusManager.socket.emit('clear-processing-videos');
+    statusManager.socket.disconnect();
+  }
+});
 
 // Load completed videos and populate processing table after a brief delay
 setTimeout(() => {

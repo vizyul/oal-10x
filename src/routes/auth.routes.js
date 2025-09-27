@@ -1,9 +1,13 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 
 const { authController } = require('../controllers');
 const { validationMiddleware } = require('../middleware');
+const {
+  authSecurityLimit,
+  emailVerificationLimit,
+  registrationLimit
+} = require('../middleware/rate-limiting.middleware');
 const authService = require('../services/auth.service');
 const sessionService = require('../services/session.service');
 const { logger } = require('../utils');
@@ -11,31 +15,8 @@ const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
 
 const router = express.Router();
 
-// Rate limiting for authentication routes
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many authentication attempts. Please try again later.',
-    error: 'RATE_LIMIT_EXCEEDED'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// More restrictive rate limiting for code sending
-const codeLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 3, // Limit each IP to 3 code requests per 5 minutes
-  message: {
-    success: false,
-    message: 'Too many verification code requests. Please wait before trying again.',
-    error: 'CODE_RATE_LIMIT_EXCEEDED'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Note: Rate limiting now handled by centralized rate-limiting.middleware.js
+// This provides intelligent, context-aware rate limiting based on endpoint types and user tiers
 
 // SIGNUP FLOW ROUTES (3-step process)
 
@@ -44,7 +25,7 @@ router.get('/sign-up', authController.renderSignUp);
 
 // Step 1: POST /auth/sign-up/send-code - Send verification code to email
 router.post('/sign-up/send-code',
-  codeLimiter,
+  emailVerificationLimit,
   [
     body('email')
       .isEmail()
@@ -60,7 +41,7 @@ router.get('/sign-up/verify', authController.renderVerifyCode);
 
 // Step 2: POST /auth/sign-up/verify-code - Verify the 6-digit code
 router.post('/sign-up/verify-code',
-  authLimiter,
+  registrationLimit,
   [
     body('email')
       .isEmail()
@@ -77,7 +58,7 @@ router.post('/sign-up/verify-code',
 
 // Step 2: POST /auth/sign-up/resend-code - Resend verification code
 router.post('/sign-up/resend-code',
-  codeLimiter,
+  emailVerificationLimit,
   [
     body('email')
       .isEmail()
@@ -93,7 +74,7 @@ router.get('/sign-up/complete', authController.renderCompleteProfile);
 
 // Step 3: POST /auth/sign-up/complete - Complete registration
 router.post('/sign-up/complete',
-  authLimiter,
+  registrationLimit,
   [
     body('email')
       .isEmail()
@@ -140,7 +121,7 @@ router.get('/sign-in', authController.renderSignIn);
 
 // POST /auth/sign-in - Process sign in
 router.post('/sign-in',
-  authLimiter,
+  authSecurityLimit,
   [
     body('email')
       .isEmail()
@@ -174,7 +155,7 @@ router.get('/forgot-password', authController.renderForgotPassword);
 
 // POST /auth/forgot-password - Process forgot password
 router.post('/forgot-password',
-  authLimiter,
+  authSecurityLimit,
   [
     body('email')
       .isEmail()
@@ -190,7 +171,7 @@ router.get('/reset-password/:token', authController.renderResetPassword);
 
 // POST /auth/reset-password/:token - Process reset password
 router.post('/reset-password/:token',
-  authLimiter,
+  authSecurityLimit,
   [
     body('password')
       .isLength({ min: 8 })

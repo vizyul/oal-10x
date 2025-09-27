@@ -298,10 +298,33 @@ class ProcessingStatusService extends EventEmitter {
       userSessions.delete(session);
       if (userSessions.size === 0) {
         this.userSessions.delete(userId);
+        // Clear all processing videos for this user when they have no active sessions
+        this.clearUserProcessingVideos(userId);
       }
     }
 
     logger.debug(`Unregistered session for user ${userId}`);
+  }
+
+  /**
+   * Clear all processing videos for a specific user
+   * @param {string} userId - User ID
+   */
+  clearUserProcessingVideos(userId) {
+    let clearedCount = 0;
+
+    this.processingVideos.forEach((status, videoId) => {
+      if (status.userId === userId) {
+        this.processingVideos.delete(videoId);
+        clearedCount++;
+      }
+    });
+
+    if (clearedCount > 0) {
+      logger.info(`Cleared ${clearedCount} processing videos for user ${userId} (no active sessions)`);
+    }
+
+    return clearedCount;
   }
 
   /**

@@ -175,8 +175,31 @@ class SubscriptionService {
    */
   async getCurrentPeriodUsageBreakdown(userId) {
     try {
-      // Get current usage using model
-      const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
+      // Get PostgreSQL user ID using User model
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) {
+        logger.warn(`No user found for identifier ${userId}`);
+        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+      }
+
+      // Check if user is on free tier
+      const database = require('./database.service');
+      const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [pgUserId]);
+      const user = userResult.rows[0];
+
+      if (user && user.subscription_tier === 'free') {
+        // For free tier users, use the free_video_used column instead of subscription tracking
+        const videosUsed = user.free_video_used ? 1 : 0;
+        return {
+          videos: videosUsed,
+          api_calls: 0,
+          storage: 0,
+          ai_summaries: 0
+        };
+      }
+
+      // For paid users, get current usage using model
+      const currentUsage = await subscriptionUsage.getCurrentByUserId(pgUserId);
 
       if (!currentUsage) {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };

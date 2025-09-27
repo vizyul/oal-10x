@@ -69,7 +69,9 @@ class AIChatService {
         systemMessage = '',
         temperature = 0.7,
         maxTokens = 2000,
-        model = 'gemini-1.5-flash'
+        //model = 'gemini-1.5-flash'
+        model = 'gemini-flash-lite-latest'
+        //model = 'gemini-flash-latest'
       } = options;
 
       logger.debug('Generating content with Gemini', {
