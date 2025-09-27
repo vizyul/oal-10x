@@ -503,20 +503,72 @@ class ContentController {
         });
       }
 
-      // This would integrate with the existing content generation service
-      // For now, return a success response indicating generation has started
-      logger.info(`Triggered content generation for video ${videoId}, types: ${contentTypes.join(', ')}, provider: ${aiProvider}`);
+      // Get video transcript for content generation
+      const transcriptQuery = await database.query(
+        'SELECT transcript_text FROM videos WHERE id = $1',
+        [videoId]
+      );
 
-      res.json({
-        success: true,
-        message: 'Content generation started',
-        data: {
-          videoId: parseInt(videoId),
-          contentTypes,
-          aiProvider,
-          status: 'initiated'
-        }
-      });
+      if (transcriptQuery.rows.length === 0 || !transcriptQuery.rows[0].transcript_text) {
+        return res.status(400).json({
+          success: false,
+          message: 'Video transcript not found - content generation requires transcript'
+        });
+      }
+
+      const transcript = transcriptQuery.rows[0].transcript_text;
+
+      // Actually call the content generation service
+      logger.info(`Starting content generation for video ${videoId}, types: ${contentTypes.join(', ')}, provider: ${aiProvider}`);
+
+      try {
+        const contentGenerationService = require('../services/content-generation.service');
+        const results = await contentGenerationService.generateAllContentForVideo(
+          videoId, // videoRecordId
+          videoId, // videoId (same for PostgreSQL)
+          transcript,
+          {
+            provider: aiProvider,
+            contentTypes,
+            userId
+          }
+        );
+
+        // Return accurate results based on what actually happened
+        const response = {
+          success: results.summary.failed === 0,
+          message: results.summary.failed === 0
+            ? `Content generation completed successfully for ${results.summary.successful} types`
+            : `Content generation partially completed: ${results.summary.successful} succeeded, ${results.summary.failed} failed`,
+          data: {
+            videoId: parseInt(videoId),
+            contentTypes,
+            aiProvider,
+            summary: results.summary,
+            completedTypes: Object.keys(results.content || {}),
+            failedTypes: Object.keys(results.errors || {}),
+            status: results.summary.failed === 0 ? 'completed' : 'partial'
+          }
+        };
+
+        // Use appropriate HTTP status code
+        const statusCode = results.summary.failed === 0 ? 200 : 207; // 207 = Multi-Status (partial success)
+        res.status(statusCode).json(response);
+
+      } catch (generationError) {
+        logger.error(`Content generation failed for video ${videoId}:`, generationError);
+        res.status(500).json({
+          success: false,
+          message: 'Content generation failed',
+          data: {
+            videoId: parseInt(videoId),
+            contentTypes,
+            aiProvider,
+            status: 'failed',
+            error: generationError.message
+          }
+        });
+      }
 
     } catch (error) {
       logger.error('Error triggering content generation:', error);

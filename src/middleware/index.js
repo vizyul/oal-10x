@@ -1,5 +1,4 @@
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const compression = require('compression');
 const { validationResult } = require('express-validator');
@@ -45,26 +44,8 @@ const securityMiddleware = [
     threshold: 1024 // Only compress responses larger than 1KB
   }),
 
-  // General rate limiting
-  rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-    message: {
-      success: false,
-      message: 'Too many requests from this IP. Please try again later.',
-      error: 'RATE_LIMIT_EXCEEDED'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => {
-      // Skip rate limiting for health check, static assets, and logout
-      return req.path === '/health' ||
-             req.path === '/auth/logout' ||
-             req.path.startsWith('/css') ||
-             req.path.startsWith('/js') ||
-             req.path.startsWith('/images');
-    }
-  })
+  // Note: Global rate limiting removed - now handled by centralized rate-limiting.middleware.js
+  // This provides better user experience and more intelligent rate limiting based on endpoint types
 ];
 
 // Validation middleware

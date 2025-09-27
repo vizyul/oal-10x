@@ -28,7 +28,7 @@ class ContentGenerationService {
       this.supportedContentTypesCache = contentTypes.map(ct => ct.type);
       this.contentTypesCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
 
-      logger.info(`Loaded ${this.supportedContentTypesCache.length} supported content types from AiPrompts model`);
+      logger.debug(`Loaded ${this.supportedContentTypesCache.length} content types`);
       return this.supportedContentTypesCache;
     } catch (error) {
       logger.error('Error loading content types from AiPrompts model:', error);
@@ -79,7 +79,6 @@ class ContentGenerationService {
    */
   async getActivePrompts(provider = null, contentType = null) {
     try {
-      logger.debug('Getting active prompts', { provider, contentType });
 
       let prompts;
 
@@ -98,7 +97,6 @@ class ContentGenerationService {
         prompts = await aiPrompts.getSystemPrompts();
       }
 
-      logger.debug(`Found ${prompts.length} prompts using AiPrompts model`);
       return prompts;
     } catch (error) {
       logger.error('Error getting active prompts:', error);
@@ -139,6 +137,7 @@ class ContentGenerationService {
   async generateContent(videoId, videoRecordId, transcript, prompt, _userId = null) {
     const processingStatusService = require('./processing-status.service');
     const generationStartTime = new Date();
+    let processedPrompt;
 
     try {
 
@@ -151,10 +150,11 @@ class ContentGenerationService {
       }
 
       // Process the prompt template with sanitization
-      const processedPrompt = promptSanitizer.processTemplate(prompt.prompt_text, {
+      processedPrompt = promptSanitizer.processTemplate(prompt.prompt_text, {
         TRANSCRIPT: transcript,
         VIDEO_ID: videoId
       });
+
 
       // Generate content with retry logic
       const generationResult = await aiChatService.generateContentWithRetry(
@@ -172,6 +172,16 @@ class ContentGenerationService {
       const generatedContent = typeof generationResult === 'string' ? generationResult : generationResult.text;
       const metrics = typeof generationResult === 'object' ? generationResult.metrics : null;
 
+      // Check if LLM actually generated content
+      if (!generatedContent || generatedContent.trim() === '') {
+        throw new Error(`LLM generated empty or null content for ${prompt.content_type}`);
+      }
+
+      // Calculate generation duration
+      const generationEndTime = new Date();
+      const generationDuration = (generationEndTime - generationStartTime) / 1000;
+
+
       // Write content to database immediately
       try {
         const contentUpdate = {
@@ -182,14 +192,27 @@ class ContentGenerationService {
             metrics: metrics
           }
         };
+
+
         await this.updateVideoWithGeneratedContent(videoRecordId, contentUpdate);
-        logger.info(`Successfully saved ${prompt.content_type} content to database for video ${videoId}`);
+
 
         // Update content status to completed ONLY after successful database write
         processingStatusService.updateContentStatus(videoId, prompt.content_type, 'completed');
 
       } catch (dbError) {
-        logger.error(`Failed to save ${prompt.content_type} content to database for video ${videoId}:`, dbError.message);
+        // Log database save failure
+        logger.error(`❌ Database save failed for ${prompt.content_type}`, {
+          videoId,
+          contentType: prompt.content_type,
+          databaseStatus: 'failed',
+          finalGenerationStatus: 'failed',
+          llmGenerationStatus: 'completed', // LLM succeeded but DB failed
+          errorMessage: dbError.message,
+          contentLength: generatedContent?.length || 0,
+          generationDuration: `${generationDuration}s`
+        });
+
         processingStatusService.updateContentStatus(videoId, prompt.content_type, 'failed', `Database save failed: ${dbError.message}`);
 
         return {
@@ -210,11 +233,32 @@ class ContentGenerationService {
       };
 
     } catch (error) {
-      logger.error(`Failed to generate content for video ${videoId}:`, {
-        error: error.message,
-        provider: prompt.ai_provider,
+      // Calculate generation duration even for failures
+      const generationEndTime = new Date();
+      const generationDuration = (generationEndTime - generationStartTime) / 1000;
+
+      // Analyze LLM generation failure
+      const llmErrorDetails = this.analyzeLLMGenerationError(error, prompt, processedPrompt);
+
+      // Log LLM generation failure with detailed analysis
+      logger.error(`🚫 LLM generation failed for ${prompt.content_type}`, {
+        videoId,
         contentType: prompt.content_type,
-        promptName: prompt.name
+        aiProvider: prompt.ai_provider,
+        finalGenerationStatus: 'failed',
+        llmGenerationStatus: 'failed',
+        errorMessage: error.message,
+        errorType: error.constructor.name,
+        errorCode: error.code,
+        statusCode: error.status || error.statusCode,
+        generationDuration: `${generationDuration}s`,
+        promptName: prompt.name,
+        promptLength: processedPrompt?.length || 'unknown',
+        failureCategory: llmErrorDetails.category,
+        failureReason: llmErrorDetails.reason,
+        suggestedFix: llmErrorDetails.suggestedFix,
+        retryable: llmErrorDetails.retryable,
+        apiCost: llmErrorDetails.estimatedCost
       });
 
       // Update content status to failed
@@ -330,7 +374,6 @@ class ContentGenerationService {
 
         const batch = relevantPrompts.slice(i, i + concurrent);
 
-        logger.debug(`Processing batch ${Math.floor(i / concurrent) + 1}/${Math.ceil(relevantPrompts.length / concurrent)}`);
 
         const batchPromises = batch.map(prompt =>
           this.generateContent(videoId, videoRecordId, transcript, prompt, userId)
@@ -365,7 +408,29 @@ class ContentGenerationService {
       // Note: Database updates now happen individually after each content generation
       // No batch update needed here since each generateContent call writes to database immediately
 
-      logger.info(`Content generation completed for video ${videoId}`, results.summary);
+      // Simple summary for successful cases, detailed for failures
+      if (results.summary.failed === 0) {
+        logger.info(`✅ All content generated for video ${videoId} (${results.summary.successful}/${results.summary.total} types)`);
+      } else {
+        // Detailed logging only for failures
+        const failedTypeDetails = Object.keys(results.errors).map(promptName => {
+          const prompt = relevantPrompts.find(p => p.name === promptName);
+          return {
+            contentType: prompt?.content_type || promptName,
+            error: results.errors[promptName]
+          };
+        });
+
+        logger.error(`❌ Partial content generation for video ${videoId}`, {
+          videoId,
+          successful: results.summary.successful,
+          failed: results.summary.failed,
+          provider: selectedProvider,
+          completedTypes: Object.keys(results.content),
+          failedTypes: failedTypeDetails,
+          overallStatus: 'partial_completion'
+        });
+      }
 
       // Check if we should mark the video as completed in the database
       await this.checkAndUpdateVideoCompletion(videoRecordId, videoId);
@@ -400,7 +465,6 @@ class ContentGenerationService {
           video = await videoModel.findByAirtableId(videoRecordId);
           if (video) {
             actualVideoId = video.id;
-            logger.debug(`Found video by airtable_id ${videoRecordId}, using PostgreSQL ID ${actualVideoId}`);
           } else {
             logger.error(`Video record not found with ID or airtable_id: ${videoRecordId}`);
             throw new Error(`Video record not found: ${videoRecordId}`);
@@ -412,9 +476,13 @@ class ContentGenerationService {
       }
 
       // Process each content type and save to video_content table
+      const processedTypes = [];
+      const failedTypes = [];
+
       for (const [contentType, data] of Object.entries(generatedContent)) {
         if (!data.content) {
           logger.warn(`No content provided for content type ${contentType}`);
+          failedTypes.push({ contentType, reason: 'No content provided' });
           continue;
         }
 
@@ -471,7 +539,7 @@ class ContentGenerationService {
               WHERE id = $8
             `;
 
-            await database.query(updateQuery, [
+            const updateResult = await database.query(updateQuery, [
               data.content,
               data.provider || 'unknown',
               startTime,
@@ -482,7 +550,7 @@ class ContentGenerationService {
               existingContentId
             ]);
 
-            logger.debug(`Updated existing video_content record ID ${existingContentId} for video ${actualVideoId} content type ${contentType}`);
+            processedTypes.push({ contentType, status: 'updated' });
 
           } else {
             // Insert new record
@@ -505,7 +573,7 @@ class ContentGenerationService {
               ) VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8, $9, true, 1, $6, $6)
             `;
 
-            await database.query(insertQuery, [
+            const insertResult = await database.query(insertQuery, [
               actualVideoId,
               contentTypeRecord.id,
               data.content,
@@ -517,21 +585,292 @@ class ContentGenerationService {
               tokensUsed
             ]);
 
-            logger.debug(`Created new video_content record for video ${actualVideoId} content type ${contentType}`);
+            processedTypes.push({ contentType, status: 'created' });
           }
 
         } catch (contentError) {
           logger.error(`Error saving content type ${contentType} for video ${actualVideoId}:`, contentError.message);
-          // Continue with other content types rather than failing completely
+          failedTypes.push({ contentType, reason: contentError.message });
+          throw new Error(`Failed to save ${contentType}: ${contentError.message}`);
         }
       }
 
-      logger.info(`Successfully processed ${Object.keys(generatedContent).length} content types for video ${actualVideoId}`);
+
+      // Throw error if any content types failed
+      if (failedTypes.length > 0) {
+        const failureMessage = `${failedTypes.length} content type(s) failed: ${failedTypes.map(f => `${f.contentType} (${f.reason})`).join(', ')}`;
+        throw new Error(failureMessage);
+      }
 
     } catch (error) {
       logger.error(`Error updating video ${videoRecordId} with generated content:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Analyze content save errors to provide detailed failure reasons
+   * @param {Error} error - The error that occurred
+   * @param {string} contentType - Content type being saved
+   * @param {number} videoId - Video ID
+   * @param {Object} data - Content data
+   * @returns {Object} Error analysis with category, reason, and suggested fix
+   */
+  analyzeContentSaveError(error, contentType, videoId, data) {
+    const analysis = {
+      category: 'unknown',
+      reason: error.message,
+      suggestedFix: 'Review logs and try again',
+      retryable: false
+    };
+
+    // PostgreSQL specific error codes
+    if (error.code) {
+      switch (error.code) {
+        case '23505': // unique_violation
+          analysis.category = 'duplicate_content';
+          analysis.reason = `Duplicate content detected for ${contentType} - content already exists`;
+          analysis.suggestedFix = 'Use UPDATE instead of INSERT, or check for existing content first';
+          analysis.retryable = false;
+          break;
+
+        case '23503': // foreign_key_violation
+          analysis.category = 'foreign_key_violation';
+          if (error.message.includes('content_type_id')) {
+            analysis.reason = `Content type '${contentType}' not found in content_types table`;
+            analysis.suggestedFix = 'Ensure content type exists and is active in content_types table';
+          } else if (error.message.includes('video_id')) {
+            analysis.reason = `Video ID ${videoId} not found in videos table`;
+            analysis.suggestedFix = 'Ensure video exists in videos table before generating content';
+          } else {
+            analysis.reason = 'Foreign key constraint violation - referenced record not found';
+            analysis.suggestedFix = 'Check that all referenced records exist';
+          }
+          analysis.retryable = false;
+          break;
+
+        case '23514': // check_violation
+          analysis.category = 'data_validation';
+          analysis.reason = 'Data validation failed - content violates database constraints';
+          analysis.suggestedFix = 'Check content format, length, and required fields';
+          analysis.retryable = false;
+          break;
+
+        case '23502': // not_null_violation
+          analysis.category = 'missing_required_data';
+          analysis.reason = 'Required field is null or missing';
+          analysis.suggestedFix = 'Ensure all required fields are provided';
+          analysis.retryable = false;
+          break;
+
+        case '42P01': // undefined_table
+          analysis.category = 'schema_error';
+          analysis.reason = 'Database table not found - possible schema migration issue';
+          analysis.suggestedFix = 'Check database schema and run migrations if needed';
+          analysis.retryable = false;
+          break;
+
+        case '42703': // undefined_column
+          analysis.category = 'schema_error';
+          analysis.reason = 'Database column not found - possible schema mismatch';
+          analysis.suggestedFix = 'Check database schema matches application code';
+          analysis.retryable = false;
+          break;
+
+        case '53300': // too_many_connections
+          analysis.category = 'connection_limit';
+          analysis.reason = 'Database connection limit exceeded';
+          analysis.suggestedFix = 'Retry after brief delay when connections available';
+          analysis.retryable = true;
+          break;
+
+        case '57014': // query_canceled
+          analysis.category = 'query_timeout';
+          analysis.reason = 'Database query was canceled or timed out';
+          analysis.suggestedFix = 'Retry with shorter content or check database performance';
+          analysis.retryable = true;
+          break;
+
+        case '08006': // connection_failure
+        case '08000': // connection_exception
+          analysis.category = 'connection_error';
+          analysis.reason = 'Database connection failed';
+          analysis.suggestedFix = 'Check database connectivity and retry';
+          analysis.retryable = true;
+          break;
+
+        default:
+          analysis.category = 'database_error';
+          analysis.reason = `Database error (${error.code}): ${error.message}`;
+          analysis.suggestedFix = 'Check database logs for detailed error information';
+          analysis.retryable = true;
+      }
+    }
+    // Content-specific validation errors
+    else if (error.message.includes('content_text')) {
+      if (data.content && data.content.length > 50000) {
+        analysis.category = 'content_too_large';
+        analysis.reason = `Content too large (${data.content.length} chars) for ${contentType}`;
+        analysis.suggestedFix = 'Truncate content or increase database field size';
+        analysis.retryable = false;
+      } else if (!data.content || data.content.trim() === '') {
+        analysis.category = 'empty_content';
+        analysis.reason = `Empty or null content provided for ${contentType}`;
+        analysis.suggestedFix = 'Ensure LLM generated valid content before saving';
+        analysis.retryable = true;
+      }
+    }
+    // Network/connection errors
+    else if (error.message.includes('ECONNRESET') || error.message.includes('ENOTFOUND')) {
+      analysis.category = 'network_error';
+      analysis.reason = 'Network connection to database failed';
+      analysis.suggestedFix = 'Check network connectivity and retry';
+      analysis.retryable = true;
+    }
+    // Timeout errors
+    else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      analysis.category = 'timeout_error';
+      analysis.reason = 'Database operation timed out';
+      analysis.suggestedFix = 'Retry with shorter content or check database performance';
+      analysis.retryable = true;
+    }
+    // Verification failures
+    else if (error.message.includes('Verification failed')) {
+      analysis.category = 'verification_failure';
+      analysis.reason = 'Content saved but verification query failed to find it';
+      analysis.suggestedFix = 'Check for transaction rollback or database consistency issues';
+      analysis.retryable = true;
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Analyze LLM generation errors to provide detailed failure reasons
+   * @param {Error} error - The error that occurred during LLM generation
+   * @param {Object} prompt - The prompt configuration used
+   * @param {string} processedPrompt - The actual prompt sent to LLM
+   * @returns {Object} Error analysis with category, reason, and suggested fix
+   */
+  analyzeLLMGenerationError(error, prompt, processedPrompt) {
+    const analysis = {
+      category: 'unknown',
+      reason: error.message,
+      suggestedFix: 'Review error and try again',
+      retryable: false,
+      estimatedCost: 'unknown'
+    };
+
+    // API key and authentication errors
+    if (error.status === 401 || error.statusCode === 401 || error.message.includes('API key') || error.message.includes('authentication')) {
+      analysis.category = 'authentication_error';
+      analysis.reason = `Invalid or missing API key for ${prompt.ai_provider}`;
+      analysis.suggestedFix = 'Check API key configuration and permissions';
+      analysis.retryable = false;
+    }
+    // Rate limiting errors
+    else if (error.status === 429 || error.statusCode === 429 || error.message.includes('rate limit') || error.message.includes('quota')) {
+      analysis.category = 'rate_limit_exceeded';
+      analysis.reason = `${prompt.ai_provider} rate limit or quota exceeded`;
+      analysis.suggestedFix = 'Wait before retrying or upgrade API plan';
+      analysis.retryable = true;
+    }
+    // Content policy violations
+    else if (error.status === 400 && (error.message.includes('content policy') || error.message.includes('safety') || error.message.includes('inappropriate'))) {
+      analysis.category = 'content_policy_violation';
+      analysis.reason = `Content violates ${prompt.ai_provider} safety policies`;
+      analysis.suggestedFix = 'Review and modify prompt content for policy compliance';
+      analysis.retryable = false;
+    }
+    // Token limit exceeded
+    else if (error.message.includes('token') && (error.message.includes('limit') || error.message.includes('exceeded') || error.message.includes('maximum'))) {
+      analysis.category = 'token_limit_exceeded';
+      analysis.reason = `Prompt or response exceeded token limits for ${prompt.ai_provider}`;
+      analysis.suggestedFix = 'Reduce prompt size or increase max_tokens setting';
+      analysis.retryable = false;
+
+      // Estimate cost based on prompt length
+      const estimatedTokens = Math.ceil((processedPrompt?.length || 0) / 4);
+      analysis.estimatedCost = `~${estimatedTokens} tokens`;
+    }
+    // Network and connectivity errors
+    else if (error.code === 'ECONNRESET' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT' || error.message.includes('network')) {
+      analysis.category = 'network_error';
+      analysis.reason = `Network connectivity issue with ${prompt.ai_provider} API`;
+      analysis.suggestedFix = 'Check internet connection and API endpoint status';
+      analysis.retryable = true;
+    }
+    // Server errors (5xx)
+    else if (error.status >= 500 || error.statusCode >= 500) {
+      analysis.category = 'api_server_error';
+      analysis.reason = `${prompt.ai_provider} API server error (${error.status || error.statusCode})`;
+      analysis.suggestedFix = 'Retry after brief delay - server issue on API provider side';
+      analysis.retryable = true;
+    }
+    // Client errors (4xx)
+    else if (error.status >= 400 && error.status < 500) {
+      analysis.category = 'api_client_error';
+      analysis.reason = `Invalid request to ${prompt.ai_provider} API (${error.status})`;
+      analysis.suggestedFix = 'Check request format, parameters, and API documentation';
+      analysis.retryable = false;
+    }
+    // Timeout errors
+    else if (error.message.includes('timeout') || error.code === 'ETIMEDOUT') {
+      analysis.category = 'request_timeout';
+      analysis.reason = `Request to ${prompt.ai_provider} API timed out`;
+      analysis.suggestedFix = 'Reduce prompt complexity or increase timeout settings';
+      analysis.retryable = true;
+    }
+    // Model-specific errors
+    else if (error.message.includes('model') && error.message.includes('not found')) {
+      analysis.category = 'model_not_found';
+      analysis.reason = `AI model not available or invalid for ${prompt.ai_provider}`;
+      analysis.suggestedFix = 'Check model name and availability in API documentation';
+      analysis.retryable = false;
+    }
+    // JSON parsing errors (malformed API response)
+    else if (error.message.includes('JSON') || error.message.includes('parse')) {
+      analysis.category = 'response_parsing_error';
+      analysis.reason = `Invalid or malformed response from ${prompt.ai_provider} API`;
+      analysis.suggestedFix = 'Retry request - may be temporary API response issue';
+      analysis.retryable = true;
+    }
+    // Content generation failures (empty or invalid responses)
+    else if (error.message.includes('empty') || error.message.includes('no content') || error.message.includes('invalid response')) {
+      analysis.category = 'empty_response';
+      analysis.reason = `${prompt.ai_provider} returned empty or invalid content`;
+      analysis.suggestedFix = 'Modify prompt to be more specific or try different parameters';
+      analysis.retryable = true;
+    }
+    // Provider-specific error handling
+    else if (prompt.ai_provider === 'gemini') {
+      if (error.message.includes('SAFETY')) {
+        analysis.category = 'safety_filter';
+        analysis.reason = 'Content blocked by Gemini safety filters';
+        analysis.suggestedFix = 'Modify prompt to avoid potentially harmful content';
+        analysis.retryable = false;
+      } else if (error.message.includes('RECITATION')) {
+        analysis.category = 'recitation_filter';
+        analysis.reason = 'Content blocked due to potential copyright recitation';
+        analysis.suggestedFix = 'Modify prompt to request original content only';
+        analysis.retryable = false;
+      }
+    }
+    else if (prompt.ai_provider === 'openai') {
+      if (error.message.includes('content_filter')) {
+        analysis.category = 'content_filter';
+        analysis.reason = 'Content blocked by OpenAI content filter';
+        analysis.suggestedFix = 'Modify prompt to comply with OpenAI usage policies';
+        analysis.retryable = false;
+      }
+    }
+
+    // Add retry recommendation based on category
+    if (['network_error', 'api_server_error', 'request_timeout', 'rate_limit_exceeded', 'response_parsing_error', 'empty_response'].includes(analysis.category)) {
+      analysis.retryable = true;
+    }
+
+    return analysis;
   }
 
   /**
@@ -548,15 +887,12 @@ class ContentGenerationService {
         userId = null
       } = options;
 
-      logger.info('Starting batch content generation for videos with transcripts', {
-        provider,
-        contentTypes,
-        maxVideos,
-        userId
-      });
 
       // Get videos from PostgreSQL database using Video model
       const allVideos = await videoModel.findAll({}, { limit: maxVideos * 2 });
+
+      // Get dynamic content types from ai_prompts table
+      const supportedTypes = await this.getSupportedContentTypes();
 
       // Filter videos that have transcripts but missing content
       let videos = allVideos.filter(record => {
@@ -570,15 +906,13 @@ class ContentGenerationService {
           return false;
         }
 
-        // Include if missing some content (e.g., blog_text or discussion_guide_text)
-        return !record.summary_text || !record.discussion_guide_text || !record.quiz_text;
+        // Include if missing any supported content type
+        return supportedTypes.some(type => !record[type]);
       }).slice(0, maxVideos);
 
-      logger.info(`Found ${videos.length} videos needing content generation`);
 
       if (videos.length === 0) {
-        logger.info('No videos found that need content generation');
-        return [];
+          return [];
       }
 
       // Process videos
@@ -611,7 +945,21 @@ class ContentGenerationService {
         }
       }
 
-      logger.info(`Batch processing completed: ${results.filter(r => r.summary?.successful > 0).length}/${results.length} videos processed successfully`);
+      // Log comprehensive batch processing summary
+      const successfulVideos = results.filter(r => r.summary?.successful > 0);
+      const totalContentGenerated = results.reduce((sum, r) => sum + (r.summary?.successful || 0), 0);
+      const totalContentFailed = results.reduce((sum, r) => sum + (r.summary?.failed || 0), 0);
+
+      // Create detailed status breakdown
+      const videoSummaries = results.map(result => ({
+        videoId: result.videoId,
+        totalTypes: result.summary?.total || 0,
+        completed: result.summary?.successful || 0,
+        failed: result.summary?.failed || 0,
+        status: result.summary?.failed === 0 ? 'all_completed' :
+                result.summary?.successful > 0 ? 'partial_completion' : 'all_failed'
+      }));
+
       return results;
 
     } catch (error) {
@@ -657,8 +1005,10 @@ class ContentGenerationService {
           return v.transcript_text?.length > 100;
         }).length;
 
+        // Get dynamic content types and check if any content exists
+        const supportedTypes = await this.getSupportedContentTypes();
         videoStats.withGeneratedContent = allVideos.filter(v => {
-          return v.summary_text || v.discussion_guide_text || v.quiz_text;
+          return supportedTypes.some(type => v[type]);
         }).length;
       } catch (error) {
         logger.warn('Could not get video statistics from database:', error.message);
@@ -696,7 +1046,6 @@ class ContentGenerationService {
       // Check if video has transcript
       const video = await videoModel.findById(videoRecordId);
       if (!video || !video.transcript_text || video.transcript_text.trim() === '') {
-        logger.debug(`Video ${videoId} does not have transcript yet, not marking as completed`);
         return;
       }
 
@@ -716,9 +1065,7 @@ class ContentGenerationService {
           processed_at: new Date().toISOString()
         });
 
-        logger.info(`✅ Video ${videoId} marked as completed - has transcript and ${contentCount} content items`);
       } else {
-        logger.debug(`Video ${videoId} has transcript but no generated content yet, keeping status as processing`);
       }
 
     } catch (error) {

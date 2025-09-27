@@ -278,8 +278,7 @@ router.post('/batch',
         return true;
       })
   ],
-  videosController.processBatch.bind(videosController),
-  subscriptionMiddleware.incrementUsage
+  videosController.processBatch.bind(videosController)
 );
 
 module.exports = router;

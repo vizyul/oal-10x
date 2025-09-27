@@ -49,11 +49,20 @@ router.get('/socket-token', (req, res) => {
 /**
  * @route   GET /videos/upload
  * @desc    Video upload page
- * @access  Private - Requires Basic subscription
+ * @access  Private - Requires Basic subscription and available video slots
  */
 router.get('/upload',
   subscriptionMiddleware.requireSubscription('free'),
   (req, res) => {
+    // Check if user has remaining video capacity
+    if (req.subscriptionInfo && req.subscriptionInfo.remainingVideos <= 0) {
+      // Redirect to upgrade page with specific message for exhausted limits
+      const tierMessage = req.subscriptionInfo.tier === 'free'
+        ? 'You have used your free video limit'
+        : 'You have reached your video import limit';
+      return res.redirect(`/subscription/upgrade?reason=video_limit&message=${encodeURIComponent(tierMessage)}`);
+    }
+
     res.render('videos/upload', {
       title: 'Upload Video - Our AI Legacy',
       description: 'Add videos by URL or connect your YouTube account',

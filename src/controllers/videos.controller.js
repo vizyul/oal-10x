@@ -1315,13 +1315,25 @@ class VideosController {
           const postgresRecord = await video.createVideo(videoData);
           logger.info(`✅ Video ${videoId} created in PostgreSQL: ID ${postgresRecord.id}`);
 
-          // Database write succeeded - increment subscription usage
+          // Database write succeeded - handle usage tracking for both free and paid users
           try {
             const subscriptionService = require('../services/subscription.service');
-            await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
-            logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+
+            // Get user tier to determine usage tracking method
+            const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
+            const userTier = userResult.rows[0]?.subscription_tier || 'free';
+
+            if (userTier === 'free') {
+              // Mark free video as used
+              await subscriptionService.markFreeVideoAsUsed(actualUserId);
+              logger.info(`✅ Marked free video as used for user ${actualUserId}`);
+            } else {
+              // Regular subscription usage tracking for paid users
+              await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+              logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+            }
           } catch (usageError) {
-            logger.warn(`⚠️  Failed to increment video usage for user ${actualUserId}:`, usageError.message);
+            logger.warn(`⚠️  Failed to update usage for user ${actualUserId}:`, usageError.message);
           }
 
           // Trigger processing with selected content types

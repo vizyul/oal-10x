@@ -76,6 +76,12 @@ app.set('views', path.join(__dirname, 'views'));
 // Apply security middleware first
 app.use(securityMiddleware);
 
+// Apply centralized rate limiting
+const { autoRateLimit, addRateLimitHeaders, logRateLimitEvents } = require('./middleware/rate-limiting.middleware');
+app.use(addRateLimitHeaders);
+app.use(logRateLimitEvents);
+app.use(autoRateLimit);
+
 // Request logging
 if (process.env.NODE_ENV === 'development') {
   const morgan = require('morgan');

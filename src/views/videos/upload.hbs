@@ -302,7 +302,20 @@ document.addEventListener('DOMContentLoaded', function() {
       subscriptionLimits
     });
 
-    if (subscriptionLimits && urls.length > availableSlots) {
+    // Check if user has no available slots (exhausted subscription)
+    if (subscriptionLimits && availableSlots <= 0) {
+      console.log('No available slots - subscription exhausted');
+      const tierMessage = subscriptionLimits.tier === 'free'
+        ? `You've used your free video (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`
+        : `Your video import limit has been reached (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`;
+
+      showUrlError(`${tierMessage} <a href="/subscription/upgrade">Upgrade your plan</a> to import more videos.
+
+Entered URLs cannot be processed due to subscription limits.`);
+
+      // Don't add any URLs
+      selectedUrls.clear();
+    } else if (subscriptionLimits && urls.length > availableSlots) {
       console.log('Subscription limit hit - adding only', availableSlots, 'URLs');
       const droppedCount = urls.length - availableSlots;
       const droppedUrls = urls.slice(availableSlots);
@@ -318,7 +331,7 @@ You tried to import ${urls.length} videos, but your plan allows only ${available
 Dropped URLs:
 ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
 
-Upgrade your plan to import more videos.`);
+<a href="/subscription/upgrade">Upgrade your plan</a> to import more videos.`);
 
       // Only add what we can
       urls.slice(0, availableSlots).forEach(url => selectedUrls.add(url));
@@ -377,8 +390,17 @@ Upgrade your plan to import more videos.`);
     contentTypeError.classList.add('hidden');
   }
 
+  // Initialize subscription data from server-side
+  subscriptionLimits = {
+    remainingVideos: {{subscription.remainingVideos}},
+    limits: {{{json subscription.limits}}},
+    usage: {{{json subscription.usage}}},
+    tier: '{{subscription.tier}}'
+  };
+
+  console.log('Subscription limits loaded:', subscriptionLimits);
+
   // Initialize core functionality first (independent of OAuth)
-  loadSubscriptionInfo();
   loadContentTypes();
 
   // Initialize YouTube OAuth status (non-blocking)
@@ -404,18 +426,7 @@ Upgrade your plan to import more videos.`);
     }
   }
   
-  async function loadSubscriptionInfo() {
-    try {
-      const response = await fetch('/api/subscription/status');
-      const result = await response.json();
-      
-      if (result.success) {
-        subscriptionLimits = result.data;
-      }
-    } catch (error) {
-      console.error('Error loading subscription info:', error);
-    }
-  }
+  // Subscription info is now loaded from server-side rendering (see initialization above)
   
   function showConnectedState(connectionData) {
     youtubeNotConnected.classList.add('hidden');
@@ -591,7 +602,7 @@ Upgrade your plan to import more videos.`);
   }
   
   function showError(message) {
-    errorMessageEl.textContent = message;
+    errorMessageEl.innerHTML = message; // Use innerHTML to parse HTML tags in error messages
     errorMessageEl.classList.remove('hidden');
     // Auto-hide after 5 seconds
     setTimeout(() => hideError(), 5000);
@@ -697,13 +708,25 @@ Upgrade your plan to import more videos.`);
     const isChecked = event.target.checked;
 
     if (isChecked) {
-      // Check subscription limits considering existing URLs and videos
+      // Check subscription limits BEFORE selection
       const currentTotal = selectedVideos.size + selectedUrls.size;
+
+      // Check subscription limits BEFORE selection with improved messages
+      if (subscriptionLimits && subscriptionLimits.remainingVideos === 0) {
+        event.preventDefault();
+        event.target.checked = false;
+        const tierMessage = subscriptionLimits.tier === 'free'
+          ? `You've used your free video (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`
+          : `Your video import limit has been reached (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`;
+        showError(`${tierMessage} <a href="/subscription/upgrade">Upgrade your plan</a> to import more videos.`);
+        return;
+      }
+
       if (subscriptionLimits && currentTotal >= subscriptionLimits.remainingVideos) {
         event.preventDefault();
         event.target.checked = false;
         const urlInfo = selectedUrls.size > 0 ? ` (${selectedUrls.size} URL(s) already selected)` : '';
-        showError(`You can only import ${subscriptionLimits.remainingVideos} video(s) total with your current subscription${urlInfo}.`);
+        showError(`You can only import ${subscriptionLimits.remainingVideos} more video(s) with your current ${subscriptionLimits.tier} plan${urlInfo}.`);
         return;
       }
       selectedVideos.add(videoId);
@@ -801,7 +824,10 @@ Upgrade your plan to import more videos.`);
     selectedVideos.clear();
 
     if (availableSlots <= 0 && subscriptionLimits) {
-      showError(`Cannot select any videos. You have ${currentUrls} URL(s) selected and can only import ${maxTotal} video(s) total with your current subscription.`);
+      const tierMessage = subscriptionLimits.tier === 'free'
+        ? `You've used your free video (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`
+        : `Your video import limit has been reached (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`;
+      showError(`Cannot select any videos. ${tierMessage} <a href="/subscription/upgrade">Upgrade your plan</a> to import more videos.`);
       updateSelectionUI();
       return;
     }
@@ -859,7 +885,10 @@ Upgrade your plan to import more videos.`);
 
     // Final validation: Check subscription limits for combined total
     if (subscriptionLimits && totalSelected > subscriptionLimits.remainingVideos) {
-      showError(`You selected ${totalSelected} video(s) but can only process ${subscriptionLimits.remainingVideos} with your current subscription. Please reduce your selection.`);
+      const tierInfo = subscriptionLimits.tier === 'free'
+        ? `Your free plan allows 1 video total and you've used ${subscriptionLimits.usage.videos}.`
+        : `Your ${subscriptionLimits.tier} plan allows ${subscriptionLimits.limits.videos} videos and you've used ${subscriptionLimits.usage.videos}.`;
+      showError(`You selected ${totalSelected} video(s) but can only import ${subscriptionLimits.remainingVideos} more. ${tierInfo} <a href="/subscription/upgrade">Upgrade your plan</a> for more videos.`);
       return;
     }
 

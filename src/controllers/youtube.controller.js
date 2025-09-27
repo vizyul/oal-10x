@@ -495,11 +495,7 @@ class YouTubeController {
           if (postgresRecord) {
             // Database write succeeded - handle usage tracking for both free and paid users
             try {
-              // Check if user is free tier and handle accordingly
-              const database = require('../services/database.service');
-              const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
-              const userTier = userResult.rows[0]?.subscription_tier || 'free';
-
+              // Use the already fetched user tier from earlier in the function
               if (userTier === 'free') {
                 // Mark free video as used
                 await subscriptionService.markFreeVideoAsUsed(actualUserId);
