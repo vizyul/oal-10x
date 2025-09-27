@@ -149,7 +149,7 @@ const addRateLimitHeaders = (req, res, next) => {
     originalSet(field, value);
 
     // Add additional rate limit context if available
-    if (req.user) {
+    if (req.user && req.user.id) {
       originalSet('X-RateLimit-User-Tier', req.user.subscription_tier || 'free');
       originalSet('X-RateLimit-User-ID', req.user.id.toString());
     }
