@@ -84,7 +84,7 @@ Primary user data with OAuth integration and comprehensive profile fields:
 - **Identity**: `id`, `email`, `first_name`, `last_name`, `password`
 - **Verification**: `email_verified`, `email_verification_token`, `email_verification_expires`
 - **Authentication**: `oauth_provider`, `oauth_id` (normalized design vs separate provider columns)
-- **Status**: `status` (active), `role` (user/admin), `subscription_tier` (free/premium/enterprise)
+- **Status**: `status` (active), `role` (user/admin), `subscription_tier` (free/basic/premium/creator/enterprise)
 - **Profile**: `profile_image_url`, `phone`, `date_of_birth`, `gender`, `location`, `bio`, `website_url`
 - **Social**: `social_links` (JSONB), `preferences` (JSONB), `metadata` (JSONB)
 - **Subscription**: `stripe_customer_id`, `subscription_status`, `subscription_plan`, `trial_end`
@@ -111,7 +111,7 @@ Session tracking with proper duration calculation and timezone handling:
 #### user_subscriptions (15 columns)
 Stripe subscription management:
 - **Identity**: `id`, `users_id` (FK to users), `stripe_subscription_id`
-- **Plan**: `plan_name`, `subscription_tier` (free/premium/enterprise), `price_id`
+- **Plan**: `plan_name`, `subscription_tier` (free/basic/premium/creator/enterprise), `price_id`
 - **Status**: `status`, `current_period_start`, `current_period_end`
 - **Trial**: `trial_start`, `trial_end`
 - **Data**: `metadata` (JSONB), `airtable_id`

@@ -11,22 +11,22 @@ process.env.AIRTABLE_BASE_ID = 'test-base-id';
 // HTTPS and OAuth testing environment
 process.env.HOST = '0.0.0.0';
 process.env.HTTPS_PORT = '4433'; // Different port for testing to avoid conflicts
-process.env.CORS_ORIGIN = 'https://dev.ourailegacy.com:4433';
+process.env.CORS_ORIGIN = 'https://dev.amplifycontent.ai:4433';
 
 // OAuth test configuration (use mock values for testing)
 process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
 process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
-process.env.GOOGLE_CALLBACK_URL = 'https://dev.ourailegacy.com:4433/auth/google/callback';
+process.env.GOOGLE_CALLBACK_URL = 'https://dev.amplifycontent.ai:4433/auth/google/callback';
 
 process.env.APPLE_CLIENT_ID = 'test-apple-client-id';
 process.env.APPLE_TEAM_ID = 'test-apple-team-id';
 process.env.APPLE_KEY_ID = 'test-apple-key-id';
 process.env.APPLE_PRIVATE_KEY = 'test-apple-private-key';
-process.env.APPLE_CALLBACK_URL = 'https://dev.ourailegacy.com:4433/auth/apple/callback';
+process.env.APPLE_CALLBACK_URL = 'https://dev.amplifycontent.ai:4433/auth/apple/callback';
 
 process.env.MICROSOFT_CLIENT_ID = 'test-microsoft-client-id';
 process.env.MICROSOFT_CLIENT_SECRET = 'test-microsoft-client-secret';
-process.env.MICROSOFT_CALLBACK_URL = 'https://dev.ourailegacy.com:4433/auth/microsoft/callback';
+process.env.MICROSOFT_CALLBACK_URL = 'https://dev.amplifycontent.ai:4433/auth/microsoft/callback';
 
 // Mock console.log for cleaner test output
 global.console = {

@@ -435,6 +435,11 @@ class ContentGenerationService {
       // Check if we should mark the video as completed in the database
       await this.checkAndUpdateVideoCompletion(videoRecordId, videoId);
 
+      // Update YouTube video description if content was generated successfully
+      if (results.summary.successful > 0 && userId) {
+        await this.updateYouTubeDescription(videoId, videoRecordId, results, userId);
+      }
+
       return results;
 
     } catch (error) {
@@ -1052,7 +1057,7 @@ class ContentGenerationService {
       // Check if video has any content in video_content table
       const contentQuery = `
         SELECT COUNT(*) as content_count
-        FROM video_content 
+        FROM video_content
         WHERE video_id = $1 AND content_text IS NOT NULL AND content_text != ''
       `;
 
@@ -1071,6 +1076,70 @@ class ContentGenerationService {
     } catch (error) {
       const { logger } = require('../utils');
       logger.error(`Error checking video completion for ${videoId}:`, error);
+    }
+  }
+
+  /**
+   * Update YouTube video description with summary and chapters
+   * @param {string} videoId - YouTube video ID
+   * @param {string} videoRecordId - PostgreSQL video record ID
+   * @param {Object} results - Content generation results
+   * @param {string} userId - User ID
+   */
+  async updateYouTubeDescription(videoId, videoRecordId, results, userId) {
+    try {
+      // Check if video was imported through YouTube integration (has OAuth tokens)
+      const { video: videoModel } = require('../models');
+      const video = await videoModel.findById(videoRecordId);
+
+      if (!video || !video.imported_via_youtube_oauth) {
+        logger.debug(`Video ${videoId} not imported via YouTube OAuth, skipping description update`);
+        return;
+      }
+
+      // Get summary and chapters from generated content
+      const summary = results.content.summary_text?.content || null;
+      const chapters = results.content.chapters_text?.content || null;
+
+      // Only update if we have summary or chapters
+      if (!summary && !chapters) {
+        logger.debug(`No summary or chapters generated for video ${videoId}, skipping description update`);
+        return;
+      }
+
+      // Call YouTube OAuth service to update description
+      const youtubeOAuthService = require('./youtube-oauth.service');
+
+      try {
+        const updateResult = await youtubeOAuthService.updateVideoDescription(
+          userId,
+          videoId,
+          summary,
+          chapters
+        );
+
+        if (updateResult.success) {
+          logger.info(`✅ Updated YouTube description for video ${videoId}`, {
+            videoId,
+            originalLength: updateResult.originalDescriptionLength,
+            newLength: updateResult.newDescriptionLength,
+            addedLength: updateResult.addedContentLength,
+            truncated: updateResult.truncated
+          });
+        }
+      } catch (youtubeError) {
+        // Don't fail content generation if YouTube update fails
+        logger.warn(`Failed to update YouTube description for video ${videoId}:`, youtubeError.message);
+
+        // Check if it's an authentication issue
+        if (youtubeError.message.includes('tokens') || youtubeError.message.includes('authentication')) {
+          logger.info(`YouTube OAuth tokens may need refresh for user ${userId}`);
+        }
+      }
+
+    } catch (error) {
+      logger.error(`Error updating YouTube description for video ${videoId}:`, error.message);
+      // Don't throw - this is a non-critical enhancement
     }
   }
 }

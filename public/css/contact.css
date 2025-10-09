@@ -160,8 +160,8 @@ textarea.form-control {
 }
 
 .btn-primary:hover {
-  background: #a8832b;
-  border-color: #a8832b;
+  background: var(--brand-white);
+  border-color: var(--text-primary);
   transform: translateY(-1px);
   box-shadow: var(--shadow-hover);
 }

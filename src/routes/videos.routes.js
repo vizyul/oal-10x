@@ -239,6 +239,22 @@ router.get('/:id/content/:contentType',
 );
 
 /**
+ * @route   POST /api/videos/get-video
+ * @desc    Extract video ID from YouTube URL
+ * @access  Private
+ */
+router.post('/get-video',
+  [
+    body('url')
+      .notEmpty()
+      .withMessage('URL is required')
+      .isString()
+      .withMessage('URL must be a string')
+  ],
+  videosController.getVideoIdFromUrl.bind(videosController)
+);
+
+/**
  * @route   POST /api/videos/batch
  * @desc    Process multiple video URLs
  * @access  Private - Requires Basic subscription

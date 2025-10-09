@@ -413,6 +413,9 @@ class YouTubeController {
             category: 'Education',
             privacy_setting: 'public',
 
+            // Import source tracking
+            imported_via_youtube_oauth: true,
+
             // User association and timestamps
             users_id: actualUserId, // PostgreSQL integer foreign key
             created_at: new Date().toISOString()

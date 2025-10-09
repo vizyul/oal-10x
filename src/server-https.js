@@ -11,8 +11,8 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // HTTPS options with certificate paths
 const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, '../certs/dev.ourailegacy.com-key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, '../certs/dev.ourailegacy.com.pem'))
+  key: fs.readFileSync(path.join(__dirname, '../certs/dev.amplifycontent.ai.key.pem')),
+  cert: fs.readFileSync(path.join(__dirname, '../certs/dev.amplifycontent.ai.cert.pem'))
 };
 
 // Create HTTPS server
@@ -21,7 +21,7 @@ const server = https.createServer(httpsOptions, app);
 // Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'https://dev.ourailegacy.com',
+    origin: process.env.CORS_ORIGIN || 'https://dev.amplifycontent.ai',
     methods: ['GET', 'POST']
   }
 });
@@ -81,8 +81,8 @@ app.set('io', io);
 // Handle server startup
 const startServer = () => {
   server.listen(PORT, HOST, () => {
-    logger.info(`🚀 HTTPS Server running on https://dev.ourailegacy.com${PORT === 443 ? '' : ':' + PORT}`);
-    logger.info(`📍 Server binding to ${HOST}:${PORT} (accessible via dev.ourailegacy.com)`);
+    logger.info(`🚀 HTTPS Server running on https://dev.amplifycontent.ai${PORT === 443 ? '' : ':' + PORT}`);
+    logger.info(`📍 Server binding to ${HOST}:${PORT} (accessible via dev.amplifycontent.ai)`);
     logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`📊 Process ID: ${process.pid}`);
     logger.info('🔒 HTTPS enabled for Apple OAuth development');

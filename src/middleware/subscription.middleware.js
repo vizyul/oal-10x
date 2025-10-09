@@ -7,7 +7,8 @@ const TIER_HIERARCHY = {
   'free': 0,
   'basic': 1,
   'premium': 2,
-  'enterprise': 3
+  'enterprise': 3,
+  'creator': 4
 };
 
 /**

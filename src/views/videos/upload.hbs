@@ -33,7 +33,7 @@
         <p>Choose which AI-generated content you want for your videos</p>
       </div>
       <div class="header-center hidden" id="header-selection-info">
-        <span id="selected-content-count">0</span> content types selected
+        <span id="selected-content-count">0</span> &nbsp;content types selected
       </div>
       <div class="header-right hidden" id="header-selection-controls">
         <button type="button" id="select-all-content-btn" class="btn btn-secondary btn-small">Select All</button>
@@ -372,6 +372,7 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
         messageLines.push('<strong>Valid YouTube URL formats:</strong>');
         messageLines.push('• https://youtube.com/watch?v=VIDEO_ID');
         messageLines.push('• https://youtube.com/live/VIDEO_ID');
+        messageLines.push('• https://youtube.com/shorts/VIDEO_ID');
         messageLines.push('• https://youtu.be/VIDEO_ID');
       }
 
@@ -909,18 +910,33 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       // Process YouTube OAuth selected videos
       if (selectedVideos.size > 0) {
         const videoIds = Array.from(selectedVideos);
-        processingPromises.push(
-          fetch('/api/youtube/videos/import', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              videoIds,
-              contentTypes
-            })
+        console.log('Importing YouTube videos:', { videoIds, contentTypes });
+
+        const importPromise = fetch('/api/youtube/videos/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            videoIds,
+            contentTypes
           })
-        );
+        }).then(response => {
+          console.log('YouTube import response status:', response.status);
+          if (!response.ok) {
+            return response.json().then(err => {
+              console.error('YouTube import failed:', err);
+              throw new Error(err.message || 'Import failed');
+            });
+          }
+          return response;
+        }).catch(error => {
+          console.error('YouTube import error:', error);
+          showError(`YouTube import failed: ${error.message}`);
+          throw error;
+        });
+
+        processingPromises.push(importPromise);
       }
 
       // Process URL-based videos
@@ -940,13 +956,16 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
         );
       }
 
-      // Start processing asynchronously - redirect immediately, handle count updates in background
+      // Wait for processing to complete before redirecting
       Promise.all(processingPromises).then(responses => {
-        // Process responses in background after redirect
+        // Process responses
         let createdCount = 0;
+        let hasErrors = false;
+
         responses.forEach(async (response) => {
           if (response.ok) {
             const result = await response.json();
+            console.log('Import result:', result);
             if (result.success) {
               if (result.data?.imported !== undefined) {
                 createdCount += result.data.imported;
@@ -958,18 +977,30 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
                 createdCount += 1;
               }
             }
+          } else {
+            hasErrors = true;
           }
         });
-        console.log(`Background processing: ${createdCount} videos created successfully`);
-      }).catch(error => {
-        console.error('Background processing error:', error);
-      });
 
-      // Immediate redirect - don't wait for API responses
-      progressMessage.textContent = 'Redirecting to Video Dashboard...';
-      setTimeout(() => {
-        window.location.href = `/videos?processing=true&count=${totalSelected}&contentTypes=${contentTypes.join(',')}`;
-      }, 500);
+        console.log(`Processing complete: ${createdCount} videos created successfully, hasErrors: ${hasErrors}`);
+
+        // Only redirect if no errors
+        if (!hasErrors) {
+          progressMessage.textContent = 'Redirecting to Video Dashboard...';
+          setTimeout(() => {
+            window.location.href = `/videos?processing=true&count=${totalSelected}&contentTypes=${contentTypes.join(',')}`;
+          }, 1000);
+        } else {
+          console.error('Import had errors, not redirecting');
+          hideProgress();
+          importSelectedBtn.disabled = false;
+        }
+      }).catch(error => {
+        console.error('Import error - NOT redirecting:', error);
+        showError(`Import failed: ${error.message}`);
+        hideProgress();
+        importSelectedBtn.disabled = false;
+      });
 
     } catch (error) {
       console.error('Import error:', error);
@@ -1021,7 +1052,8 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})(?:\S*)?/,
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube live URLs with query params
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/,  // Support for YouTube live URLs
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube Shorts
     ];
 
     for (const pattern of patterns) {
@@ -1045,10 +1077,11 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       // Enhanced regex to support multiple YouTube URL formats:
       // - youtube.com/watch?v=VIDEO_ID
       // - youtube.com/live/VIDEO_ID
+      // - youtube.com/shorts/VIDEO_ID
       // - youtu.be/VIDEO_ID
       // - with or without www.
       // - with additional parameters (like ?feature=shared)
-      const youtubeRegex = /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const youtubeRegex = /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|live\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
       if (youtubeRegex.test(line)) {
         const videoId = extractVideoId(line);
         if (videoId) {

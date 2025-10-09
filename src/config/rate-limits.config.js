@@ -111,6 +111,17 @@ const API_LIMITS = {
       message: 'API rate limit exceeded. Please contact support if you need higher limits.',
       error: 'ENTERPRISE_TIER_RATE_LIMIT_EXCEEDED'
     }
+  },
+
+  // Creator tier users (highest tier)
+  CREATOR: {
+    windowMs: TIME_WINDOWS.ONE_HOUR,
+    max: Math.ceil(5000 * ENV_MULTIPLIER), // 5000 requests per hour
+    message: {
+      success: false,
+      message: 'API rate limit exceeded. Please contact support if you need higher limits.',
+      error: 'CREATOR_TIER_RATE_LIMIT_EXCEEDED'
+    }
   }
 };
 
@@ -123,7 +134,7 @@ const CONTENT_LIMITS = {
   VIDEO_PROCESSING: {
     windowMs: TIME_WINDOWS.ONE_HOUR,
     max: (user) => {
-      const baseLimits = { free: 5, premium: 20, enterprise: 100 };
+      const baseLimits = { free: 5, premium: 20, enterprise: 100, creator: 250 };
       const userTier = user?.subscription_tier || 'free';
       return Math.ceil((baseLimits[userTier] || baseLimits.free) * ENV_MULTIPLIER);
     },
@@ -139,7 +150,7 @@ const CONTENT_LIMITS = {
   AI_GENERATION: {
     windowMs: TIME_WINDOWS.ONE_HOUR,
     max: (user) => {
-      const baseLimits = { free: 10, premium: 50, enterprise: 200 };
+      const baseLimits = { free: 10, premium: 50, enterprise: 200, creator: 500 };
       const userTier = user?.subscription_tier || 'free';
       return Math.ceil((baseLimits[userTier] || baseLimits.free) * ENV_MULTIPLIER);
     },
