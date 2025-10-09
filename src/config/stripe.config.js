@@ -122,15 +122,15 @@ const stripeConfig = {
       analyticsAccess: true,
       apiAccess: false
     },
-    enterprise: {
-      name: 'Enterprise',
+    creator: {
+      name: 'Creator',
       monthly: {
-        priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID,
+        priceId: process.env.STRIPE_CREATOR_PRICE_ID,
         price: 299,
         period: 'month'
       },
       yearly: {
-        priceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID,
+        priceId: process.env.STRIPE_CREATOR_YEARLY_PRICE_ID,
         price: 2990,
         monthlyEquivalent: 249.17,
         originalMonthlyTotal: 3588,
@@ -139,6 +139,26 @@ const stripeConfig = {
       },
       features: ['16 videos/month', 'Priority processing', 'API access', 'Dedicated support'],
       videoLimit: 16,
+      analyticsAccess: true,
+      apiAccess: true
+    },
+    enterprise: {
+      name: 'Enterprise',
+      monthly: {
+        priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID,
+        price: 499,
+        period: 'month'
+      },
+      yearly: {
+        priceId: process.env.STRIPE_ENTERPRISE_YEARLY_PRICE_ID,
+        price: 4990,
+        monthlyEquivalent: 415.83,
+        originalMonthlyTotal: 5988,
+        savings: 998,
+        period: 'year'
+      },
+      features: ['50 videos/month', 'Advanced AI content', 'Analytics dashboard', 'API access', 'Priority support'],
+      videoLimit: 50,
       analyticsAccess: true,
       apiAccess: true
     }

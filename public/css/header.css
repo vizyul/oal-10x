@@ -96,7 +96,7 @@
 
 /* Get Started Button Styling - Match Home Page Style */
 .btn-get-started {
-  background: var(--accent-color) !important;
+  background: var(--green) !important;
   color: var(--text-primary) !important;
   padding: var(--space-3) var(--space-6) !important;
   border-radius: var(--radius-md);
@@ -110,7 +110,7 @@
 }
 
 .btn-get-started:hover {
-  background: #a8832b !important;
+  background: var(--brand-white) !important;
   transform: translateY(-1px);
   box-shadow: var(--shadow-hover);
   color: var(--text-primary) !important;
@@ -458,7 +458,7 @@
   border-color: #7c3aed;
 }
 
-.tier-enterprise {
+.tier-enterprise, .tier-creator {
   background: #fef3c7;
   color: #92400e;
   border-color: #f59e0b;

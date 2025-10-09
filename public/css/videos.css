@@ -513,13 +513,16 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-color, #C39D43), #A67E33);
+  background: var(--accent-color);
+  border: 3px solid var(--text-primary);
   color: white;
 }
 
 .btn-primary:hover {
+  background: var(--brand-white);
+  color: var(--text-primary);
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px -3px rgba(195, 157, 67, 0.3);
+  box-shadow: 0 8px 15px -3px rgba(67, 195, 112, 0.3);
 }
 
 /* Override for Amplify Selected Videos button - use green color like Upgrade button */

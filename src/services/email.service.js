@@ -244,7 +244,7 @@ class EmailService {
 
       const emailMessage = {
         message: {
-          subject: 'Verify Your Email - Our AI Legacy',
+          subject: 'Verify Your Email - AmplifyContent.ai',
           body: {
             contentType: 'HTML',
             content: this.generateVerificationEmailHTML(verificationCode)
@@ -298,9 +298,9 @@ class EmailService {
   async sendEmailViaSMTP(email, verificationCode) {
     try {
       const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@ourailegacy.com',
+        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
         to: email,
-        subject: 'Verify Your Email - Our AI Legacy',
+        subject: 'Verify Your Email - AmplifyContent.ai',
         html: this.generateVerificationEmailHTML(verificationCode),
         text: this.generateVerificationEmailText(verificationCode)
       };
@@ -338,30 +338,32 @@ class EmailService {
         <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #000000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .header h1 { color: #c99b31; margin: 0 0 10px 0; font-size: 28px; }
+            .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+            .brand-text { color: #000000; }
+            .brand-ai { color: #10b981; }
             .header h2 { color: white; margin: 0; font-size: 20px; }
             .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
-            .verification-code { background-color: #c99b31; color: #000000; font-size: 36px; font-weight: bold; text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; letter-spacing: 8px; }
+            .verification-code { background-color: #10b981; color: #ffffff; font-size: 36px; font-weight: bold; text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; letter-spacing: 8px; }
             .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
             .button { background-color: #000000; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>Our AI Legacy</h1>
+            <h1><span style="color: #ffffff;">AmplifyContent.</span><span style="color: #10b981;">ai</span></h1>
             <h2>Email Verification</h2>
         </div>
         <div class="content">
             <p>Thank you for signing up! To complete your registration, please verify your email address by entering the following 6-digit code:</p>
-            
+
             <div class="verification-code">${code}</div>
-            
+
             <p>This code will expire in 10 minutes. If you didn't request this verification, you can safely ignore this email.</p>
-            
-            <p>Welcome to Our AI Legacy - where your content is amplified leveraging through AI!</p>
+
+            <p>Welcome to AmplifyContent.ai - where your content is amplified through AI!</p>
         </div>
         <div class="footer">
-            <p>© ${new Date().getFullYear()} Our AI Legacy. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
             <p>This is an automated email, please do not reply.</p>
         </div>
     </body>
@@ -370,7 +372,7 @@ class EmailService {
 
   generateVerificationEmailText(code) {
     return `
-Our AI Legacy - Email Verification
+AmplifyContent.ai - Email Verification
 
 Thank you for signing up! To complete your registration, please verify your email address by entering the following 6-digit code:
 
@@ -378,9 +380,9 @@ ${code}
 
 This code will expire in 10 minutes. If you didn't request this verification, you can safely ignore this email.
 
-Welcome to Our AI Legacy - where your content is amplified by leveraging AI!
+Welcome to AmplifyContent.ai - where your content is amplified through AI!
 
-© ${new Date().getFullYear()} Our AI Legacy. All rights reserved.
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
 This is an automated email, please do not reply.
     `;
   }
@@ -412,7 +414,7 @@ This is an automated email, please do not reply.
 
       const emailMessage = {
         message: {
-          subject: 'Welcome to Our AI Legacy!',
+          subject: 'Welcome to AmplifyContent.ai!',
           body: {
             contentType: 'HTML',
             content: this.generateWelcomeEmailHTML(firstName)
@@ -465,9 +467,9 @@ This is an automated email, please do not reply.
   async sendWelcomeEmailViaSMTP(email, firstName) {
     try {
       const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@ourailegacy.com',
+        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
         to: email,
-        subject: 'Welcome to Our AI Legacy!',
+        subject: 'Welcome to AmplifyContent.ai!',
         html: this.generateWelcomeEmailHTML(firstName),
         text: this.generateWelcomeEmailText(firstName)
       };
@@ -499,32 +501,32 @@ This is an automated email, please do not reply.
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Welcome to Our AI Legacy</title>
+        <title>Welcome to AmplifyContent.ai</title>
         <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #000000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .header h1 { color: #c99b31; margin: 0; font-size: 28px; }
+            .header h1 { margin: 0; font-size: 28px; }
             .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
             .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>Welcome to Our AI Legacy!</h1>
+            <h1><span style="color: #ffffff;">Welcome to AmplifyContent.</span><span style="color: #10b981;">ai</span><span style="color: #ffffff;">!</span></h1>
         </div>
         <div class="content">
             <h2>Hello ${firstName}!</h2>
-            <p>Welcome to Our AI Legacy! Your account has been successfully created and verified.</p>
-            
-            <p>You can now start using our platform to amplify your content by leveraging AI. Explore our features and begin your journey with us.</p>
-            
-            <p>If you have any questions or need assistance, feel free to reach out to our support team at <a href="mailto:support@ourailegacy.com" style="color: #c99b31; text-decoration: none;">support@ourailegacy.com</a>.</p>
-            
+            <p>Welcome to AmplifyContent.ai! Your account has been successfully created and verified.</p>
+
+            <p>You can now start using our platform to amplify your content through AI. Explore our features and begin your journey with us.</p>
+
+            <p>If you have any questions or need assistance, feel free to reach out to our support team at <a href="mailto:support@amplifycontent.ai" style="color: #10b981; text-decoration: none;">support@amplifycontent.ai</a>.</p>
+
             <p>God bless!</p>
-            <p>The Our AI Legacy Team</p>
+            <p>The AmplifyContent.ai Team</p>
         </div>
         <div class="footer">
-            <p>© ${new Date().getFullYear()} Our AI Legacy. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
         </div>
     </body>
     </html>`;
@@ -532,20 +534,20 @@ This is an automated email, please do not reply.
 
   generateWelcomeEmailText(firstName) {
     return `
-Welcome to Our AI Legacy!
+Welcome to AmplifyContent.ai!
 
 Hello ${firstName}!
 
-Welcome to Our AI Legacy! Your account has been successfully created and verified.
+Welcome to AmplifyContent.ai! Your account has been successfully created and verified.
 
-You can now start using our platform to amplify content by leveraging AI. Explore our features and begin your journey with us.
+You can now start using our platform to amplify your content through AI. Explore our features and begin your journey with us.
 
-If you have any questions or need assistance, feel free to reach out to our support team at support@ourailegacy.com.
+If you have any questions or need assistance, feel free to reach out to our support team at support@amplifycontent.ai.
 
 God bless!
-The Our AI Legacy Team
+The AmplifyContent.ai Team
 
-© ${new Date().getFullYear()} Our AI Legacy. All rights reserved.
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
     `;
   }
 
@@ -634,7 +636,7 @@ The Our AI Legacy Team
   async sendEmailViaSMTPGeneric(to, subject, htmlContent, textContent) {
     try {
       const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@ourailegacy.com',
+        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
         to: to,
         subject: subject,
         html: htmlContent

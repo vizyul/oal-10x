@@ -42,7 +42,7 @@ class RateLimitingService {
    * Pre-initialize all tier-specific limiters
    */
   initializeTierLimiters() {
-    const tiers = ['anonymous', 'free', 'premium', 'enterprise'];
+    const tiers = ['anonymous', 'free', 'premium', 'enterprise', 'creator'];
 
     tiers.forEach(tier => {
       const limiterKey = `api_${tier}`;

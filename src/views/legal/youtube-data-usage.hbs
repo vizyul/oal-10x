@@ -3,7 +3,7 @@
 <div style="max-width: 1000px; margin: 50px auto; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
   
   <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; margin-bottom: 30px; text-align: center;">
-    <strong>Last Updated:</strong> September 6, 2025
+    <strong>Last Updated:</strong> October 8, 2025
   </div>
 
   <h1 style="color: #141414; margin-bottom: 30px; border-bottom: 3px solid #27200e; padding-bottom: 15px;">YouTube Data Usage - Our AI Legacy Platform</h1>
@@ -46,15 +46,16 @@
   </ol>
 
   <h2 id="oauth-scopes" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">OAuth Scopes Requested</h2>
-  
+
   <h3 style="color: #27200e; margin: 25px 0 10px 0;">Primary Scopes</h3>
-  
+
   <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
-    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">1. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube.readonly</code></h4>
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">1. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube</code></h4>
     <ul style="margin-bottom: 0; padding-left: 20px;">
-      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Read-only access to user's YouTube account data</li>
-      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Retrieve channel information, video metadata, playlists, and video lists</li>
-      <li style="margin-bottom: 0;"><strong>Data Accessed:</strong> Channel details, video titles, descriptions, thumbnails, upload dates, durations</li>
+      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Read and write access to user's YouTube account data</li>
+      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Retrieve channel information, video metadata, playlists, video lists, and update video descriptions with AI-generated summaries and chapters</li>
+      <li style="margin-bottom: 8px;"><strong>Data Accessed:</strong> Channel details, video titles, descriptions, thumbnails, upload dates, durations</li>
+      <li style="margin-bottom: 0;"><strong>Data Modified:</strong> Video descriptions (enhanced with AI-generated summaries and chapter timestamps)</li>
     </ul>
   </div>
 
@@ -89,7 +90,7 @@
   </ul>
 
   <h3 style="color: #27200e; margin: 25px 0 10px 0;">2. Video Metadata</h3>
-  
+
   <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Retrieved:</strong></p>
   <ul style="margin-bottom: 20px; padding-left: 30px;">
     <li style="margin-bottom: 8px;">Video ID, title, and description</li>
@@ -98,6 +99,47 @@
     <li style="margin-bottom: 8px;">Privacy status and category</li>
     <li style="margin-bottom: 8px;">View count and engagement statistics</li>
     <li style="margin-bottom: 8px;">Video tags and metadata</li>
+  </ul>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">3. Video Description Updates (Write Access)</h3>
+
+  <div style="background: #e8f4f8; border: 1px solid #b3d9e8; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">Automated Video Description Enhancement</h4>
+    <p style="margin-bottom: 15px; line-height: 1.6;">Our platform automatically enhances your YouTube video descriptions by appending AI-generated content to help viewers discover and navigate your content more effectively.</p>
+  </div>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>What Gets Added to Video Descriptions:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>AI-Generated Summary:</strong> A concise overview of the video's main topics and key points</li>
+    <li style="margin-bottom: 8px;"><strong>Video Chapters:</strong> Timestamped chapter markers that help viewers navigate to specific sections of your video</li>
+  </ul>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>How It Works:</strong></p>
+  <ol style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;">After you import a video from your YouTube channel, our AI analyzes the video transcript</li>
+    <li style="margin-bottom: 8px;">The AI generates a summary and chapter timestamps based on the content</li>
+    <li style="margin-bottom: 8px;">Your original video description is <strong>preserved completely</strong></li>
+    <li style="margin-bottom: 8px;">The AI-generated summary and chapters are <strong>appended to the end</strong> of your existing description</li>
+    <li style="margin-bottom: 8px;">The updated description is automatically saved to your YouTube video</li>
+  </ol>
+
+  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">Important Safeguards:</h4>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;"><strong>5000 Character Limit:</strong> YouTube enforces a maximum description length of 5000 characters. If adding our AI content would exceed this limit, we intelligently truncate the additions while preserving your original description in full.</li>
+      <li style="margin-bottom: 8px;"><strong>Original Content Protected:</strong> Your existing video description is never modified or removed</li>
+      <li style="margin-bottom: 8px;"><strong>Clear Attribution:</strong> AI-generated sections are clearly marked with headers (📝 SUMMARY and 📺 VIDEO CHAPTERS)</li>
+      <li style="margin-bottom: 8px;"><strong>Only Your Videos:</strong> We only update descriptions for videos imported from channels you own and have authorized</li>
+      <li style="margin-bottom: 0;"><strong>Full Control:</strong> You can manually edit or remove the AI-generated content directly on YouTube at any time</li>
+    </ul>
+  </div>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Benefits of Description Enhancement:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Improved Discoverability:</strong> More detailed descriptions help YouTube's search algorithm understand your content</li>
+    <li style="margin-bottom: 8px;"><strong>Better User Experience:</strong> Chapter markers allow viewers to jump to specific sections</li>
+    <li style="margin-bottom: 8px;"><strong>Increased Engagement:</strong> Clear summaries help viewers decide if your video matches their needs</li>
+    <li style="margin-bottom: 8px;"><strong>Time Savings:</strong> Automatically generate content that would take hours to create manually</li>
   </ul>
 
   <h2 id="data-storage" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Data Storage and Security</h2>
@@ -161,9 +203,9 @@
   <p style="margin-bottom: 20px; line-height: 1.6;">This document serves as our commitment to transparent data practices and responsible YouTube API usage. We regularly review and update our data handling procedures to maintain the highest standards of user privacy and data protection.</p>
 
   <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0; text-align: center; font-style: italic; font-size: 0.9em; color: #666;">
-    <p style="margin-bottom: 0;"><strong>Document Version:</strong> 1.0<br>
-    <strong>Last Updated:</strong> September 6, 2025<br>
-    <strong>Next Review Date:</strong> March 6, 2026<br>
+    <p style="margin-bottom: 0;"><strong>Document Version:</strong> 1.1<br>
+    <strong>Last Updated:</strong> October 8, 2025<br>
+    <strong>Next Review Date:</strong> April 8, 2026<br>
     <strong>Approved By:</strong> Bezaleel Consulting Group Data Protection Team</p>
   </div>
 

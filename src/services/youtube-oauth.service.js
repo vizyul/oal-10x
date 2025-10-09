@@ -69,7 +69,7 @@ class YouTubeOAuthService {
       const encodedState = Buffer.from(JSON.stringify(stateData)).toString('base64');
 
       const scopes = [
-        'https://www.googleapis.com/auth/youtube.readonly',
+        'https://www.googleapis.com/auth/youtube',
         'https://www.googleapis.com/auth/youtube.force-ssl'
       ];
 
@@ -789,6 +789,99 @@ class YouTubeOAuthService {
     } catch (error) {
       logger.error('Error deactivating user tokens:', error);
       throw new Error('Failed to deactivate tokens');
+    }
+  }
+
+  /**
+   * Update video description on YouTube
+   * @param {string} userId - User ID
+   * @param {string} videoId - YouTube video ID
+   * @param {string} summary - AI-generated summary
+   * @param {string} chapters - AI-generated video chapters
+   * @returns {Object} Updated video information
+   */
+  async updateVideoDescription(userId, videoId, summary, chapters) {
+    try {
+      await this.setUserCredentials(userId);
+
+      // First, get the current video details
+      const videoResponse = await this.youtube.videos.list({
+        part: ['snippet'],
+        id: videoId
+      });
+
+      if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+        throw new Error('Video not found');
+      }
+
+      const currentSnippet = videoResponse.data.items[0].snippet;
+      const originalDescription = currentSnippet.description || '';
+
+      // Build the new description with 5000 character limit
+      let newDescription = originalDescription;
+      let addedContent = '';
+
+      // Add summary if provided
+      if (summary && summary.trim()) {
+        addedContent += `\n\n📝 SUMMARY\n${summary.trim()}`;
+      }
+
+      // Add chapters if provided
+      if (chapters && chapters.trim()) {
+        addedContent += `\n\n📺 VIDEO CHAPTERS\n${chapters.trim()}`;
+      }
+
+      // Combine and enforce 5000 character limit
+      const combinedDescription = originalDescription + addedContent;
+
+      if (combinedDescription.length > 5000) {
+        // Calculate how much space we have for added content
+        const availableSpace = 5000 - originalDescription.length;
+
+        if (availableSpace <= 0) {
+          logger.warn(`Video ${videoId} description is already at or over 5000 characters. Cannot add summary/chapters.`);
+          throw new Error('Video description is already at maximum length (5000 characters)');
+        }
+
+        // Truncate added content to fit
+        const truncatedContent = addedContent.substring(0, availableSpace - 20); // -20 for truncation notice
+        addedContent = truncatedContent + '\n\n[Truncated...]';
+        newDescription = originalDescription + addedContent;
+      } else {
+        newDescription = combinedDescription;
+      }
+
+      // Update the video
+      const updateResponse = await this.youtube.videos.update({
+        part: ['snippet'],
+        requestBody: {
+          id: videoId,
+          snippet: {
+            ...currentSnippet,
+            description: newDescription,
+            categoryId: currentSnippet.categoryId
+          }
+        }
+      });
+
+      logger.info(`Updated YouTube video description for video ${videoId}`, {
+        userId,
+        originalLength: originalDescription.length,
+        newLength: newDescription.length,
+        addedLength: addedContent.length
+      });
+
+      return {
+        success: true,
+        videoId,
+        originalDescriptionLength: originalDescription.length,
+        newDescriptionLength: newDescription.length,
+        addedContentLength: addedContent.length,
+        truncated: combinedDescription.length > 5000
+      };
+    } catch (error) {
+      logger.error('Error updating video description:', error);
+      throw new Error(`Failed to update video description: ${error.message}`);
     }
   }
 }

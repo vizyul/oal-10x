@@ -323,7 +323,7 @@
 
 /* Pricing Grid - Upgrade Page */
 .subscription-upgrade-container {
-  max-width: 1200px;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -417,7 +417,7 @@
 }
 
 .pricing-card.current-plan.pricing-card-enterprise .check-icon {
-  color: #059669;
+  color: var(--accent-color);
 }
 
 .pricing-card.current-plan.pricing-card-enterprise .subscribe-btn {
@@ -462,7 +462,7 @@
 
 /* Premium tier - brand gold background */
 .pricing-card-premium {
-  background: #C39D43;
+  background: var(--accent-color);
   color: #1a1a1a;
 }
 
@@ -507,7 +507,7 @@
 
 .pricing-card-premium .savings-text {
   background-color: #1a1a1a;
-  color: #C39D43;
+  color: var(--brand-white);
 }
 
 /* Enterprise tier - black background */
@@ -522,7 +522,7 @@
 }
 
 .pricing-card-enterprise .price {
-  color: #C39D43;
+  color: var(--accent-color);
 }
 
 .pricing-card-enterprise .period {
@@ -538,17 +538,17 @@
 }
 
 .pricing-card-enterprise .check-icon {
-  color: #C39D43;
+  color: var(--accent-color);
 }
 
 .pricing-card-enterprise .subscribe-btn {
-  background: linear-gradient(135deg, #C39D43, #A67E33);
-  color: #1a1a1a;
-  border: 1px solid #C39D43;
+  background: linear-gradient(135deg, var(--accent-color), var(--green-hover));
+  color: var(--brand-white);
+  border: 1px solid var(--text-primary);
 }
 
 .pricing-card-enterprise .subscribe-btn:hover {
-  background: linear-gradient(135deg, #A67E33, #C39D43);
+  background: linear-gradient(135deg, var(--green-hover), var(--accent-color));
   color: #ffffff;
 }
 
@@ -557,7 +557,7 @@
 }
 
 .pricing-card-enterprise .savings-text {
-  background-color: #C39D43;
+  background-color: var(--brand-white);
   color: #1a1a1a;
 }
 
@@ -598,14 +598,6 @@
   flex-shrink: 0;
 }
 
-.premium-feature .check-icon {
-  color: #8b5cf6;
-}
-
-.enterprise-feature .check-icon {
-  color: #f59e0b;
-}
-
 .card-footer {
   margin-top: 2rem;
 }
@@ -615,9 +607,9 @@
   padding: 1rem;
   font-size: 1.1rem;
   font-weight: 600;
-  border: none;
+  border: 3px solid var(--text-primary);
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent-color, #C39D43), #A67E33);
+  background: linear-gradient(135deg, var(--accent-color, var(--green-hover)), var(--accent-color));
   color: white;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -625,6 +617,7 @@
 
 .subscribe-btn:hover {
   transform: translateY(-2px);
+  color: var(--text-primary);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 

@@ -867,7 +867,8 @@ class VideosController {
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})(?:\S*)?/,
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
       /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})(?:\S*)?/,
-      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube live URLs with query params
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/live\/([a-zA-Z0-9_-]{11})(?:\S*)?/,  // Support for YouTube live URLs
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})(?:\S*)?/  // Support for YouTube Shorts
     ];
 
     for (const pattern of patterns) {
@@ -878,6 +879,63 @@ class VideosController {
     }
 
     return null;
+  }
+
+  /**
+   * Extract video ID from YouTube URL
+   * POST /api/videos/get-video
+   */
+  async getVideoIdFromUrl(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: errors.array()
+        });
+      }
+
+      const { url } = req.body;
+      logger.info(`Extracting video ID from URL: ${url}`);
+
+      // Extract video ID using the existing method
+      const videoId = this.extractVideoId(url);
+
+      if (!videoId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid YouTube URL format',
+          data: {
+            url: url,
+            supported_formats: [
+              'https://youtube.com/watch?v=VIDEO_ID',
+              'https://youtube.com/live/VIDEO_ID',
+              'https://youtube.com/shorts/VIDEO_ID',
+              'https://youtu.be/VIDEO_ID'
+            ]
+          }
+        });
+      }
+
+      logger.info(`Successfully extracted video ID: ${videoId} from URL: ${url}`);
+
+      return res.json({
+        success: true,
+        data: {
+          videoId: videoId,
+          url: url
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error extracting video ID from URL:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to extract video ID',
+        error: error.message
+      });
+    }
   }
 
   /**
