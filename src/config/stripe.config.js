@@ -117,7 +117,7 @@ const stripeConfig = {
         savings: 158,
         period: 'year'
       },
-      features: ['8 videos/month', 'All BASIC Content Types', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
+      features: ['8 videos/month', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
       videoLimit: 8,
       analyticsAccess: true,
       apiAccess: false
