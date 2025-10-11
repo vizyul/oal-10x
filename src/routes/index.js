@@ -91,6 +91,9 @@ router.use('/subscription', require('./subscription-web.routes'));
 // Videos routes
 router.use('/videos', require('./videos-web.routes'));
 
+// Account deletion routes
+router.use('/account', require('./account-deletion.routes'));
+
 // Webhook routes are handled directly in app.js with raw body middleware
 
 // API routes

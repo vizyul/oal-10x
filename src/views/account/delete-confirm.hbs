@@ -1,0 +1,502 @@
+<div class="account-deletion-container">
+  <div class="deletion-header">
+    <h1>Delete Account</h1>
+    <p class="warning-text">This action cannot be undone. Please read carefully before proceeding.</p>
+  </div>
+
+  <!-- Step 1: Export Data -->
+  <div class="deletion-step" id="step-export">
+    <div class="step-header">
+      <span class="step-number">1</span>
+      <h2>Export Your Data</h2>
+    </div>
+    <div class="step-content">
+      <p>Before deleting your account, we recommend downloading a copy of all your data. This includes:</p>
+      <ul>
+        <li>Your profile information</li>
+        <li>All videos and associated content</li>
+        <li>Subscription and billing history</li>
+        <li>YouTube channel connections</li>
+        <li>Session history and preferences</li>
+      </ul>
+      <button type="button" class="btn btn-primary" id="exportDataBtn">
+        <span class="btn-text">Download My Data</span>
+        <span class="btn-loading" style="display: none;">
+          <span class="spinner"></span> Preparing Download...
+        </span>
+      </button>
+      <div class="export-status" id="exportStatus" style="display: none;"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Confirm Deletion -->
+  <div class="deletion-step" id="step-confirm">
+    <div class="step-header">
+      <span class="step-number">2</span>
+      <h2>Confirm Account Deletion</h2>
+    </div>
+    <div class="step-content">
+      <div class="danger-zone">
+        <h3>⚠️ Warning: Permanent Data Loss</h3>
+        <p>Once you delete your account, the following will be permanently removed:</p>
+        <ul>
+          <li>Your profile and account information</li>
+          <li>All videos and generated content (summaries, study guides, etc.)</li>
+          <li>Your subscription and billing history</li>
+          <li>All preferences and settings</li>
+          <li>YouTube channel connections and authentication tokens</li>
+        </ul>
+        <p><strong>This action cannot be reversed.</strong></p>
+      </div>
+
+      <form id="deleteAccountForm">
+        <div class="form-group">
+          <label class="checkbox-container">
+            <input type="checkbox" id="confirmCheckbox" name="confirmation" value="true" required>
+            <span class="checkmark"></span>
+            <span class="checkbox-label">I understand that all my data will be permanently deleted and this action cannot be undone</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Confirm Your Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            class="form-control"
+            placeholder="Enter your password to confirm"
+            required
+          >
+        </div>
+
+        <div class="form-message" id="formMessage" style="display: none;"></div>
+
+        <div class="form-actions">
+          <a href="/profile" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
+            <span class="btn-text">Delete My Account</span>
+            <span class="btn-loading" style="display: none;">
+              <span class="spinner"></span> Deleting...
+            </span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+.account-deletion-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+}
+
+.deletion-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.deletion-header h1 {
+  color: #dc3545;
+  margin-bottom: 0.5rem;
+}
+
+.warning-text {
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.deletion-step {
+  background: #fff;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: #007bff;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 1.2rem;
+  margin-right: 1rem;
+}
+
+.step-header h2 {
+  margin: 0;
+  color: #212529;
+}
+
+.step-content ul {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.step-content ul li {
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.danger-zone {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.danger-zone h3 {
+  color: #856404;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.danger-zone p, .danger-zone ul {
+  color: #856404;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #495057;
+  font-weight: 500;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: flex-start;
+  cursor: pointer;
+  position: relative;
+  padding-left: 35px;
+}
+
+.checkbox-container input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 24px;
+  width: 24px;
+  border: 2px solid #ced4da;
+  border-radius: 4px;
+  background-color: #fff;
+}
+
+.checkbox-container:hover input ~ .checkmark {
+  border-color: #80bdff;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.checkbox-container .checkmark:after {
+  left: 7px;
+  top: 3px;
+  width: 6px;
+  height: 12px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-label {
+  color: #495057;
+  line-height: 1.5;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.btn {
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.form-message {
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.form-message.success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.form-message.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.export-status {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.export-status.success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.export-status.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const exportBtn = document.getElementById('exportDataBtn');
+  const exportStatus = document.getElementById('exportStatus');
+  const confirmCheckbox = document.getElementById('confirmCheckbox');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const deleteForm = document.getElementById('deleteAccountForm');
+  const formMessage = document.getElementById('formMessage');
+
+  // Enable delete button only when checkbox is checked
+  confirmCheckbox.addEventListener('change', function() {
+    deleteBtn.disabled = !this.checked;
+  });
+
+  // Export data functionality
+  exportBtn.addEventListener('click', async function() {
+    const btnText = exportBtn.querySelector('.btn-text');
+    const btnLoading = exportBtn.querySelector('.btn-loading');
+
+    exportBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'flex';
+    exportStatus.style.display = 'none';
+
+    try {
+      const response = await fetch('/account/export-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'account-data.zip';
+      if (contentDisposition) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      // Show success message
+      exportStatus.className = 'export-status success';
+      exportStatus.textContent = '✓ Your data has been downloaded successfully!';
+      exportStatus.style.display = 'block';
+
+    } catch (error) {
+      console.error('Export error:', error);
+      exportStatus.className = 'export-status error';
+      exportStatus.textContent = '✗ Failed to export data. Please try again.';
+      exportStatus.style.display = 'block';
+    } finally {
+      btnText.style.display = 'inline';
+      btnLoading.style.display = 'none';
+      exportBtn.disabled = false;
+    }
+  });
+
+  // Delete account form submission
+  deleteForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    if (!confirmCheckbox.checked) {
+      showMessage('Please confirm that you understand the consequences.', 'error');
+      return;
+    }
+
+    const password = document.getElementById('password').value;
+    if (!password) {
+      showMessage('Please enter your password to confirm.', 'error');
+      return;
+    }
+
+    const btnText = deleteBtn.querySelector('.btn-text');
+    const btnLoading = deleteBtn.querySelector('.btn-loading');
+
+    deleteBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'flex';
+    formMessage.style.display = 'none';
+
+    try {
+      const response = await fetch('/account/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          confirmation: 'true',
+          password: password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        showMessage('Account deleted successfully. Redirecting...', 'success');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      } else {
+        throw new Error(data.message || 'Failed to delete account');
+      }
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      showMessage(error.message || 'Failed to delete account. Please try again.', 'error');
+      btnText.style.display = 'inline';
+      btnLoading.style.display = 'none';
+      deleteBtn.disabled = false;
+    }
+  });
+
+  function showMessage(message, type) {
+    formMessage.textContent = message;
+    formMessage.className = 'form-message ' + type;
+    formMessage.style.display = 'block';
+  }
+});
+</script>
