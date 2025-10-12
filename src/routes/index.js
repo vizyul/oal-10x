@@ -3,6 +3,7 @@ const authRoutes = require('./auth.routes');
 const { optionalAuthMiddleware, preferencesMiddleware, subscriptionMiddleware } = require('../middleware');
 const { emailService } = require('../services');
 const { logger } = require('../utils');
+const ogimg = process.env.OGIMG;
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.get('/', (req, res) => {
   res.render('index', {
     title: 'AmplifyContent.ai - Turn 1 YouTube Video Into 17 Content Pieces in Seconds | AI Content Repurposing',
     description: 'Transform YouTube videos into 17 ready-to-publish content pieces instantly. AI-powered transcription and content repurposing for creators, marketers, and businesses. Try it for free today.',
+    ogimage: ogimg,
     user: req.user,
     userTheme: req.userTheme,
     subscription: req.subscriptionInfo,
