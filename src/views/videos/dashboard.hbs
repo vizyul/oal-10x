@@ -668,10 +668,11 @@ class ProcessingStatusManager {
 
   markdownToHtml(markdown) {
     if (!markdown) return '';
-    
+
     // Convert markdown to HTML
     let html = markdown
-      // Headers
+      // Headers (order matters - most specific first)
+      .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
       .replace(/^### (.*$)/gim, '<h3>$1</h3>')
       .replace(/^## (.*$)/gim, '<h2>$1</h2>')
       .replace(/^# (.*$)/gim, '<h1>$1</h1>')
