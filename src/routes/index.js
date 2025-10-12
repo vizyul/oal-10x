@@ -38,7 +38,7 @@ router.get('/', (req, res) => {
 router.get('/dashboard', require('../middleware').authMiddleware, (req, res) => {
   res.render('dashboard', {
     title: 'Dashboard',
-    description: 'Your AI Legacy dashboard',
+    description: 'AmplifyContent.ai dashboard',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -108,7 +108,7 @@ router.use('/admin', require('./admin.routes'));
 router.get('/terms', (req, res) => {
   res.render('legal/terms', {
     title: 'Terms & Conditions',
-    description: 'Our AI Legacy Terms & Conditions',
+    description: 'AmplifyContent.ai Terms & Conditions',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -120,7 +120,7 @@ router.get('/terms', (req, res) => {
 router.get('/privacy', (req, res) => {
   res.render('legal/privacy', {
     title: 'Privacy Policy',
-    description: 'Our AI Legacy Privacy Policy',
+    description: 'AmplifyContent.ai Privacy Policy',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -132,7 +132,7 @@ router.get('/privacy', (req, res) => {
 router.get('/youtube-data-usage', (req, res) => {
   res.render('legal/youtube-data-usage', {
     title: 'YouTube Data Usage',
-    description: 'YouTube Data Usage and Privacy Information',
+    description: 'AmplifyContent.ai YouTube Data Usage and Privacy Information',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -144,7 +144,7 @@ router.get('/youtube-data-usage', (req, res) => {
 // About page
 router.get('/about', (req, res) => {
   res.render('about', {
-    title: 'About Our AI Legacy',
+    title: 'About AmplifyContent.ai',
     description: 'Learn about our mission and vision',
     user: req.user,
     subscription: req.subscriptionInfo,
@@ -158,7 +158,7 @@ router.get('/about', (req, res) => {
 router.get('/contact', (req, res) => {
   res.render('contact', {
     title: 'Contact Us',
-    description: 'Get in touch with Our AI Legacy',
+    description: 'Get in touch with AmplifyContent.ai',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -172,7 +172,7 @@ router.get('/contact', (req, res) => {
 router.get('/demo', (req, res) => {
   res.render('demo', {
     title: 'Request Demo',
-    description: 'Schedule a demo of Our AI Legacy platform',
+    description: 'Schedule a demo of AmplifyContent.ai platform',
     user: req.user,
     subscription: req.subscriptionInfo,
     showHeader: true,
@@ -190,7 +190,7 @@ router.post('/demo', async (req, res) => {
     if (!name || !email || !organization) {
       return res.render('demo', {
         title: 'Request Demo',
-        description: 'Schedule a demo of Our AI Legacy platform',
+        description: 'Schedule a demo of AmplifyContent.ai platform',
         user: req.user,
         subscription: req.subscriptionInfo,
         showHeader: true,
@@ -215,7 +215,7 @@ router.post('/demo', async (req, res) => {
     `;
 
     const result = await emailService.sendEmail(
-      'sales@ourailegacy.com',
+      'support@amplifycontent.ai',
       `Demo Request: ${organization}`,
       demoEmailContent
     );
@@ -223,7 +223,7 @@ router.post('/demo', async (req, res) => {
     if (result.success) {
       res.render('demo', {
         title: 'Request Demo',
-        description: 'Schedule a demo of Our AI Legacy platform',
+        description: 'Schedule a demo of AmplifyContent.ai platform',
         user: req.user,
         subscription: req.subscriptionInfo,
         showHeader: true,
@@ -239,7 +239,7 @@ router.post('/demo', async (req, res) => {
     console.error('Demo form error:', error);
     res.render('demo', {
       title: 'Request Demo',
-      description: 'Schedule a demo of Our AI Legacy platform',
+      description: 'Schedule a demo of AmplifyContent.ai platform',
       user: req.user,
       subscription: req.subscriptionInfo,
       showHeader: true,
@@ -260,7 +260,7 @@ router.post('/contact', async (req, res) => {
     if (!name || !email || !subject || !message) {
       return res.render('contact', {
         title: 'Contact Us',
-        description: 'Get in touch with Our AI Legacy',
+        description: 'Get in touch with AmplifyContent.ai',
         user: req.user,
         subscription: req.subscriptionInfo,
         showHeader: true,
@@ -283,7 +283,7 @@ router.post('/contact', async (req, res) => {
     `;
 
     const result = await emailService.sendEmail(
-      'support@ourailegacy.com',
+      'support@amplifycontent.ai',
       `Contact Form: ${subject}`,
       contactEmailContent
     );
@@ -291,7 +291,7 @@ router.post('/contact', async (req, res) => {
     if (result.success) {
       res.render('contact', {
         title: 'Contact Us',
-        description: 'Get in touch with Our AI Legacy',
+        description: 'Get in touch with AmplifyContent.ai',
         user: req.user,
         subscription: req.subscriptionInfo,
         showHeader: true,
@@ -308,7 +308,7 @@ router.post('/contact', async (req, res) => {
     console.error('Contact form error:', error);
     res.render('contact', {
       title: 'Contact Us',
-      description: 'Get in touch with Our AI Legacy',
+      description: 'Get in touch with AmplifyContent.ai',
       user: req.user,
       subscription: req.subscriptionInfo,
       showHeader: true,
