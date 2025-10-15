@@ -54,8 +54,13 @@ class DatabaseService {
     try {
       const result = await this.pool.query(text, params);
       const duration = Date.now() - start;
+
       // Only log slow queries or in debug mode
-      if (duration > 500) {
+      // For remote databases (Railway), allow higher threshold due to network latency (~400-600ms is normal)
+      const isRemoteDb = process.env.DB_HOST?.includes('railway') || process.env.DB_HOST?.includes('rlwy');
+      const slowQueryThreshold = isRemoteDb ? 1500 : 500;
+
+      if (duration > slowQueryThreshold) {
         logger.warn(`Slow query executed in ${duration}ms`, { sql: text.substring(0, 100) + '...' });
       }
       return result;

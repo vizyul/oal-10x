@@ -200,6 +200,72 @@ class ContentGenerationService {
         // Update content status to completed ONLY after successful database write
         processingStatusService.updateContentStatus(videoId, prompt.content_type, 'completed');
 
+        // Post-processing: If this is clips_text, trigger automatic clip downloads
+        if (prompt.content_type === 'clips_text') {
+          logger.info(`Clips JSON generated, triggering automatic clip downloads for video ${videoId}`);
+
+          try {
+            const clipsService = require('./clips.service');
+
+            // Parse the JSON content (strip markdown code blocks if present)
+            let jsonContent = generatedContent.trim();
+            // Match both array [] and object {} formats
+            const jsonMatch = jsonContent.match(/```(?:json)?\s*([\[{][\s\S]*?[\]}])\s*```/);
+            if (jsonMatch) {
+              jsonContent = jsonMatch[1];
+            }
+
+            const clipsData = JSON.parse(jsonContent);
+
+            // Handle both array format [{...}] and object format {clips: [{...}]}
+            let clipsArray;
+            if (Array.isArray(clipsData)) {
+              clipsArray = clipsData;
+            } else if (clipsData.clips && Array.isArray(clipsData.clips)) {
+              clipsArray = clipsData.clips;
+            } else {
+              logger.warn(`Invalid clips JSON format for video ${videoId}, expected array or object with 'clips' property`);
+              clipsArray = null;
+            }
+
+            if (clipsArray && clipsArray.length > 0) {
+              // Save clips to database and trigger downloads
+              const clipIds = await clipsService.saveClipSuggestions(
+                videoRecordId,
+                clipsArray,
+                prompt.ai_provider
+              );
+
+              logger.info(`Saved ${clipIds.length} clip suggestions for video ${videoId}`);
+
+              // Now trigger downloads for all clips (runs in background, doesn't block)
+              if (clipIds.length > 0) {
+                // Download and convert clips in background (don't await to avoid blocking)
+                setImmediate(async () => {
+                  for (const clipId of clipIds) {
+                    try {
+                      logger.info(`Downloading clip ${clipId} for video ${videoId}`);
+                      const downloadResult = await clipsService.downloadClip(clipId);
+
+                      logger.info(`Converting clip ${clipId} to vertical format`);
+                      await clipsService.convertToVerticalFormat(clipId);
+
+                      logger.info(`✅ Clip ${clipId} downloaded and converted successfully`);
+                    } catch (clipError) {
+                      logger.error(`Failed to process clip ${clipId}:`, clipError.message);
+                      // Continue with next clip even if one fails
+                    }
+                  }
+                  logger.info(`✅ Finished processing ${clipIds.length} clips for video ${videoId}`);
+                });
+              }
+            }
+          } catch (clipsError) {
+            logger.error(`Failed to process clips for video ${videoId}:`, clipsError.message);
+            // Don't fail the overall content generation if clips processing fails
+          }
+        }
+
       } catch (dbError) {
         // Log database save failure
         logger.error(`❌ Database save failed for ${prompt.content_type}`, {

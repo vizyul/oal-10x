@@ -339,6 +339,9 @@ router.use('/youtube', require('./youtube.routes'));
 // Subscription routes
 router.use('/subscription', require('./subscription.routes'));
 
+// Clips routes (handles both /videos/:id/clips and /clips/:id)
+router.use('/', require('./clips.routes'));
+
 // Handle 404 for API routes
 // User Preferences Routes
 const PreferencesService = require('../services/preferences.service');
