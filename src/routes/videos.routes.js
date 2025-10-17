@@ -3,6 +3,7 @@ const { body, param, query } = require('express-validator');
 const router = express.Router();
 const videosController = require('../controllers/videos.controller');
 const { authMiddleware, subscriptionMiddleware } = require('../middleware');
+const { videoProcessingLimit } = require('../middleware/rate-limiting.middleware');
 
 // Helper function to get available content types for validation
 let contentTypesCache = null;
@@ -144,10 +145,11 @@ router.get('/:id',
 
 /**
  * @route   POST /api/videos
- * @desc    Create a new video entry
+ * @desc    Create a new video entry (BILLABLE OPERATION - rate limited)
  * @access  Private - Requires Basic subscription
  */
 router.post('/',
+  videoProcessingLimit,
   subscriptionMiddleware.requireSubscription('free'),
   subscriptionMiddleware.checkUsageLimit('videos'),
   videoValidation.create,
@@ -188,10 +190,11 @@ router.get('/:id/status',
 
 /**
  * @route   POST /api/videos/:id/process
- * @desc    Trigger video processing
+ * @desc    Trigger video processing (BILLABLE OPERATION - rate limited)
  * @access  Private - Requires Basic subscription
  */
 router.post('/:id/process',
+  videoProcessingLimit,
   subscriptionMiddleware.requireSubscription('free'),
   videoValidation.params,
   videosController.processVideo.bind(videosController)
@@ -256,10 +259,11 @@ router.post('/get-video',
 
 /**
  * @route   POST /api/videos/batch
- * @desc    Process multiple video URLs
+ * @desc    Process multiple video URLs (BILLABLE OPERATION - rate limited)
  * @access  Private - Requires Basic subscription
  */
 router.post('/batch',
+  videoProcessingLimit,
   subscriptionMiddleware.requireSubscription('free'),
   subscriptionMiddleware.checkUsageLimit('videos'),
   [

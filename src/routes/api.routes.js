@@ -2,14 +2,15 @@ const express = require('express');
 const { body } = require('express-validator');
 
 const { authMiddleware, validationMiddleware } = require('../middleware');
-const { apiLimit } = require('../middleware/rate-limiting.middleware');
+const { authSecurityLimit } = require('../middleware/rate-limiting.middleware');
 const { authService, airtableService } = require('../services');
 const { logger } = require('../utils');
 
 const router = express.Router();
 
-// Apply centralized API rate limiting with user-tier awareness
-router.use(apiLimit);
+// NOTE: Rate limiting is now applied selectively to billable operations and security-sensitive endpoints.
+// Basic app functionality (GET requests for preferences, videos, etc.) is NOT rate-limited.
+// See individual route definitions below for specific rate limiting.
 
 // API health check
 router.get('/health', (req, res) => {
@@ -21,8 +22,9 @@ router.get('/health', (req, res) => {
   });
 });
 
-// User authentication endpoints
+// User authentication endpoints (rate-limited for security)
 router.post('/auth/signup', [
+  authSecurityLimit,
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 8 }).matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/),
   body('firstName').trim().isLength({ min: 2, max: 50 }).matches(/^[A-Za-z\s'-]+$/),
@@ -32,6 +34,7 @@ router.post('/auth/signup', [
 ], validationMiddleware, require('../controllers/auth.controller').signUp);
 
 router.post('/auth/signin', [
+  authSecurityLimit,
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty()
 ], validationMiddleware, require('../controllers/auth.controller').signIn);
@@ -120,12 +123,15 @@ router.put('/user/profile', authMiddleware, [
   }
 });
 
-// Change password endpoint
-router.put('/user/password', authMiddleware, [
+// Change password endpoint (rate-limited for security)
+router.put('/user/password', [
+  authMiddleware,
+  authSecurityLimit,
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword').isLength({ min: 8 }).matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
-    .withMessage('New password must meet security requirements')
-], validationMiddleware, async (req, res) => {
+    .withMessage('New password must meet security requirements'),
+  validationMiddleware
+], async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const bcrypt = require('bcryptjs');
@@ -176,11 +182,14 @@ router.put('/user/password', authMiddleware, [
   }
 });
 
-// Delete account endpoint
-router.delete('/user/account', authMiddleware, [
+// Delete account endpoint (rate-limited for security)
+router.delete('/user/account', [
+  authMiddleware,
+  authSecurityLimit,
   body('password').notEmpty().withMessage('Password is required to delete account'),
-  body('confirmation').equals('DELETE').withMessage('You must type DELETE to confirm')
-], validationMiddleware, async (req, res) => {
+  body('confirmation').equals('DELETE').withMessage('You must type DELETE to confirm'),
+  validationMiddleware
+], async (req, res) => {
   try {
     const { password } = req.body;
     const bcrypt = require('bcryptjs');

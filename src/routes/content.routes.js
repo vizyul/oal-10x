@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const contentController = require('../controllers/content.controller');
 const { authMiddleware } = require('../middleware');
+const { aiGenerationLimit } = require('../middleware/rate-limiting.middleware');
 const { body, param, query } = require('express-validator');
 
 // Apply authentication individually to routes instead of using router.use
@@ -93,9 +94,11 @@ router.get('/statistics',
 
 /**
  * POST /api/content/videos/:videoId/generate
- * Trigger AI content generation for specific content types
+ * Trigger AI content generation for specific content types (BILLABLE OPERATION - rate limited)
  */
 router.post('/videos/:videoId/generate',
+  authMiddleware,
+  aiGenerationLimit,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   body('contentTypes').isArray({ min: 1 }).withMessage('Content types array is required'),
   body('contentTypes.*').isLength({ min: 1 }).withMessage('Each content type must be non-empty string'),
