@@ -813,7 +813,7 @@ section:nth-child(even) {
 }
 
 .path-icon svg {
-  width: 50%;
+  width: 25%;
   height: auto;
   color: #000000;
 }
