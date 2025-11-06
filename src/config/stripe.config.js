@@ -106,15 +106,15 @@ const stripeConfig = {
       name: 'Premium',
       monthly: {
         priceId: process.env.STRIPE_PREMIUM_PRICE_ID,
-        price: 79,
+        price: 69,
         period: 'month'
       },
       yearly: {
         priceId: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID,
-        price: 790,
-        monthlyEquivalent: 65.83,
-        originalMonthlyTotal: 948,
-        savings: 158,
+        price: 690,
+        monthlyEquivalent: 57.50,
+        originalMonthlyTotal: 828,
+        savings: 138,
         period: 'year'
       },
       features: ['8 videos/month', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
@@ -126,15 +126,15 @@ const stripeConfig = {
       name: 'Creator',
       monthly: {
         priceId: process.env.STRIPE_CREATOR_PRICE_ID,
-        price: 159,
+        price: 129,
         period: 'month'
       },
       yearly: {
         priceId: process.env.STRIPE_CREATOR_YEARLY_PRICE_ID,
-        price: 1590,
-        monthlyEquivalent: 132.50,
-        originalMonthlyTotal: 1908,
-        savings: 318,
+        price: 1290,
+        monthlyEquivalent: 107.50,
+        originalMonthlyTotal: 1548,
+        savings: 258,
         period: 'year'
       },
       features: ['16 videos/month', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],

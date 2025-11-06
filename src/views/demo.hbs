@@ -3,7 +3,7 @@
   <div class="container">
     <div class="demo-header-content">
       <h1>Request a Demo</h1>
-      <p>See Our AI Legacy in action and discover how it can transform your business</p>
+      <p>See AmplifyContent.<span style="color: var(--green);">ai</span> in action and discover how it can amplify your content.</p>
     </div>
   </div>
 </section>
@@ -15,10 +15,23 @@
       <!-- Demo Form -->
       <div class="demo-form-section">
         <div class="demo-card">
-          <h2>Schedule Your Personal Demo</h2>
-          <p>Fill out the form below and our team will reach out to schedule a personalized demo of Our AI Legacy platform.</p>
-          
+          <h2>Schedule A Demo</h2>
+          <p>Fill out the form below and our team will reach out to schedule a personalized demo of the AmplifyContent.<span style="color: var(--green);">ai</span> platform.</p>
+
+          {{#if success}}
+            <div class="alert alert-success" style="margin-bottom: 24px; padding: 16px; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 8px;">{{success}}</div>
+          {{/if}}
+          {{#if error}}
+            <div class="alert alert-error" style="margin-bottom: 24px; padding: 16px; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 8px;">{{error}}</div>
+          {{/if}}
+
           <form class="demo-form" method="POST" action="/demo">
+            <!-- Honeypot field - hidden from humans, visible to bots -->
+            <div style="position: absolute; left: -9999px;" aria-hidden="true">
+              <label for="website">Website (leave blank)</label>
+              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
             <div class="form-group">
               <label for="name">Full Name *</label>
               <input type="text" id="name" name="name" required class="form-control">
@@ -30,7 +43,7 @@
             </div>
             
             <div class="form-group">
-              <label for="organization">Church/Organization Name *</label>
+              <label for="organization">Company Name *</label>
               <input type="text" id="organization" name="organization" required class="form-control">
             </div>
             
@@ -48,7 +61,7 @@
             </div>
             
             <div class="form-group">
-              <label for="congregation-size">Congregation Size</label>
+              <label for="congregation-size">Company Size</label>
               <select id="congregation-size" name="congregationSize" class="form-control">
                 <option value="">Select size</option>
                 <option value="under-50">Under 50</option>
@@ -94,8 +107,8 @@
                 </svg>
               </div>
               <div class="benefit-content">
-                <h4>AI-Powered Sermon Preparation</h4>
-                <p>See how our AI can help you research topics, generate outlines, and find relevant scripture passages.</p>
+                <h4>AI-Powered Content Generation</h4>
+                <p>See how our AI can generate e-books, study guides to reinforce learning, create social media posts, and much mouch more.</p>
               </div>
             </div>
             
@@ -109,8 +122,8 @@
                 </svg>
               </div>
               <div class="benefit-content">
-                <h4>Content Generation Tools</h4>
-                <p>Explore our suite of content creation tools for newsletters, social media, and study materials.</p>
+                <h4>Enhance YouTube Videos</h4>
+                <p>Automatically enhance your YouTube videos with a SEO and AEO optimized summary and videoo chapters.</p>
               </div>
             </div>
             
@@ -124,8 +137,8 @@
                 </svg>
               </div>
               <div class="benefit-content">
-                <h4>Personalized Workflow</h4>
-                <p>Learn how to customize the platform to match your ministry's unique style and needs.</p>
+                <h4>Personalized Content</h4>
+                <p>Generate only the content you're interested in.</p>
               </div>
             </div>
             
@@ -138,7 +151,7 @@
               </div>
               <div class="benefit-content">
                 <h4>Integration Capabilities</h4>
-                <p>Discover how Our AI Legacy integrates with your existing church management systems.</p>
+                <p>Discover how AmplifyContent.<span style="color: var(--green);">ai</span> integrates with your existing YouTube account.</p>
               </div>
             </div>
           </div>
@@ -146,9 +159,9 @@
         
         <div class="demo-testimonial">
           <blockquote>
-            "The demo showed us exactly how Our AI Legacy could save us hours each week on sermon preparation and content creation. It's been a game-changer for our ministry."
+            "The demo showed us exactly how AmplifyContent.<span style="color: var(--green);">ai</span> could save us hours each week on content creation. It's been a game-changer."
           </blockquote>
-          <cite>— Pastor Sarah Johnson, Grace Community Church</cite>
+          <cite>— Darlyn C. Turner, Billionaire Minds</cite>
         </div>
       </div>
     </div>
@@ -158,7 +171,7 @@
 <style>
 /* Demo page specific styles */
 .demo-header {
-  background: linear-gradient(135deg, #006400 0%, #004d00 100%);
+  background: linear-gradient(135deg, #2c2c2c 0%, #000000 100%);
   padding: 80px 0;
   color: white;
   text-align: center;
@@ -276,7 +289,7 @@ textarea.form-control {
 }
 
 .btn-primary {
-  background: #006400;
+  background: var(--green);
   color: white;
 }
 
@@ -308,7 +321,7 @@ textarea.form-control {
   flex-shrink: 0;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #006400, #004d00);
+  background: linear-gradient(135deg, var(--green), var(--green-hover));
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -335,7 +348,7 @@ textarea.form-control {
   padding: 32px;
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   border-radius: 12px;
-  border-left: 4px solid #006400;
+  border-left: 4px solid var(--green);
 }
 
 .demo-testimonial blockquote {

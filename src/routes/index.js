@@ -1,6 +1,8 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const authRoutes = require('./auth.routes');
 const { optionalAuthMiddleware, preferencesMiddleware, subscriptionMiddleware } = require('../middleware');
+const { contactFormLimit } = require('../middleware/rate-limiting.middleware');
 const { emailService } = require('../services');
 const { logger } = require('../utils');
 const ogimg = process.env.OGIMG;
@@ -181,13 +183,56 @@ router.get('/demo', (req, res) => {
   });
 });
 
-// Demo form submission
-router.post('/demo', async (req, res) => {
+// Demo form submission with validation
+router.post('/demo', [
+  contactFormLimit, // Reuse contact form rate limit (5 per hour)
+  // Validation and sanitization rules
+  body('name')
+    .trim()
+    .notEmpty().withMessage('Name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
+    .matches(/^[A-Za-z\s'-]+$/).withMessage('Name can only contain letters, spaces, hyphens, and apostrophes')
+    .escape(),
+  body('email')
+    .trim()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Please enter a valid email address')
+    .normalizeEmail()
+    .isLength({ max: 254 }).withMessage('Email is too long')
+    .matches(/^[^\s@]+@[^\s@]+\.[^\s@]+$/).withMessage('Please enter a valid email format'),
+  body('organization')
+    .trim()
+    .notEmpty().withMessage('Organization is required')
+    .isLength({ min: 2, max: 200 }).withMessage('Organization must be between 2 and 200 characters')
+    .escape(),
+  body('role')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .escape(),
+  body('congregationSize')
+    .optional()
+    .trim()
+    .isLength({ max: 50 })
+    .escape(),
+  body('timeline')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .escape(),
+  body('interest')
+    .optional()
+    .trim()
+    .isLength({ max: 2000 }).withMessage('Interest/Notes must be less than 2000 characters')
+    .escape(),
+  body('website')
+    .optional()
+    .trim()
+], async (req, res) => {
   try {
-    const { name, email, organization, role, congregationSize, interest, timeline } = req.body;
-
-    // Validate required fields
-    if (!name || !email || !organization) {
+    // Honeypot check
+    if (req.body.website) {
+      logger.warn('Bot detected via honeypot field on demo form', { ip: req.ip });
       return res.render('demo', {
         title: 'Request Demo',
         description: 'Schedule a demo of AmplifyContent.ai platform',
@@ -196,10 +241,35 @@ router.post('/demo', async (req, res) => {
         showHeader: true,
         showFooter: true,
         showNav: true,
-        error: 'Please fill in all required fields.',
+        success: 'Thank you for your demo request! Our team will contact you within 24 hours to schedule your personalized demonstration.'
+      });
+    }
+
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const firstError = errors.array()[0].msg;
+      logger.warn('Demo form validation failed', {
+        ip: req.ip,
+        errors: errors.array(),
+        email: req.body.email
+      });
+
+      return res.render('demo', {
+        title: 'Request Demo',
+        description: 'Schedule a demo of AmplifyContent.ai platform',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        error: firstError,
         formData: req.body
       });
     }
+
+    // Get sanitized values
+    const { name, email, organization, role, congregationSize, interest, timeline } = req.body;
 
     // Send demo request email to sales team
     const demoEmailContent = `
@@ -251,13 +321,42 @@ router.post('/demo', async (req, res) => {
   }
 });
 
-// Contact form submission
-router.post('/contact', async (req, res) => {
+// Contact form submission with validation
+router.post('/contact', [
+  contactFormLimit,
+  // Validation and sanitization rules
+  body('name')
+    .trim()
+    .notEmpty().withMessage('Name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
+    .matches(/^[A-Za-z\s'-]+$/).withMessage('Name can only contain letters, spaces, hyphens, and apostrophes')
+    .escape(), // Sanitize HTML
+  body('email')
+    .trim()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Please enter a valid email address')
+    .normalizeEmail()
+    .isLength({ max: 254 }).withMessage('Email is too long')
+    .matches(/^[^\s@]+@[^\s@]+\.[^\s@]+$/).withMessage('Please enter a valid email format'),
+  body('subject')
+    .trim()
+    .notEmpty().withMessage('Subject is required')
+    .isLength({ min: 3, max: 200 }).withMessage('Subject must be between 3 and 200 characters')
+    .escape(), // Sanitize HTML
+  body('message')
+    .trim()
+    .notEmpty().withMessage('Message is required')
+    .isLength({ min: 10, max: 5000 }).withMessage('Message must be between 10 and 5000 characters')
+    .escape(), // Sanitize HTML
+  body('website')
+    .optional()
+    .trim()
+], async (req, res) => {
   try {
-    const { name, email, subject, message } = req.body;
-
-    // Validate required fields
-    if (!name || !email || !subject || !message) {
+    // Honeypot check - if 'website' field is filled, it's a bot
+    if (req.body.website) {
+      logger.warn('Bot detected via honeypot field', { ip: req.ip });
+      // Return success to fool the bot
       return res.render('contact', {
         title: 'Contact Us',
         description: 'Get in touch with AmplifyContent.ai',
@@ -267,10 +366,36 @@ router.post('/contact', async (req, res) => {
         showFooter: true,
         showNav: true,
         additionalCSS: ['/css/contact.css'],
-        error: 'All fields are required.',
-        formData: { name, email, subject, message }
+        success: 'Thank you for your message! We\'ll get back to you soon.'
       });
     }
+
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const firstError = errors.array()[0].msg;
+      logger.warn('Contact form validation failed', {
+        ip: req.ip,
+        errors: errors.array(),
+        email: req.body.email
+      });
+
+      return res.render('contact', {
+        title: 'Contact Us',
+        description: 'Get in touch with AmplifyContent.ai',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        additionalCSS: ['/css/contact.css'],
+        error: firstError,
+        formData: req.body
+      });
+    }
+
+    // Get sanitized values
+    const { name, email, subject, message } = req.body;
 
     // Send contact email to support
     const contactEmailContent = `
