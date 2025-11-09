@@ -3,7 +3,7 @@
 <div style="max-width: 1000px; margin: 50px auto; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
   
   <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; margin-bottom: 30px; text-align: center;">
-    <strong>Last Updated:</strong> October 8, 2025
+    <strong>Last Updated:</strong> January 9, 2025
   </div>
 
   <h1 style="color: #141414; margin-bottom: 30px; border-bottom: 3px solid #27200e; padding-bottom: 15px;">YouTube Data Usage - AmplifyContent.ai Platform</h1>
@@ -45,26 +45,40 @@
     <li style="margin-bottom: 8px;"><strong>Create Accessible Resources:</strong> Convert video content into multiple formats for broader accessibility</li>
   </ol>
 
-  <h2 id="oauth-scopes" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">OAuth Scopes Requested</h2>
+  <h2 id="oauth-scopes" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">OAuth Scope Requested</h2>
 
-  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Primary Scopes</h3>
-
-  <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
-    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">1. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube</code></h4>
-    <ul style="margin-bottom: 0; padding-left: 20px;">
-      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Read and write access to user's YouTube account data</li>
-      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Retrieve channel information, video metadata, playlists, video lists, and update video descriptions with AI-generated summaries and chapters</li>
-      <li style="margin-bottom: 8px;"><strong>Data Accessed:</strong> Channel details, video titles, descriptions, thumbnails, upload dates, durations</li>
-      <li style="margin-bottom: 0;"><strong>Data Modified:</strong> Video descriptions (enhanced with AI-generated summaries and chapter timestamps)</li>
-    </ul>
+  <div style="background: #e8f4f8; border: 1px solid #b3d9e8; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <p style="margin-bottom: 0; line-height: 1.6;"><strong>Important:</strong> AmplifyContent.ai requests only ONE YouTube API scope for secure, read-and-write access to your YouTube channel data.</p>
   </div>
 
   <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0;">
-    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">2. <code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube.force-ssl</code></h4>
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;"><code style="background-color: #f1f1f1; padding: 2px 6px; border-radius: 3px; font-family: Monaco, monospace; font-size: 0.9em; color: #27200e;">https://www.googleapis.com/auth/youtube.force-ssl</code></h4>
+
+    <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Purpose:</strong></p>
+    <ul style="margin-bottom: 15px; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">Secure read and write access to your YouTube account data over encrypted SSL/HTTPS connections</li>
+      <li style="margin-bottom: 8px;">Retrieve channel information, video metadata, playlists, and video lists</li>
+      <li style="margin-bottom: 8px;">Update video descriptions with AI-generated summaries and chapter timestamps</li>
+    </ul>
+
+    <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Accessed:</strong></p>
+    <ul style="margin-bottom: 15px; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">Channel details (name, description, subscriber count, video count)</li>
+      <li style="margin-bottom: 8px;">Video metadata (titles, descriptions, thumbnails, upload dates, durations)</li>
+      <li style="margin-bottom: 8px;">Playlist information and organization</li>
+    </ul>
+
+    <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Data Modified:</strong></p>
+    <ul style="margin-bottom: 15px; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">Video descriptions (AI-generated summaries and chapter timestamps appended to existing descriptions)</li>
+      <li style="margin-bottom: 8px;">Only videos you explicitly import and process are modified</li>
+    </ul>
+
+    <p style="margin-bottom: 0; line-height: 1.6;"><strong>Security Benefit:</strong></p>
     <ul style="margin-bottom: 0; padding-left: 20px;">
-      <li style="margin-bottom: 8px;"><strong>Purpose:</strong> Force SSL connections for secure data transmission</li>
-      <li style="margin-bottom: 8px;"><strong>Usage:</strong> Ensure all YouTube API communications are encrypted</li>
-      <li style="margin-bottom: 0;"><strong>Security Benefit:</strong> Protects user data during transmission</li>
+      <li style="margin-bottom: 8px;">Forces all YouTube API communications to use SSL/HTTPS encryption</li>
+      <li style="margin-bottom: 8px;">Protects your YouTube data during transmission between our platform and Google's servers</li>
+      <li style="margin-bottom: 0;">Ensures industry-standard security for all YouTube API requests</li>
     </ul>
   </div>
 
@@ -145,7 +159,7 @@
   <h2 id="data-storage" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">Data Storage and Security</h2>
 
   <h3 style="color: #27200e; margin: 25px 0 10px 0;">Storage Architecture</h3>
-  
+
   <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 20px; margin: 25px 0;">
     <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">PostgreSQL Database System:</h4>
     <p style="margin-bottom: 0; line-height: 1.6;">All YouTube data is securely stored in our PostgreSQL database with comprehensive security measures including encryption at rest, access controls, and regular security audits.</p>
@@ -159,6 +173,49 @@
     <li style="margin-bottom: 8px;">Generated educational content</li>
     <li style="margin-bottom: 8px;">User preferences and settings</li>
   </ul>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Data Sharing Policy</h3>
+
+  <div style="background: #e8f4f8; border: 1px solid #b3d9e8; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">We Do NOT Share Your YouTube Data</h4>
+    <p style="margin-bottom: 0; line-height: 1.6;"><strong>AmplifyContent.ai does not sell, rent, trade, or share your YouTube data with any third parties, organizations, or external entities. Your YouTube channel information, video metadata, and OAuth tokens remain exclusively within our secure platform.</strong></p>
+  </div>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Limited Service Provider Usage:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>AI Processing Only:</strong> Google Gemini and OpenAI receive only video transcript text for content generation. These services do NOT receive your YouTube account information, channel data, or OAuth tokens.</li>
+    <li style="margin-bottom: 8px;"><strong>No Marketing or Analytics Sharing:</strong> We do not share YouTube data with marketing platforms, advertising networks, or analytics services.</li>
+    <li style="margin-bottom: 8px;"><strong>No AI Training:</strong> Your YouTube data is never used to train AI models or shared with AI training datasets.</li>
+  </ul>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Data Retention</h3>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>Retention Periods:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>YouTube Channel Data:</strong> Retained while your YouTube account remains connected to AmplifyContent.ai</li>
+    <li style="margin-bottom: 8px;"><strong>Video Metadata:</strong> Retained while your account is active and connected</li>
+    <li style="margin-bottom: 8px;"><strong>OAuth Tokens:</strong> Retained until you disconnect your YouTube account or revoke access through Google</li>
+    <li style="margin-bottom: 8px;"><strong>Generated Content:</strong> Retained while your account is active; deleted upon account closure</li>
+  </ul>
+
+  <h3 style="color: #27200e; margin: 25px 0 10px 0;">Data Deletion</h3>
+
+  <p style="margin-bottom: 15px; line-height: 1.6;"><strong>You can delete your YouTube data at any time through the following methods:</strong></p>
+  <ul style="margin-bottom: 20px; padding-left: 30px;">
+    <li style="margin-bottom: 8px;"><strong>Disconnect YouTube Account:</strong> Remove YouTube connection from your profile settings - deletes all YouTube data within 24 hours</li>
+    <li style="margin-bottom: 8px;"><strong>Revoke OAuth Access:</strong> Revoke AmplifyContent.ai access through Google Account settings - immediately invalidates our access and triggers data deletion</li>
+    <li style="margin-bottom: 8px;"><strong>Delete Individual Videos:</strong> Remove specific videos from your dashboard - deletes that video's metadata and generated content</li>
+    <li style="margin-bottom: 8px;"><strong>Close Account:</strong> Delete your entire AmplifyContent.ai account - permanently removes all YouTube data within 30 days</li>
+  </ul>
+
+  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 20px; margin: 25px 0;">
+    <h4 style="color: #27200e; margin-top: 0; margin-bottom: 15px;">Automatic Deletion:</h4>
+    <ul style="margin-bottom: 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">If your account is inactive for 2 years, all data including YouTube data is automatically deleted after 90-day notice</li>
+      <li style="margin-bottom: 8px;">When YouTube access is revoked, all associated YouTube data is automatically deleted within 24 hours</li>
+      <li style="margin-bottom: 0;">When you close your account, all YouTube data is permanently deleted within 30 days</li>
+    </ul>
+  </div>
 
   <h2 id="user-control" style="color: #27200e; margin: 30px 0 15px 0; border-left: 4px solid #141414; padding-left: 15px;">User Control and Consent</h2>
 
@@ -203,9 +260,9 @@
   <p style="margin-bottom: 20px; line-height: 1.6;">This document serves as our commitment to transparent data practices and responsible YouTube API usage. We regularly review and update our data handling procedures to maintain the highest standards of user privacy and data protection.</p>
 
   <div style="background: #f8f9fa; padding: 20px; border-left: 4px solid #141414; margin: 25px 0; text-align: center; font-style: italic; font-size: 0.9em; color: #666;">
-    <p style="margin-bottom: 0;"><strong>Document Version:</strong> 1.1<br>
-    <strong>Last Updated:</strong> October 8, 2025<br>
-    <strong>Next Review Date:</strong> April 8, 2026<br>
+    <p style="margin-bottom: 0;"><strong>Document Version:</strong> 2.0<br>
+    <strong>Last Updated:</strong> January 9, 2025<br>
+    <strong>Next Review Date:</strong> July 9, 2025<br>
     <strong>Approved By:</strong> Bezaleel Consulting Group Data Protection Team</p>
   </div>
 
