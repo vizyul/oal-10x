@@ -127,6 +127,10 @@ adhoc/
 migration-docs/
 migration-scripts/
 
+# Database folder - with exception for migrations
+database/*
+!database/migrations/
+
 # Stripe webhook test files
 test-subscription-*.json
 
