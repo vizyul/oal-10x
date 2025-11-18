@@ -1,0 +1,124 @@
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-6">Webhook Monitoring</h1>
+
+  <!-- Health Metrics -->
+  <div id="health-metrics" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="text-sm text-gray-600">Success Rate</div>
+      <div id="success-rate" class="text-3xl font-bold text-green-600">Loading...</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="text-sm text-gray-600">Total Events (24h)</div>
+      <div id="total-events" class="text-3xl font-bold text-blue-600">Loading...</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="text-sm text-gray-600">Failed Events</div>
+      <div id="failed-events" class="text-3xl font-bold text-red-600">Loading...</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="text-sm text-gray-600">Stuck Events</div>
+      <div id="stuck-events" class="text-3xl font-bold text-yellow-600">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Event Statistics -->
+  <div class="bg-white p-6 rounded-lg shadow mb-6">
+    <h2 class="text-xl font-bold mb-4">Event Statistics (Last 7 Days)</h2>
+    <div id="event-stats" class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Event Type</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Successful</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Failed</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Success Rate</th>
+          </tr>
+        </thead>
+        <tbody id="stats-body" class="bg-white divide-y divide-gray-200">
+          <tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Events -->
+  <div class="bg-white p-6 rounded-lg shadow">
+    <h2 class="text-xl font-bold mb-4">Recent Events</h2>
+    <div id="recent-events" class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Event ID</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+          </tr>
+        </thead>
+        <tbody id="events-body" class="bg-white divide-y divide-gray-200">
+          <tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Load webhook data
+async function loadWebhookData() {
+  try {
+    // Load health metrics
+    const healthRes = await fetch('/admin/api/webhooks/health');
+    const healthData = await healthRes.json();
+    if (healthData.success) {
+      document.getElementById('success-rate').textContent = healthData.health.success_rate_percent + '%';
+      document.getElementById('total-events').textContent = healthData.health.events_last_24h;
+      document.getElementById('failed-events').textContent = healthData.health.failed_events;
+      document.getElementById('stuck-events').textContent = healthData.health.stuck_events;
+    }
+
+    // Load event stats
+    const statsRes = await fetch('/admin/api/webhooks/stats?days=7');
+    const statsData = await statsRes.json();
+    if (statsData.success) {
+      const statsBody = document.getElementById('stats-body');
+      statsBody.innerHTML = statsData.data.map(row => `
+        <tr>
+          <td class="px-4 py-2 text-sm">${row.event_type}</td>
+          <td class="px-4 py-2 text-sm">${row.total}</td>
+          <td class="px-4 py-2 text-sm text-green-600">${row.successful}</td>
+          <td class="px-4 py-2 text-sm text-red-600">${row.failed}</td>
+          <td class="px-4 py-2 text-sm">${((row.successful / row.total) * 100).toFixed(1)}%</td>
+        </tr>
+      `).join('') || '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">No data</td></tr>';
+    }
+
+    // Load recent events
+    const eventsRes = await fetch('/admin/api/webhooks/recent?limit=20');
+    const eventsData = await eventsRes.json();
+    if (eventsData.success) {
+      const eventsBody = document.getElementById('events-body');
+      eventsBody.innerHTML = eventsData.data.map(row => `
+        <tr>
+          <td class="px-4 py-2 text-sm font-mono">${row.stripe_event_id.substring(0, 20)}...</td>
+          <td class="px-4 py-2 text-sm">${row.event_type}</td>
+          <td class="px-4 py-2 text-sm">
+            <span class="px-2 py-1 text-xs rounded ${row.processed_successfully ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+              ${row.status}
+            </span>
+          </td>
+          <td class="px-4 py-2 text-sm">${new Date(row.created_at).toLocaleString()}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No events</td></tr>';
+    }
+  } catch (error) {
+    console.error('Error loading webhook data:', error);
+  }
+}
+
+// Load data on page load
+loadWebhookData();
+
+// Refresh every 30 seconds
+setInterval(loadWebhookData, 30000);
+</script>

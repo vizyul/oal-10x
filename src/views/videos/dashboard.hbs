@@ -1259,7 +1259,7 @@ async function loadCompletedVideos() {
 function showEmptyState(gridElement) {
   const videoLimit = {{{subscription.limits.videos}}};
   const uploadAction = videoLimit > 0 
-    ? `<a href="/videos/upload" class="btn btn-primary">Upload Video</a>`
+    ? `<a href="/videos/upload" class="btn btn-primary">Amplify Videos</a>`
     : `<a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>`;
     
   gridElement.innerHTML = `

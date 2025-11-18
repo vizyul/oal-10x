@@ -69,7 +69,6 @@ class YouTubeOAuthService {
       const encodedState = Buffer.from(JSON.stringify(stateData)).toString('base64');
 
       const scopes = [
-        'https://www.googleapis.com/auth/youtube',
         'https://www.googleapis.com/auth/youtube.force-ssl'
       ];
 

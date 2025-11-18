@@ -242,6 +242,14 @@ const authMiddleware = async (req, res, next) => {
     req.user = user;
     req.userId = user.id;
 
+    // Debug logging
+    logger.info('Auth middleware completed - req.user set:', {
+      userId: req.user.id,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      hasFirstName: !!req.user.firstName
+    });
+
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {

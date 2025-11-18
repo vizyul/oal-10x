@@ -3,6 +3,9 @@ const router = express.Router();
 const { adminMiddleware } = require('../middleware/admin.middleware');
 const { subscriptionMiddleware } = require('../middleware');
 const adminController = require('../controllers/admin.controller');
+const webhooksController = require('../controllers/admin/webhooks.controller');
+const database = require('../services/database.service');
+const { logger } = require('../utils');
 const { body } = require('express-validator');
 
 // Apply subscription middleware first to ensure admin pages have subscription data
@@ -13,6 +16,115 @@ router.use(adminMiddleware);
 
 // Admin Dashboard
 router.get('/', adminController.dashboard);
+
+// Subscription Management
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const { status = 'active', page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let query = `
+      SELECT
+        us.id,
+        us.stripe_subscription_id,
+        us.status,
+        us.current_period_start,
+        us.current_period_end,
+        us.cancel_at_period_end,
+        u.id as user_id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        COALESCE(sp.plan_name, us.plan_name) as plan_name,
+        spp.billing_period,
+        ROUND(spp.amount / 100.0, 2) as price
+      FROM user_subscriptions us
+      JOIN users u ON us.users_id = u.id
+      LEFT JOIN subscription_plan_prices spp ON us.price_id = spp.stripe_price_id
+      LEFT JOIN subscription_plans sp ON spp.subscription_plan_id = sp.id
+    `;
+
+    const params = [];
+    if (status !== 'all') {
+      query += ` WHERE us.status = $1`;
+      params.push(status);
+    }
+
+    query += ` ORDER BY us.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), offset);
+
+    const subscriptions = await database.query(query, params);
+
+    let countQuery = 'SELECT COUNT(*) FROM user_subscriptions';
+    if (status !== 'all') {
+      countQuery += ' WHERE status = $1';
+    }
+    const countResult = await database.query(countQuery, status !== 'all' ? [status] : []);
+    const totalCount = parseInt(countResult.rows[0].count);
+
+    res.render('admin/subscriptions', {
+      layout: 'main',
+      title: 'Subscription Management',
+      user: req.user,
+      subscriptions: subscriptions.rows,
+      status,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalCount,
+      totalPages: Math.ceil(totalCount / parseInt(limit))
+    });
+  } catch (error) {
+    logger.error('Error rendering subscriptions page:', error);
+    res.status(500).render('errors/500', {
+      layout: 'main',
+      title: 'Server Error',
+      user: req.user
+    });
+  }
+});
+
+// Webhook Monitoring
+router.get('/webhooks', async (req, res) => {
+  try {
+    res.render('admin/webhooks', {
+      layout: 'main',
+      title: 'Webhook Monitoring',
+      user: req.user
+    });
+  } catch (error) {
+    logger.error('Error rendering webhooks page:', error);
+    res.status(500).render('errors/500', {
+      layout: 'main',
+      title: 'Server Error',
+      user: req.user
+    });
+  }
+});
+
+// System Health
+router.get('/health', async (req, res) => {
+  try {
+    res.render('admin/health', {
+      layout: 'main',
+      title: 'System Health',
+      user: req.user
+    });
+  } catch (error) {
+    logger.error('Error rendering health page:', error);
+    res.status(500).render('errors/500', {
+      layout: 'main',
+      title: 'Server Error',
+      user: req.user
+    });
+  }
+});
+
+// API Endpoints for AJAX
+router.get('/api/webhooks/stats', webhooksController.getWebhookStats);
+router.get('/api/webhooks/health', webhooksController.getWebhookHealth);
+router.get('/api/webhooks/failed', webhooksController.getFailedWebhooks);
+router.get('/api/webhooks/recent', webhooksController.getRecentEvents);
+router.get('/api/webhooks/migrations', webhooksController.getSubscriptionMigrations);
 
 // Content Types Management
 router.get('/content-types', adminController.contentTypesIndex);

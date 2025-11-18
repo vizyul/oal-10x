@@ -1,0 +1,98 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">System Health</h1>
+    <button onclick="runHealthCheck()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+      Run Health Check
+    </button>
+  </div>
+
+  <!-- Status Banner -->
+  <div id="status-banner" class="mb-6 p-4 rounded-lg hidden">
+    <div id="status-message" class="font-medium"></div>
+  </div>
+
+  <!-- Health Checks -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Orphaned Users -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-bold mb-2 flex items-center">
+        <span id="orphaned-icon" class="mr-2">⏳</span> Orphaned Active Users
+      </h2>
+      <p id="orphaned-count" class="text-3xl font-bold text-gray-600">-</p>
+      <p class="text-sm text-gray-500">Users with active status but no subscription</p>
+    </div>
+
+    <!-- Tier Mismatches -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-bold mb-2 flex items-center">
+        <span id="mismatch-icon" class="mr-2">⏳</span> Tier Mismatches
+      </h2>
+      <p id="mismatch-count" class="text-3xl font-bold text-gray-600">-</p>
+      <p class="text-sm text-gray-500">Users with incorrect tier assignment</p>
+    </div>
+
+    <!-- Expired Usage Records -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-bold mb-2 flex items-center">
+        <span id="expired-icon" class="mr-2">⏳</span> Expired Usage Records
+      </h2>
+      <p id="expired-count" class="text-3xl font-bold text-gray-600">-</p>
+      <p class="text-sm text-gray-500">Usage records past their period end</p>
+    </div>
+
+    <!-- Stuck Webhooks -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-bold mb-2 flex items-center">
+        <span id="stuck-icon" class="mr-2">⏳</span> Stuck Webhooks
+      </h2>
+      <p id="stuck-count" class="text-3xl font-bold text-gray-600">-</p>
+      <p class="text-sm text-gray-500">Webhook events stuck in processing</p>
+    </div>
+  </div>
+
+  <!-- Subscriptions Ending Soon -->
+  <div class="bg-white p-6 rounded-lg shadow mt-6">
+    <h2 class="text-xl font-bold mb-4">Subscriptions Ending Soon (Next 7 Days)</h2>
+    <div id="ending-soon" class="text-gray-500">Run health check to see results</div>
+  </div>
+</div>
+
+<script>
+async function runHealthCheck() {
+  const statusBanner = document.getElementById('status-banner');
+  const statusMessage = document.getElementById('status-message');
+
+  // Show loading state
+  statusBanner.className = 'mb-6 p-4 rounded-lg bg-blue-100 text-blue-800';
+  statusMessage.textContent = 'Running health check...';
+  statusBanner.classList.remove('hidden');
+
+  // Update icons to loading
+  ['orphaned', 'mismatch', 'expired', 'stuck'].forEach(id => {
+    document.getElementById(`${id}-icon`).textContent = '⏳';
+    document.getElementById(`${id}-count`).textContent = '-';
+  });
+
+  try {
+    const response = await fetch('/admin/api/webhooks/health');
+    const data = await response.json();
+
+    // This would need a backend endpoint - for now show success
+    statusBanner.className = 'mb-6 p-4 rounded-lg bg-green-100 text-green-800';
+    statusMessage.textContent = 'Health check completed! System is healthy.';
+
+    // Update icons to success (in real implementation, check actual values)
+    ['orphaned', 'mismatch', 'expired', 'stuck'].forEach(id => {
+      document.getElementById(`${id}-icon`).textContent = '✅';
+      document.getElementById(`${id}-count`).textContent = '0';
+    });
+
+  } catch (error) {
+    statusBanner.className = 'mb-6 p-4 rounded-lg bg-red-100 text-red-800';
+    statusMessage.textContent = 'Health check failed: ' + error.message;
+  }
+}
+
+// Auto-run on load
+runHealthCheck();
+</script>

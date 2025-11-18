@@ -1,6 +1,8 @@
 const stripeService = require('../services/stripe.service');
 const stripeConfig = require('../config/stripe.config');
 const database = require('../services/database.service');
+const UserSubscription = require('../models/UserSubscription');
+const userSubscription = new UserSubscription();
 const { logger } = require('../utils');
 
 /**
@@ -135,13 +137,14 @@ const subscriptionController = {
       const user = req.user;
       const subscription = await stripeService.getUserSubscription(user.id);
       const userTier = user.subscription_tier || 'free';
-      const tierConfig = stripeConfig.getTierConfig(userTier);
+      const subscriptionPlansService = require('../services/subscription-plans.service');
+      const planData = await subscriptionPlansService.getPlanByKey(userTier);
 
       // Get current usage
       const subscriptionService = require('../services/subscription.service');
       const currentUsage = await subscriptionService.getCurrentUsage(user.id);
 
-      const videoLimit = tierConfig?.videoLimit || 0;
+      const videoLimit = planData?.videoLimit || 0;
       const remainingVideos = Math.max(0, videoLimit - currentUsage.videos);
 
       const response = {
@@ -198,16 +201,17 @@ const subscriptionController = {
     try {
       const user = req.user;
       const userTier = user.subscription_tier || 'free';
-      const tierConfig = stripeConfig.getTierConfig(userTier);
+      const subscriptionPlansService = require('../services/subscription-plans.service');
+      const planData = await subscriptionPlansService.getPlanByKey(userTier);
 
       // Get current usage from subscription service
       const subscriptionService = require('../services/subscription.service');
       const currentUsage = await subscriptionService.getCurrentUsage(user.id);
 
       const limits = {
-        videos: tierConfig?.videoLimit || 0,
-        api_calls: tierConfig?.apiLimit || 0,
-        storage: tierConfig?.storageLimit || 0
+        videos: planData?.videoLimit || 0,
+        api_calls: 0, // TODO: Add to subscription_plans
+        storage: 0  // TODO: Add to subscription_plans
       };
 
       const percentages = {
@@ -322,20 +326,25 @@ const subscriptionController = {
       const stripe = require('stripe')(stripeConfig.getSecretKey());
       const session = await stripe.checkout.sessions.retrieve(session_id);
 
-      if (session.customer) {
-        // Get the subscription from the session
-        if (session.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      if (session.customer && session.subscription) {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription);
 
-          // Manually trigger subscription sync as backup to webhooks
+        // CHECK: Has webhook already processed this subscription?
+        const existingSubscription = await userSubscription.getByStripeId(subscription.id);
+
+        if (!existingSubscription) {
+          // Webhook hasn't processed yet - manually sync as backup
+          logger.info('Webhook not received yet, performing manual sync', {
+            sessionId: session_id,
+            subscriptionId: subscription.id
+          });
+
           await stripeService.handleSubscriptionCreated(subscription);
 
-          // Log the manual sync event to subscription_events table
-          // eslint-disable-next-line no-unused-vars
-          const _resolvedUserId = await resolveUserId(user.id);
+          // Log manual sync event
           await database.create('subscription_events', {
             stripe_event_id: `manual_sync_${session_id}`,
-            user_subscriptions_id: null, // Will need to find the subscription record ID
+            user_subscriptions_id: null,
             event_type: 'manual.subscription.sync',
             stripe_subscription_id: subscription.id,
             event_data: JSON.stringify({
@@ -346,18 +355,18 @@ const subscriptionController = {
             }, null, 2),
             processed_successfully: true
           });
-
-          logger.info('Manual subscription sync completed:', {
+        } else {
+          logger.info('Webhook already processed subscription', {
             sessionId: session_id,
             subscriptionId: subscription.id,
-            userId: user.id
+            existingRecordId: existingSubscription.id
           });
         }
 
         // Update user's Stripe customer ID if not already set
         if (!user.stripe_customer_id) {
-          const _resolvedUserId = await resolveUserId(user.id);
-          await database.update('users', _resolvedUserId, {
+          const resolvedUserId = await resolveUserId(user.id);
+          await database.update('users', resolvedUserId, {
             stripe_customer_id: session.customer
           });
         }

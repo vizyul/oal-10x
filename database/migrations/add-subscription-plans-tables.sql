@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     description TEXT,                              -- Marketing description
     features JSONB,                                -- Array of feature bullet points
 
+    -- Resource Limits (denormalized for performance - also in subscription_plan_features)
+    video_limit INTEGER DEFAULT 0,                 -- Monthly video processing limit (-1 = unlimited)
+    api_calls_limit INTEGER DEFAULT 0,             -- Monthly API calls limit (-1 = unlimited)
+    storage_limit INTEGER DEFAULT 0,               -- Storage limit in GB (-1 = unlimited)
+
     -- Metadata
     metadata JSONB,                                -- Additional flexible data
 
@@ -250,21 +255,26 @@ CREATE INDEX idx_plan_migrations_created ON subscription_plan_migrations(created
 -- =====================================================================
 
 -- Insert base plans
-INSERT INTO subscription_plans (plan_key, plan_name, plan_slug, is_active, is_visible, sort_order, description, features) VALUES
+INSERT INTO subscription_plans (plan_key, plan_name, plan_slug, is_active, is_visible, sort_order, description, features, video_limit, api_calls_limit, storage_limit) VALUES
 ('free', 'Free', 'free', true, true, 1, 'Try Our AI Legacy with 1 free video',
- '["1 free video", "Basic AI summaries", "Community support"]'::jsonb),
+ '["1 free video", "All CREATOR Content Types", "Priority Support", "Dedicated Account Manager", "Custom Integration", "Team Collaboration"]'::jsonb,
+ 1, 0, 1),
 
 ('basic', 'Basic', 'basic', true, true, 2, 'Perfect for individuals getting started',
- '["4 videos/month", "Video Transcript", "SEO Optimized Summary", "Video Chapters", "20 Social Media Posts", "Email Support"]'::jsonb),
+ '["4 videos/month", "Video Transcript", "SEO Optimized Summary", "Video Chapters", "20 Social Media Posts", "Email Support"]'::jsonb,
+ 4, 0, 5),
 
 ('premium', 'Premium', 'premium', true, true, 3, 'Advanced features for content creators',
- '["8 videos/month", "All BASIC Content Types", "Auto-update YouTube Video with Summary & Chapters", "Slide Deck", "E-Book", "LinkedIn Article", "Marketing Funnel Playbook", "Newsletter"]'::jsonb),
+ '["8 videos/month", "All BASIC Content Types", "Auto-update YouTube Video with Summary & Chapters", "Slide Deck", "E-Book", "LinkedIn Article", "Marketing Funnel Playbook", "Newsletter"]'::jsonb,
+ 8, 1000, 10),
 
 ('creator', 'Creator', 'creator', true, true, 4, 'Comprehensive toolkit for professional creators',
- '["16 videos/month", "All PREMIUM Content Types", "Blog Post", "Podcast Script", "Study Guide", "Discussion Guide", "Quiz", "Quotes", "Social Carousel", "Group Chat Guide"]'::jsonb),
+ '["16 videos/month", "All PREMIUM Content Types", "Blog Post", "Podcast Script", "Study Guide", "Discussion Guide", "Quiz", "Quotes", "Social Carousel", "Group Chat Guide"]'::jsonb,
+ 16, 5000, 25),
 
 ('enterprise', 'Enterprise', 'enterprise', true, true, 5, 'Maximum capacity for teams and organizations',
- '["50 videos/month", "All CREATOR Content Types", "Priority Support", "Dedicated Account Manager", "Custom Integration", "Team Collaboration"]'::jsonb);
+ '["50 videos/month", "All CREATOR Content Types", "Priority Support", "Dedicated Account Manager", "Custom Integration", "Team Collaboration"]'::jsonb,
+ 50, -1, -1);
 
 -- Insert plan features
 INSERT INTO subscription_plan_features (
@@ -278,7 +288,7 @@ INSERT INTO subscription_plan_features (
     support_level, priority_processing
 ) VALUES
 -- Free tier
-(1, 1, false, false, true, true, false, false, false, false, 0, false, false, false, false, false, false, false, false, false, false, false, false, 'email', false),
+(1, 1, false, false, true, true, true, true, true, true, 20, true, true, true, true, true, true, true, true, true, true, true, true, 'email', false),
 
 -- Basic tier
 (2, 4, false, false, true, true, true, false, false, true, 20, false, false, false, false, false, false, false, false, false, false, false, false, 'email', false),

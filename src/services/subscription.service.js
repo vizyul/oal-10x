@@ -182,26 +182,11 @@ class SubscriptionService {
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
-      // Check if user is on free tier
-      const database = require('./database.service');
-      const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [pgUserId]);
-      const user = userResult.rows[0];
-
-      if (user && user.subscription_tier === 'free') {
-        // For free tier users, use the free_video_used column instead of subscription tracking
-        const videosUsed = user.free_video_used ? 1 : 0;
-        return {
-          videos: videosUsed,
-          api_calls: 0,
-          storage: 0,
-          ai_summaries: 0
-        };
-      }
-
-      // For paid users, get current usage using model
+      // Get current usage from subscription_usage table for ALL users (including free tier)
       const currentUsage = await subscriptionUsage.getCurrentByUserId(pgUserId);
 
       if (!currentUsage) {
+        logger.warn(`No subscription usage record found for user ${pgUserId}`);
         return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
       }
 
@@ -530,6 +515,70 @@ class SubscriptionService {
       logger.error('Error checking enhanced video processing capability:', error);
       // In case of error, allow processing (fail-safe) but log the issue
       return { canProcess: true, reason: 'Error during check - allowing processing' };
+    }
+  }
+
+  /**
+   * Initialize subscription and usage records for free tier users
+   * Called during user registration to set up the free 1-video limit
+   * @param {number} userId - PostgreSQL user ID
+   * @returns {Promise<Object>} Created records
+   */
+  async initializeFreeUserSubscription(userId) {
+    try {
+      logger.info(`Initializing free subscription for user ${userId}`);
+
+      // Check if user already has subscription records
+      const existingSub = await userSubscription.getActiveByUserId(userId);
+      if (existingSub) {
+        logger.info(`User ${userId} already has subscription records, skipping initialization`);
+        return { subscription: existingSub };
+      }
+
+      // Create user_subscriptions record for free tier
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+      const subscriptionData = {
+        users_id: userId,
+        stripe_subscription_id: null,
+        plan_name: 'Free',
+        status: 'active',
+        current_period_start: periodStart.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        cancel_at_period_end: false
+      };
+
+      const subscriptionRecord = await userSubscription.create(subscriptionData);
+      logger.info(`Created user_subscriptions record ${subscriptionRecord.id} for user ${userId}`);
+
+      // Create subscription_usage record with 1 video limit
+      const usageData = {
+        user_id: userId,
+        user_subscriptions_id: subscriptionRecord.id,
+        usage_type: 'monthly',
+        usage_limit: 1, // Free tier gets 1 video
+        videos_processed: 0,
+        api_calls_made: 0,
+        storage_used_mb: 0,
+        ai_summaries_generated: 0,
+        analytics_views: 0,
+        period_start: periodStart.toISOString(),
+        period_end: periodEnd.toISOString(),
+        reset_date: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
+      };
+
+      const usageRecord = await subscriptionUsage.createUsage(usageData);
+      logger.info(`Created subscription_usage record ${usageRecord.id} for user ${userId} with 1 video limit`);
+
+      return {
+        subscription: subscriptionRecord,
+        usage: usageRecord
+      };
+    } catch (error) {
+      logger.error(`Error initializing free subscription for user ${userId}:`, error);
+      throw error;
     }
   }
 

@@ -1,5 +1,6 @@
 const stripe = require('stripe')(require('../config/stripe.config').getSecretKey());
 const stripeConfig = require('../config/stripe.config');
+const database = require('./database.service');
 const { user: UserModel, userSubscription, subscriptionUsage, subscriptionEvents } = require('../models');
 const { logger } = require('../utils');
 const { clearCachedUser, forceTokenRefresh } = require('../middleware');
@@ -145,43 +146,122 @@ class StripeService {
    */
   async handleWebhookEvent(event) {
     try {
-      logger.info('Processing webhook event:', {
-        type: event.type,
-        id: event.id
-      });
+      logger.info('Processing webhook event:', { type: event.type, id: event.id });
 
-      // Log event for debugging
-      await this.logWebhookEvent(event);
+      // CHECK: Has this event already been processed?
+      const existingEvent = await subscriptionEvents.findByStripeEventId(event.id);
+      if (existingEvent && existingEvent.processed_successfully === true) {
+        logger.info('Event already processed successfully, skipping', {
+          eventId: event.id,
+          eventType: event.type,
+          previousProcessing: existingEvent.processed_at
+        });
+        return {
+          processed: true,
+          duplicate: true,
+          message: 'Event already processed'
+        };
+      }
 
+      // Mark event as being processed (prevents concurrent processing)
+      if (!existingEvent) {
+        await this.logWebhookEvent(event);
+      } else {
+        await subscriptionEvents.update(existingEvent.id, {
+          status: 'processing',
+          retry_count: (existingEvent.retry_count || 0) + 1
+        });
+      }
+
+      // Process event
+      let result;
       switch (event.type) {
       case 'customer.subscription.created':
-        return await this.handleSubscriptionCreated(event.data.object);
+        result = await this.handleSubscriptionCreated(event.data.object);
+        break;
 
       case 'customer.subscription.updated':
-        return await this.handleSubscriptionUpdated(event.data.object);
+        result = await this.handleSubscriptionUpdated(event.data.object);
+        break;
 
       case 'customer.subscription.deleted':
-        return await this.handleSubscriptionDeleted(event.data.object);
+        result = await this.handleSubscriptionDeleted(event.data.object);
+        break;
 
       case 'customer.subscription.paused':
-        return await this.handleSubscriptionPaused(event.data.object);
+        result = await this.handleSubscriptionPaused(event.data.object);
+        break;
 
       case 'customer.subscription.resumed':
-        return await this.handleSubscriptionResumed(event.data.object);
+        result = await this.handleSubscriptionResumed(event.data.object);
+        break;
 
       case 'invoice.payment_succeeded':
-        return await this.handlePaymentSucceeded(event.data.object);
+        result = await this.handlePaymentSucceeded(event.data.object);
+        break;
 
       case 'invoice.payment_failed':
-        return await this.handlePaymentFailed(event.data.object);
+        result = await this.handlePaymentFailed(event.data.object);
+        break;
 
       case 'customer.subscription.trial_will_end':
-        return await this.handleTrialWillEnd(event.data.object);
+        result = await this.handleTrialWillEnd(event.data.object);
+        break;
+
+      case 'invoice.payment_action_required':
+        result = await this.handlePaymentActionRequired(event.data.object);
+        break;
+
+      case 'checkout.session.completed':
+        result = await this.handleCheckoutSessionCompleted(event.data.object);
+        break;
+
+      case 'customer.subscription.trial_ended':
+        result = await this.handleTrialEnded(event.data.object);
+        break;
+
+      case 'charge.succeeded':
+        result = await this.handleChargeSucceeded(event.data.object);
+        break;
+
+      case 'charge.failed':
+        result = await this.handleChargeFailed(event.data.object);
+        break;
+
+      case 'charge.refunded':
+        result = await this.handleChargeRefunded(event.data.object);
+        break;
+
+      case 'customer.created':
+        result = await this.handleCustomerCreated(event.data.object);
+        break;
+
+      case 'customer.updated':
+        result = await this.handleCustomerUpdated(event.data.object);
+        break;
+
+      case 'customer.deleted':
+        result = await this.handleCustomerDeleted(event.data.object);
+        break;
 
       default:
         logger.info('Unhandled webhook event type:', event.type);
-        return { processed: false, reason: 'Event type not handled' };
+        result = { processed: false, reason: 'Event type not handled' };
       }
+
+      // Mark as successfully processed
+      const eventRecord = await subscriptionEvents.findByStripeEventId(event.id);
+      if (eventRecord) {
+        await subscriptionEvents.update(eventRecord.id, {
+          processed_successfully: true,
+          status: 'processed',
+          processed_at: new Date(),
+          error_message: null
+        });
+      }
+
+      return result;
+
     } catch (error) {
       logger.error('Error processing webhook event:', error);
 
@@ -219,7 +299,7 @@ class StripeService {
    */
   async handleSubscriptionCreated(subscription) {
     const userId = subscription.metadata.user_id;
-    const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
+    const tier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     logger.info('Processing subscription created webhook:', {
       subscriptionId: subscription.id,
@@ -298,11 +378,17 @@ class StripeService {
     // Check for existing subscription record by Stripe subscription ID first
     let subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
+    // Get plan name from tier
+    const planName = tier.charAt(0).toUpperCase() + tier.slice(1); // Capitalize tier name
+    const priceId = subscription.items.data[0].price.id;
+
     if (subscriptionRecord) {
       // Update existing record
       subscriptionRecord = await userSubscription.updateSubscription(subscriptionRecord.id, {
         users_id: pgUserId,
         stripe_customer_id: subscription.customer,
+        plan_name: planName,
+        price_id: priceId,
         status: subscription.status,
         current_period_start: startDate,
         current_period_end: endDate,
@@ -317,6 +403,8 @@ class StripeService {
         users_id: pgUserId,
         stripe_customer_id: subscription.customer,
         stripe_subscription_id: subscription.id,
+        plan_name: planName,
+        price_id: priceId,
         status: subscription.status,
         current_period_start: startDate,
         current_period_end: endDate,
@@ -325,6 +413,29 @@ class StripeService {
         trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString().split('.')[0] + 'Z' : null
       });
       logger.info('Created new subscription record:', { subscriptionId: subscription.id, recordId: subscriptionRecord.id });
+    }
+
+    // Cancel any existing Free tier subscription when user upgrades to paid plan
+    if (tier !== 'free') {
+      const freeSubscriptions = await userSubscription.getActiveByUserId(pgUserId);
+      if (freeSubscriptions) {
+        // Check if there's a Free subscription without Stripe ID (created during registration)
+        const existingFree = await database.query(`
+          SELECT id FROM user_subscriptions
+          WHERE users_id = $1
+          AND plan_name = 'Free'
+          AND stripe_subscription_id IS NULL
+          AND status = 'active'
+          AND id != $2
+        `, [pgUserId, subscriptionRecord.id]);
+
+        if (existingFree.rows.length > 0) {
+          logger.info(`Canceling old Free subscription for user ${pgUserId} (upgrading to ${tier})`);
+          await userSubscription.updateSubscription(existingFree.rows[0].id, {
+            status: 'canceled'
+          });
+        }
+      }
     }
 
     // Update user record with proper ID resolution (use already resolved pgUserId)
@@ -353,39 +464,106 @@ class StripeService {
    */
   async handleSubscriptionUpdated(subscription) {
     const userId = subscription.metadata.user_id;
-    const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
+    const newTier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Find existing subscription record
     const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
-    if (subscriptionRecord) {
-      // Update subscription record
-      await userSubscription.updateSubscription(subscriptionRecord.id, {
-        status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
-        cancel_at_period_end: subscription.cancel_at_period_end
-      });
-
-      // Update user record with proper ID resolution
-      const pgUserId = await this.resolveUserId(userId);
-      await UserModel.updateUser(pgUserId, {
-        subscription_tier: tier,
-        subscription_status: subscription.status
-      });
-
-      // Clear cached user data to force reload with new subscription info
-      clearCachedUser(userId);
-
-      logger.info('Subscription updated:', {
+    if (!subscriptionRecord) {
+      logger.error('Subscription record not found for update', {
         subscriptionId: subscription.id,
-        userId,
-        tier,
-        status: subscription.status
+        userId
       });
+      return { processed: false, reason: 'Subscription record not found' };
     }
 
-    return { processed: true };
+    // Resolve user ID
+    const pgUserId = await this.resolveUserId(userId);
+
+    // Get user's current tier
+    const user = await UserModel.findById(pgUserId);
+    const oldTier = user.subscription_tier;
+
+    // Detect plan change
+    const tierChanged = oldTier !== newTier;
+    const newPriceId = subscription.items.data[0].price.id;
+    const priceChanged = subscriptionRecord.stripe_price_id !== newPriceId;
+
+    if (tierChanged) {
+      logger.info('Plan change detected', {
+        subscriptionId: subscription.id,
+        userId,
+        oldTier,
+        newTier,
+        changeType: this.getChangeType(oldTier, newTier)
+      });
+
+      // Create migration record
+      await this.createPlanMigration(pgUserId, subscriptionRecord.id, oldTier, newTier, subscription);
+
+      // Handle usage limits for the new tier
+      await this.handleTierChangeUsage(pgUserId, subscriptionRecord.id, oldTier, newTier);
+    }
+
+    // Detect billing period change
+    const subscriptionPlansService = require('./subscription-plans.service');
+    const newPrice = await subscriptionPlansService.getPlanByStripePriceId(newPriceId);
+    const oldPrice = subscriptionRecord.stripe_price_id ?
+      await subscriptionPlansService.getPlanByStripePriceId(subscriptionRecord.stripe_price_id) : null;
+
+    const periodChanged = oldPrice && newPrice && oldPrice.billing_period !== newPrice.billing_period;
+
+    if (periodChanged) {
+      logger.info('Billing period changed', {
+        subscriptionId: subscription.id,
+        userId,
+        oldPeriod: oldPrice.billing_period,
+        newPeriod: newPrice.billing_period,
+        tier: newTier
+      });
+
+      // Record period change in migration table
+      await this.createPlanMigration(
+        pgUserId,
+        subscriptionRecord.id,
+        oldTier,
+        newTier,
+        subscription
+      );
+
+      // Handle period transition usage
+      await this.handlePeriodTransition(pgUserId, subscriptionRecord.id, subscription, oldPrice, newPrice);
+    }
+
+    // Update subscription record
+    await userSubscription.updateSubscription(subscriptionRecord.id, {
+      status: subscription.status,
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      stripe_price_id: newPriceId
+    });
+
+    // Update user record
+    await UserModel.updateUser(pgUserId, {
+      subscription_tier: newTier,
+      subscription_status: subscription.status
+    });
+
+    // Clear cached user data
+    clearCachedUser(userId);
+    forceTokenRefresh(pgUserId);
+
+    logger.info('Subscription updated:', {
+      subscriptionId: subscription.id,
+      userId,
+      tier: newTier,
+      status: subscription.status,
+      tierChanged,
+      priceChanged
+    });
+
+    return { processed: true, tierChanged, oldTier, newTier };
   }
 
   /**
@@ -458,7 +636,7 @@ class StripeService {
    */
   async handleSubscriptionResumed(subscription) {
     const userId = subscription.metadata.user_id;
-    const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
+    const tier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Update subscription record
     const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
@@ -502,7 +680,7 @@ class StripeService {
       const userId = subscription.metadata.user_id;
 
       // Create usage record for new billing period (will find subscription record internally)
-      const tier = this.getTierFromPrice(subscription.items.data[0].price.id);
+      const tier = await this.getTierFromPrice(subscription.items.data[0].price.id);
       await this.createUsageRecord(userId, subscription, null, tier);
 
       logger.info('Payment succeeded:', {
@@ -558,6 +736,391 @@ class StripeService {
 
     // Could send email notification here
     return { processed: true };
+  }
+
+  /**
+   * Handle invoice.payment_action_required
+   * Triggered when payment requires additional user action (3D Secure, etc.)
+   */
+  async handlePaymentActionRequired(invoice) {
+    const subscriptionId = invoice.subscription;
+
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const userId = subscription.metadata.user_id;
+      const pgUserId = await this.resolveUserId(userId);
+
+      // Update subscription status
+      await UserModel.updateUser(pgUserId, {
+        subscription_status: 'incomplete'
+      });
+
+      logger.warn('Payment action required:', {
+        invoiceId: invoice.id,
+        subscriptionId,
+        userId,
+        paymentIntentStatus: invoice.payment_intent?.status
+      });
+    }
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle checkout.session.completed
+   * Alternative to manual sync in getReceipt()
+   */
+  async handleCheckoutSessionCompleted(session) {
+    const userId = session.metadata?.user_id || session.client_reference_id;
+
+    if (!userId) {
+      logger.warn('No user ID in checkout session metadata', {
+        sessionId: session.id
+      });
+      return { processed: false, reason: 'No user ID' };
+    }
+
+    // Retrieve subscription from session
+    if (session.subscription) {
+      const subscription = await stripe.subscriptions.retrieve(session.subscription);
+
+      // Process subscription (will be idempotent with customer.subscription.created)
+      await this.handleSubscriptionCreated(subscription);
+
+      logger.info('Processed checkout session', {
+        sessionId: session.id,
+        subscriptionId: subscription.id,
+        userId
+      });
+    }
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle customer.subscription.trial_ended
+   * Triggered when trial ends and subscription converts to active (or cancels)
+   */
+  async handleTrialEnded(subscription) {
+    const userId = subscription.metadata.user_id;
+    const pgUserId = await this.resolveUserId(userId);
+
+    // Update subscription record
+    const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
+    if (subscriptionRecord) {
+      await userSubscription.updateSubscription(subscriptionRecord.id, {
+        status: subscription.status,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null
+      });
+    }
+
+    // Update user status
+    await UserModel.updateUser(pgUserId, {
+      subscription_status: subscription.status
+    });
+
+    // Force token refresh
+    forceTokenRefresh(pgUserId);
+
+    logger.info('Trial ended:', {
+      subscriptionId: subscription.id,
+      userId,
+      newStatus: subscription.status
+    });
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle charge.succeeded
+   * Record successful charges for analytics
+   */
+  async handleChargeSucceeded(charge) {
+    logger.info('Charge succeeded:', {
+      chargeId: charge.id,
+      amount: charge.amount,
+      currency: charge.currency,
+      customerId: charge.customer
+    });
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle charge.failed
+   * Alert on payment failures
+   */
+  async handleChargeFailed(charge) {
+    logger.error('Charge failed:', {
+      chargeId: charge.id,
+      failureCode: charge.failure_code,
+      failureMessage: charge.failure_message,
+      customerId: charge.customer
+    });
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle charge.refunded
+   * Process refunds and update subscription state
+   */
+  async handleChargeRefunded(charge) {
+    logger.warn('Charge refunded:', {
+      chargeId: charge.id,
+      amount: charge.amount_refunded,
+      customerId: charge.customer
+    });
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle customer.created
+   */
+  async handleCustomerCreated(customer) {
+    logger.info('Customer created in Stripe:', {
+      customerId: customer.id,
+      email: customer.email
+    });
+
+    // Try to find user by email and update stripe_customer_id
+    if (customer.email) {
+      const user = await UserModel.findByEmail(customer.email);
+      if (user && !user.stripe_customer_id) {
+        await UserModel.updateUser(user.id, {
+          stripe_customer_id: customer.id
+        });
+        logger.info('Linked Stripe customer to user', {
+          userId: user.id,
+          customerId: customer.id
+        });
+      }
+    }
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle customer.updated
+   */
+  async handleCustomerUpdated(customer) {
+    logger.info('Customer updated in Stripe:', {
+      customerId: customer.id
+    });
+
+    // Sync email changes, metadata updates, etc.
+    const user = await UserModel.findByStripeCustomerId(customer.id);
+    if (user) {
+      // Update user record if email changed
+      if (customer.email && customer.email !== user.email) {
+        await UserModel.updateUser(user.id, {
+          email: customer.email
+        });
+        logger.info('Synced email from Stripe customer', {
+          userId: user.id,
+          newEmail: customer.email
+        });
+      }
+    }
+
+    return { processed: true };
+  }
+
+  /**
+   * Handle customer.deleted
+   */
+  async handleCustomerDeleted(customer) {
+    logger.warn('Customer deleted in Stripe:', {
+      customerId: customer.id
+    });
+
+    // Optionally mark user for review or soft-delete
+    const user = await UserModel.findByStripeCustomerId(customer.id);
+    if (user) {
+      await UserModel.updateUser(user.id, {
+        stripe_customer_id: null,
+        subscription_status: 'deleted'
+      });
+      logger.warn('Removed Stripe customer ID from user', {
+        userId: user.id
+      });
+    }
+
+    return { processed: true };
+  }
+
+  /**
+   * Determine if tier change is upgrade, downgrade, or crossgrade
+   */
+  getChangeType(oldTier, newTier) {
+    const tierOrder = ['free', 'basic', 'premium', 'creator', 'enterprise'];
+    const oldIndex = tierOrder.indexOf(oldTier);
+    const newIndex = tierOrder.indexOf(newTier);
+
+    if (newIndex > oldIndex) return 'upgrade';
+    if (newIndex < oldIndex) return 'downgrade';
+    return 'crossgrade'; // Same level but different billing period
+  }
+
+  /**
+   * Create plan migration record for analytics
+   */
+  async createPlanMigration(userId, subscriptionId, oldTier, newTier, subscription) {
+    try {
+      // Get plan IDs from database
+      const subscriptionPlansService = require('./subscription-plans.service');
+      const oldPlan = await subscriptionPlansService.getPlanByKey(oldTier);
+      const newPlan = await subscriptionPlansService.getPlanByKey(newTier);
+
+      const changeType = this.getChangeType(oldTier, newTier);
+
+      await database.create('subscription_plan_migrations', {
+        users_id: userId,
+        user_subscriptions_id: subscriptionId,
+        from_plan_id: oldPlan ? oldPlan.id : null,
+        to_plan_id: newPlan ? newPlan.id : null,
+        migration_type: changeType,
+        migration_reason: 'user_initiated',
+        effective_date: new Date(),
+        is_prorated: true,
+        stripe_subscription_id: subscription.id,
+        status: 'completed',
+        completed_at: new Date()
+      });
+
+      logger.info('Plan migration recorded', {
+        userId,
+        changeType,
+        oldTier,
+        newTier
+      });
+    } catch (error) {
+      logger.error('Error creating plan migration record:', error);
+      // Don't fail the webhook if migration tracking fails
+    }
+  }
+
+  /**
+   * Handle usage tracking when tier changes
+   */
+  async handleTierChangeUsage(userId, subscriptionId, oldTier, newTier) {
+    try {
+      const changeType = this.getChangeType(oldTier, newTier);
+
+      // Get current usage
+      const currentUsage = await subscriptionUsage.getCurrentBySubscriptionId(subscriptionId);
+
+      if (!currentUsage) {
+        logger.warn('No current usage record found during tier change', {
+          userId,
+          subscriptionId
+        });
+        return;
+      }
+
+      // Get new tier limits
+      const subscriptionPlansService = require('./subscription-plans.service');
+      const newPlanFeatures = await subscriptionPlansService.getPlanFeatures(newTier);
+
+      if (!newPlanFeatures) {
+        logger.error('Could not fetch new plan features', { newTier });
+        return;
+      }
+
+      const newVideoLimit = newPlanFeatures.video_limit;
+
+      if (changeType === 'upgrade') {
+        // Upgrade: Increase usage limit immediately
+        await subscriptionUsage.updateUsage(currentUsage.id, {
+          usage_limit: newVideoLimit
+        });
+
+        logger.info('Usage limit increased on upgrade', {
+          userId,
+          oldLimit: currentUsage.usage_limit,
+          newLimit: newVideoLimit,
+          currentUsage: currentUsage.videos_processed
+        });
+
+      } else if (changeType === 'downgrade') {
+        // Downgrade: Update limit but don't restrict current usage
+        await subscriptionUsage.updateUsage(currentUsage.id, {
+          usage_limit: newVideoLimit
+        });
+
+        // Check if user already exceeded new limit
+        if (currentUsage.videos_processed > newVideoLimit) {
+          logger.warn('User exceeded new limit after downgrade', {
+            userId,
+            currentUsage: currentUsage.videos_processed,
+            newLimit: newVideoLimit
+          });
+        }
+
+        logger.info('Usage limit decreased on downgrade', {
+          userId,
+          oldLimit: currentUsage.usage_limit,
+          newLimit: newVideoLimit,
+          currentUsage: currentUsage.videos_processed
+        });
+      }
+
+    } catch (error) {
+      logger.error('Error handling tier change usage:', error);
+      // Don't fail webhook if usage update fails
+    }
+  }
+
+  /**
+   * Handle usage tracking when billing period changes
+   */
+  async handlePeriodTransition(userId, subscriptionId, subscription, oldPrice, newPrice) {
+    try {
+      const currentUsage = await subscriptionUsage.getCurrentBySubscriptionId(subscriptionId);
+
+      if (!currentUsage) {
+        logger.warn('No current usage record for period transition', {
+          userId,
+          subscriptionId
+        });
+        return;
+      }
+
+      // Calculate prorated usage allowance for period change
+      const oldPeriodStart = new Date(subscription.current_period_start * 1000);
+      const newPeriodEnd = new Date(subscription.current_period_end * 1000);
+      const now = new Date();
+
+      const daysRemaining = Math.ceil((newPeriodEnd - now) / (1000 * 60 * 60 * 24));
+
+      logger.info('Period transition calculated', {
+        userId,
+        oldPeriod: oldPrice.billing_period,
+        newPeriod: newPrice.billing_period,
+        daysRemaining,
+        currentVideosProcessed: currentUsage.videos_processed
+      });
+
+      // Update usage record with new period dates
+      await subscriptionUsage.updateUsage(currentUsage.id, {
+        period_start: oldPeriodStart.toISOString().split('T')[0],
+        period_end: newPeriodEnd.toISOString().split('T')[0]
+      });
+
+      logger.info('Updated usage period dates for billing period transition', {
+        userId,
+        subscriptionId,
+        oldPeriod: oldPrice.billing_period,
+        newPeriod: newPrice.billing_period
+      });
+
+      // Note: Usage counts carry over to new period
+      // Only the period dates and limit change
+
+    } catch (error) {
+      logger.error('Error handling period transition:', error);
+    }
   }
 
   /**
@@ -621,15 +1184,43 @@ class StripeService {
         return;
       }
 
-      // Determine usage limits based on subscription tier
-      const tierLimits = {
-        'free': 2,
-        'basic': 5,
-        'premium': 20,
-        'enterprise': -1  // unlimited
-      };
+      // Get limits from database subscription_plans table
+      const subscriptionPlansService = require('./subscription-plans.service');
+      const planData = await subscriptionPlansService.getPlanByKey(tier);
 
-      const usageLimit = tier ? tierLimits[tier] || 5 : 10; // Default to 5 if tier not provided
+      if (!planData) {
+        logger.error('Unknown tier for usage record creation:', { tier });
+        throw new Error(`Unknown subscription tier: ${tier}`);
+      }
+
+      const usageLimit = planData.videoLimit; // Uses limit from database
+
+      // Check if user has an existing usage record from current billing period (from old subscription/plan)
+      // This handles plan upgrades/downgrades - we should carry over the usage count
+      let videosProcessed = 0;
+      let apiCallsMade = 0;
+      let storageUsedMb = 0;
+      let aiSummariesGenerated = 0;
+      let analyticsViews = 0;
+
+      const currentPeriodUsage = await subscriptionUsage.getCurrentByUserId(parseInt(userId));
+      if (currentPeriodUsage) {
+        // Carry over usage from current period when upgrading/downgrading
+        videosProcessed = currentPeriodUsage.videos_processed || 0;
+        apiCallsMade = currentPeriodUsage.api_calls_made || 0;
+        storageUsedMb = currentPeriodUsage.storage_used_mb || 0;
+        aiSummariesGenerated = currentPeriodUsage.ai_summaries_generated || 0;
+        analyticsViews = currentPeriodUsage.analytics_views || 0;
+
+        logger.info('Carrying over usage from current period:', {
+          userId,
+          videosProcessed,
+          apiCallsMade,
+          storageUsedMb,
+          aiSummariesGenerated,
+          analyticsViews
+        });
+      }
 
       const usageRecord = await subscriptionUsage.createUsage({
         user_id: parseInt(userId),
@@ -637,11 +1228,11 @@ class StripeService {
         period_start: periodStart,
         period_end: periodEnd,
         usage_limit: usageLimit,
-        videos_processed: 0,
-        api_calls_made: 0,
-        storage_used_mb: 0,
-        ai_summaries_generated: 0,
-        analytics_views: 0
+        videos_processed: videosProcessed,
+        api_calls_made: apiCallsMade,
+        storage_used_mb: storageUsedMb,
+        ai_summaries_generated: aiSummariesGenerated,
+        analytics_views: analyticsViews
       });
 
       logger.info('Created usage record:', {
@@ -665,14 +1256,25 @@ class StripeService {
       const userId = event.data.object.metadata?.user_id ||
                     event.data.object.customer_details?.user_id;
 
-      // Only create the event record if user_id is not blank
       if (!userId) {
-        logger.warn('Skipping subscription_events record creation - user_id is blank:', {
+        logger.warn('Skipping subscription_events - user_id is blank', {
           eventId: event.id,
-          eventType: event.type,
-          stripeSubscriptionId: event.data.object.id
+          eventType: event.type
         });
         return;
+      }
+
+      // Resolve to PostgreSQL ID
+      let pgUserId = null;
+      try {
+        pgUserId = await this.resolveUserId(userId);
+      } catch (error) {
+        logger.error('Failed to resolve user ID for event logging', {
+          eventId: event.id,
+          userId,
+          error: error.message
+        });
+        // Continue logging with null user_id for manual review
       }
 
       await subscriptionEvents.createEvent({
@@ -687,7 +1289,8 @@ class StripeService {
       logger.info('Subscription event logged successfully:', {
         eventId: event.id,
         eventType: event.type,
-        userId
+        userId,
+        pgUserId
       });
     } catch (error) {
       logger.error('Error logging webhook event:', error);
@@ -714,22 +1317,14 @@ class StripeService {
   /**
    * Get tier name from Stripe price ID
    */
-  getTierFromPrice(priceId) {
-    const tiers = stripeConfig.subscriptionTiers;
-
-    for (const [tierName, config] of Object.entries(tiers)) {
-      // Check monthly price ID
-      if (config.monthly && config.monthly.priceId === priceId) {
-        return tierName;
-      }
-      // Check yearly price ID
-      if (config.yearly && config.yearly.priceId === priceId) {
-        return tierName;
-      }
+  async getTierFromPrice(priceId) {
+    const subscriptionPlansService = require('./subscription-plans.service');
+    const tier = await subscriptionPlansService.getTierFromPrice(priceId);
+    if (!tier) {
+      logger.warn('Unknown price ID:', priceId);
+      return 'basic'; // fallback
     }
-
-    logger.warn('Unknown price ID:', priceId);
-    return 'basic'; // fallback
+    return tier;
   }
 
   /**
@@ -752,17 +1347,18 @@ class StripeService {
     const user = await UserModel.findById(parseInt(userId));
     if (!user) return false;
 
-    const tierConfig = stripeConfig.getTierConfig(user.subscription_tier || 'free');
+    const subscriptionPlansService = require('./subscription-plans.service');
+    const featureFlags = await subscriptionPlansService.getFeatureFlags(user.subscription_tier || 'free');
 
-    if (!tierConfig) return false;
+    if (!featureFlags) return false;
 
     switch (feature) {
     case 'analytics':
-      return tierConfig.analyticsAccess;
+      return featureFlags.analyticsAccess;
     case 'api':
-      return tierConfig.apiAccess;
+      return featureFlags.apiAccess;
     case 'unlimited_videos':
-      return tierConfig.videoLimit === -1;
+      return featureFlags.videoLimit === -1;
     default:
       return user.subscription_status === 'active';
     }

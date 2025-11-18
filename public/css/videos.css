@@ -513,9 +513,17 @@
 }
 
 .btn-primary {
+  /*
   background: var(--accent-color);
   border: 3px solid var(--text-primary);
   color: white;
+  */
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 2px solid #10b981;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  animation: gentle-glow 2.5s ease-in-out infinite;
 }
 
 .btn-primary:hover {

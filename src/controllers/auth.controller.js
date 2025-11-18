@@ -342,6 +342,16 @@ class AuthController {
 
       logger.info(`Registration completed for user: ${user.id}`);
 
+      // Initialize free subscription (1 video limit)
+      try {
+        const subscriptionService = require('../services/subscription.service');
+        await subscriptionService.initializeFreeUserSubscription(user.id);
+        logger.info(`Initialized free subscription for user ${user.id}`);
+      } catch (subError) {
+        logger.error('Error initializing free subscription:', subError);
+        // Don't fail registration if subscription setup fails
+      }
+
       // Send welcome email and mark as sent
       try {
         await emailService.sendWelcomeEmail(email, firstName);

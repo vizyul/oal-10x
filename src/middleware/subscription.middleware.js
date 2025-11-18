@@ -104,14 +104,15 @@ const subscriptionMiddleware = {
           return next();
         }
 
-        // Get tier configuration for paid users
-        const tierConfig = stripeConfig.getTierConfig(userTier);
-        if (!tierConfig) {
+        // Get tier configuration for paid users from database
+        const subscriptionPlansService = require('../services/subscription-plans.service');
+        const planData = await subscriptionPlansService.getPlanByKey(userTier);
+        if (!planData) {
           return handleSubscriptionError(req, res, 'Invalid subscription tier', 500);
         }
 
         // Check if unlimited for this resource
-        const resourceLimit = getResourceLimit(tierConfig, resource);
+        const resourceLimit = planData.videoLimit; // Currently only supports video limits
         if (resourceLimit === -1) {
           // Unlimited usage
           return next();
@@ -189,13 +190,14 @@ const subscriptionMiddleware = {
         }
 
         const userTier = req.user.subscription_tier || 'free';
-        const tierConfig = stripeConfig.getTierConfig(userTier);
+        const subscriptionPlansService = require('../services/subscription-plans.service');
+        const featureFlags = await subscriptionPlansService.getFeatureFlags(userTier);
 
-        if (!tierConfig) {
+        if (!featureFlags) {
           return handleSubscriptionError(req, res, 'Invalid subscription tier', 500);
         }
 
-        const hasAccess = checkFeatureAccess(tierConfig, feature);
+        const hasAccess = checkFeatureAccess(featureFlags, feature);
 
         if (!hasAccess) {
           return handleSubscriptionError(req, res, 'Feature requires upgrade', 403, {
@@ -220,13 +222,16 @@ const subscriptionMiddleware = {
     try {
       if (req.user) {
         const userTier = req.user.subscription_tier || 'free';
-        const tierConfig = stripeConfig.getTierConfig(userTier);
+        const subscriptionPlansService = require('../services/subscription-plans.service');
+        const planData = await subscriptionPlansService.getPlanByKey(userTier);
         const usage = await getCurrentUsageAll(req.user.id);
 
+        const videoLimit = planData ? planData.videoLimit : 0;
+
         const limits = {
-          videos: getResourceLimit(tierConfig, 'videos'),
-          api_calls: getResourceLimit(tierConfig, 'api_calls'),
-          storage: getResourceLimit(tierConfig, 'storage')
+          videos: videoLimit,
+          api_calls: 0, // TODO: Add api_calls limit to subscription_plans
+          storage: 0  // TODO: Add storage limit to subscription_plans
         };
 
         const percentages = {
@@ -238,7 +243,7 @@ const subscriptionMiddleware = {
         req.subscriptionInfo = {
           tier: userTier,
           status: req.user.subscription_status || 'none',
-          features: tierConfig || {},
+          features: planData ? planData.features : [],
           usage: usage,
           limits: limits,
           percentages: percentages,

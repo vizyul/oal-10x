@@ -70,8 +70,9 @@ class AIChatService {
         temperature = 0.7,
         maxTokens = 2000,
         //model = 'gemini-1.5-flash'
-        model = 'gemini-flash-lite-latest'
-        //model = 'gemini-flash-latest'
+        //model = 'gemini-flash-lite-latest'
+        model = 'gemini-flash-latest'
+        //model = 'gemini-2.5-pro'
       } = options;
 
       logger.debug('Generating content with Gemini', {
@@ -142,7 +143,8 @@ class AIChatService {
         systemMessage = '',
         temperature = 0.7,
         maxTokens = 2000,
-        model = 'gpt-4o-mini'
+        //model = 'gpt-4o-mini'
+        model = 'gpt-5.1'
       } = options;
 
       logger.debug('Generating content with ChatGPT', {
@@ -217,7 +219,8 @@ class AIChatService {
         systemMessage = '',
         temperature = 0.7,
         maxTokens = 2000,
-        model = 'claude-3-haiku-20240307'
+        //model = 'claude-3-haiku-20240307'
+        model = 'claude-sonnet-4-5'
       } = options;
 
       logger.debug('Generating content with Claude', {

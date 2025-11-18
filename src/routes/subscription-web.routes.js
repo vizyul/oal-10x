@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, subscriptionMiddleware } = require('../middleware');
 const stripeConfig = require('../config/stripe.config');
+const { logger } = require('../utils');
+
+logger.info('=== SUBSCRIPTION-WEB ROUTES MODULE LOADED ===');
 
 // Apply authentication middleware to all subscription web routes
 router.use(authMiddleware);
@@ -107,12 +110,128 @@ router.get('/manage', (req, res) => {
 });
 
 /**
+ * @route   GET /subscription/test-user
+ * @desc    Test route to verify user data rendering
+ * @access  Private
+ */
+router.get('/test-user', (req, res) => {
+  logger.info('=== TEST USER ROUTE HIT ===', {
+    userId: req.user?.id,
+    firstName: req.user?.firstName,
+    email: req.user?.email,
+    fullUser: req.user
+  });
+
+  res.send(`
+    <html>
+      <body>
+        <h1>User Data Test</h1>
+        <p>User ID: ${req.user?.id}</p>
+        <p>Email: ${req.user?.email}</p>
+        <p>First Name: ${req.user?.firstName}</p>
+        <p>Last Name: ${req.user?.lastName}</p>
+        <p>Full Object: ${JSON.stringify(req.user, null, 2)}</p>
+      </body>
+    </html>
+  `);
+});
+
+/**
  * @route   GET /subscription/success
  * @desc    Subscription success page after checkout
  * @access  Private
  */
-router.get('/success', (req, res) => {
+router.get('/success', async (req, res) => {
   const sessionId = req.query.session_id;
+
+  logger.info('=== SUCCESS PAGE ROUTE HIT ===', {
+    path: req.path,
+    originalUrl: req.originalUrl,
+    method: req.method,
+    sessionId,
+    userId: req.user?.id,
+    userFirstName: req.user?.firstName,
+    userEmail: req.user?.email
+  });
+
+  // If there's a session_id, fetch fresh subscription data
+  if (sessionId) {
+    try {
+      const authService = require('../services/auth.service');
+      const { forceTokenRefresh } = require('../middleware');
+
+      // Get fresh user data from database
+      const freshUser = await authService.findUserById(req.user.id);
+
+      if (freshUser) {
+        // Generate new token with updated subscription info
+        const newToken = authService.generateToken(freshUser.id, freshUser.email, freshUser);
+
+        // Set new token in cookie
+        res.cookie('auth_token', newToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Update req.user with fresh data
+        req.user = {
+          id: freshUser.id,
+          email: freshUser.email,
+          firstName: freshUser.firstName,
+          lastName: freshUser.lastName,
+          fullName: freshUser.fullName,
+          emailVerified: freshUser.emailVerified,
+          status: freshUser.status,
+          role: freshUser.role,
+          subscription_tier: freshUser.subscription_tier,
+          subscription_status: freshUser.subscription_status,
+          stripe_customer_id: freshUser.stripe_customer_id
+        };
+
+        // Also refresh subscriptionInfo middleware - get features from database
+        const subscriptionPlansService = require('../services/subscription-plans.service');
+        const planData = await subscriptionPlansService.getPlanByKey(freshUser.subscription_tier || 'free');
+        const featureFlags = await subscriptionPlansService.getFeatureFlags(freshUser.subscription_tier || 'free');
+
+        req.subscriptionInfo = {
+          tier: freshUser.subscription_tier || 'free',
+          status: freshUser.subscription_status || 'none',
+          features: planData ? planData.features : [], // Array of feature strings
+          featureFlags: featureFlags || {}, // Object with boolean flags
+          usage: { videos: 0, api_calls: 0, storage: 0 },
+          limits: {
+            videos: planData?.videoLimit || 0,
+            api_calls: 0, // TODO: Add to subscription_plans
+            storage: 0  // TODO: Add to subscription_plans
+          },
+          percentages: { videos: 0, api_calls: 0, storage: 0 },
+          remainingVideos: planData?.videoLimit || 0
+        };
+
+        // Clear any pending refresh flags
+        forceTokenRefresh(req.user.id);
+      }
+    } catch (error) {
+      // Log error but continue - user will see old data until next page load
+      logger.error('Error refreshing subscription on success page:', {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.id,
+        sessionId
+      });
+      console.error('Success page refresh error:', error);
+    }
+  }
+
+  // Debug logging
+  logger.info('Rendering success page with user data:', {
+    userId: req.user?.id,
+    firstName: req.user?.firstName,
+    email: req.user?.email,
+    tier: req.subscriptionInfo?.tier,
+    hasSessionId: !!sessionId
+  });
 
   res.render('subscription/success', {
     title: 'Subscription Successful - Our AI Legacy',

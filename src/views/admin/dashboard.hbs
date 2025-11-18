@@ -34,14 +34,37 @@
   </div>
 
   <div class="dashboard-actions">
-    <h2>Quick Actions</h2>
+    <h2>Subscription Management</h2>
+    <div class="action-grid">
+      <a href="/admin/subscriptions" class="action-card subscription">
+        <div class="action-icon">💳</div>
+        <h3>Subscriptions</h3>
+        <p>View and manage user subscriptions</p>
+      </a>
+
+      <a href="/admin/webhooks" class="action-card webhooks">
+        <div class="action-icon">🔔</div>
+        <h3>Webhook Monitoring</h3>
+        <p>Monitor Stripe webhook events and processing</p>
+      </a>
+
+      <a href="/admin/health" class="action-card health">
+        <div class="action-icon">🏥</div>
+        <h3>System Health</h3>
+        <p>Check system health and data consistency</p>
+      </a>
+    </div>
+  </div>
+
+  <div class="dashboard-actions">
+    <h2>Content Management</h2>
     <div class="action-grid">
       <a href="/admin/content-types" class="action-card">
         <div class="action-icon">📝</div>
         <h3>Content Types List</h3>
         <p>Browse and manage content types</p>
       </a>
-      
+
       <a href="/admin/content-types/new" class="action-card">
         <div class="action-icon">➕</div>
         <h3>Add Content Type</h3>
