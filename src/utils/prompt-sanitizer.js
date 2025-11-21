@@ -68,7 +68,7 @@ class PromptSanitizer {
         }
 
         const {
-            maxLength = 50000,        // Reasonable limit for most AI models
+            maxLength = 600000,       // Increased limit for longer transcripts
             preserveFormatting = true, // Keep basic formatting
             strictMode = false        // Enable extra strict sanitization
         } = options;

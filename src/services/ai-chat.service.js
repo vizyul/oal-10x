@@ -217,11 +217,14 @@ class AIChatService {
       const {
         prompt,
         systemMessage = '',
-        temperature = 0.7,
+        temperature: rawTemperature = 0.7,
         maxTokens = 2000,
         //model = 'claude-3-haiku-20240307'
         model = 'claude-sonnet-4-5'
       } = options;
+
+      // Ensure temperature is a valid number (database may return string)
+      const temperature = parseFloat(rawTemperature) || 0.7;
 
       logger.debug('Generating content with Claude', {
         model,
@@ -416,6 +419,101 @@ class AIChatService {
       logger.error(`${provider} test failed:`, error.message);
       return false;
     }
+  }
+
+  /**
+   * Generate an image using Gemini Imagen model
+   * @param {string} prompt - Image generation prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generated image data (base64)
+   */
+  async generateImage(prompt, options = {}) {
+    try {
+      if (!this.gemini) {
+        throw new Error('Gemini not configured - cannot generate images');
+      }
+
+      const {
+        model = 'gemini-2.0-flash-exp',
+        aspectRatio = '16:9'
+      } = options;
+
+      logger.info('Generating image with Gemini Imagen', {
+        model,
+        promptLength: prompt.length,
+        aspectRatio
+      });
+
+      const startTime = Date.now();
+
+      // Use the Imagen model for image generation
+      const imageModel = this.gemini.getGenerativeModel({
+        model,
+        generationConfig: {
+          responseModalities: ['Text', 'Image']
+        }
+      });
+
+      const result = await imageModel.generateContent(prompt);
+      const response = await result.response;
+
+      // Extract image from response
+      let imageData = null;
+      let textResponse = '';
+
+      if (response.candidates && response.candidates[0]) {
+        const parts = response.candidates[0].content.parts;
+        for (const part of parts) {
+          if (part.inlineData) {
+            imageData = {
+              base64: part.inlineData.data,
+              mimeType: part.inlineData.mimeType || 'image/png'
+            };
+          } else if (part.text) {
+            textResponse = part.text;
+          }
+        }
+      }
+
+      if (!imageData) {
+        throw new Error('No image data returned from Gemini');
+      }
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      logger.info('Image generation successful', {
+        duration: `${duration}ms`,
+        mimeType: imageData.mimeType,
+        dataLength: imageData.base64.length
+      });
+
+      return {
+        success: true,
+        image: imageData,
+        textResponse,
+        metrics: {
+          duration,
+          model
+        }
+      };
+
+    } catch (error) {
+      logger.error('Error generating image with Gemini:', {
+        error: error.message,
+        code: error.code,
+        status: error.status
+      });
+      throw new Error(`Image generation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if image generation is available
+   * @returns {boolean} Whether image generation is available
+   */
+  isImageGenerationAvailable() {
+    return !!this.gemini;
   }
 }
 

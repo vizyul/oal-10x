@@ -128,6 +128,89 @@ class ContentGenerationService {
   }
 
   /**
+   * Process ebook content to generate images for [AI_IMAGE: ...] placeholders
+   * @param {string} videoId - Video ID (for logging)
+   * @param {string} content - Generated ebook content with image placeholders
+   * @returns {Promise<string>} Content with image placeholders replaced by base64 images
+   */
+  async processEbookImages(videoId, content) {
+    try {
+      // Check if image generation is available
+      if (!aiChatService.isImageGenerationAvailable()) {
+        logger.warn(`Image generation not available for video ${videoId}, returning content without images`);
+        return content;
+      }
+
+      // Find all [AI_IMAGE: ...] placeholders
+      const imageRegex = /\[AI_IMAGE:\s*([^\]]+)\]/g;
+      const matches = [...content.matchAll(imageRegex)];
+
+      if (matches.length === 0) {
+        logger.debug(`No image placeholders found in ebook content for video ${videoId}`);
+        return content;
+      }
+
+      logger.info(`Found ${matches.length} image placeholders in ebook content for video ${videoId}`);
+
+      // Process each image placeholder
+      let processedContent = content;
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const match of matches) {
+        const fullPlaceholder = match[0];
+        const imagePrompt = match[1].trim();
+
+        try {
+          logger.info(`Generating image for prompt: "${imagePrompt.substring(0, 50)}..."`);
+
+          // Generate image using Gemini
+          const imageResult = await aiChatService.generateImage(imagePrompt, {
+            model: 'gemini-2.0-flash-exp'
+          });
+
+          if (imageResult.success && imageResult.image) {
+            // Create base64 image tag
+            const imageTag = `![Generated Image](data:${imageResult.image.mimeType};base64,${imageResult.image.base64})`;
+
+            // Replace placeholder with image
+            processedContent = processedContent.replace(fullPlaceholder, imageTag);
+            successCount++;
+
+            logger.info(`Successfully generated image ${successCount}/${matches.length} for video ${videoId}`);
+          } else {
+            throw new Error('Image generation returned no data');
+          }
+
+        } catch (imageError) {
+          logger.error(`Failed to generate image for placeholder in video ${videoId}:`, {
+            prompt: imagePrompt.substring(0, 100),
+            error: imageError.message
+          });
+
+          // Replace with error placeholder instead of leaving the original
+          const errorPlaceholder = `[Image generation failed: ${imagePrompt.substring(0, 50)}...]`;
+          processedContent = processedContent.replace(fullPlaceholder, errorPlaceholder);
+          failCount++;
+        }
+      }
+
+      logger.info(`Ebook image processing complete for video ${videoId}`, {
+        total: matches.length,
+        success: successCount,
+        failed: failCount
+      });
+
+      return processedContent;
+
+    } catch (error) {
+      logger.error(`Error processing ebook images for video ${videoId}:`, error.message);
+      // Return original content if overall processing fails
+      return content;
+    }
+  }
+
+  /**
    * Generate content for a video using a specific prompt
    * @param {string} videoId - Video ID (for logging)
    * @param {string} transcript - Video transcript
@@ -169,12 +252,17 @@ class ContentGenerationService {
       );
 
       // Handle both old string format and new object format for backward compatibility
-      const generatedContent = typeof generationResult === 'string' ? generationResult : generationResult.text;
+      let generatedContent = typeof generationResult === 'string' ? generationResult : generationResult.text;
       const metrics = typeof generationResult === 'object' ? generationResult.metrics : null;
 
       // Check if LLM actually generated content
       if (!generatedContent || generatedContent.trim() === '') {
         throw new Error(`LLM generated empty or null content for ${prompt.content_type}`);
+      }
+
+      // Post-processing for ebook_text: Generate images for [AI_IMAGE: ...] placeholders
+      if (prompt.content_type === 'ebook_text') {
+        generatedContent = await this.processEbookImages(videoId, generatedContent);
       }
 
       // Calculate generation duration
