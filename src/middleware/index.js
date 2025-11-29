@@ -16,10 +16,10 @@ const securityMiddleware = [
         defaultSrc: ['\'self\''],
         styleSrc: ['\'self\'', '\'unsafe-inline\'', 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
         fontSrc: ['\'self\'', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com'],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com'],
         imgSrc: ['\'self\'', 'data:', 'https:'],
-        connectSrc: ['\'self\'', 'https://api.stripe.com'],
-        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com']
+        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com'],
+        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com']
       }
     },
     crossOriginEmbedderPolicy: false

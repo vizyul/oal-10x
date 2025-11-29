@@ -108,7 +108,42 @@
             <script src="{{this}}"></script>
         {{/each}}
     {{/if}}
-    
+
+    <!-- RefGrow Affiliate Tracking -->
+    <script>
+        // Check for referral code in URL and store in session/cookie
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref') || urlParams.get('referral');
+
+            if (refCode) {
+                // Store referral code in localStorage for signup form
+                localStorage.setItem('referral_code', refCode);
+
+                // Track click via backend API
+                fetch('/affiliate/api/track-click', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        referralCode: refCode,
+                        landingPage: window.location.href,
+                        referrerUrl: document.referrer
+                    })
+                }).catch(err => console.error('Error tracking affiliate click:', err));
+            }
+
+            {{#if user}}
+            // User is logged in - track for RefGrow analytics
+            console.log('User authenticated:', {
+                id: '{{user.id}}',
+                email: '{{user.email}}'
+            });
+            {{/if}}
+        })();
+    </script>
+
     <!-- Additional scripts -->
     {{{scripts}}}
 </body>

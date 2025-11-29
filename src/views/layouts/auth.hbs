@@ -108,5 +108,32 @@
     <!-- JavaScript -->
     <script src="/js/main.js"></script>
     <script src="/js/auth.js"></script>
+
+    <!-- Affiliate Tracking -->
+    <script>
+        // Check for referral code in URL and store in localStorage
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref') || urlParams.get('referral');
+
+            if (refCode) {
+                // Store referral code in localStorage for signup form
+                localStorage.setItem('referral_code', refCode);
+
+                // Track click via backend API
+                fetch('/affiliate/api/track-click', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        referralCode: refCode,
+                        landingPage: window.location.href,
+                        referrerUrl: document.referrer
+                    })
+                }).catch(err => console.error('Error tracking affiliate click:', err));
+            }
+        })();
+    </script>
 </body>
 </html>

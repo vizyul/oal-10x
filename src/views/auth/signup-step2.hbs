@@ -21,6 +21,7 @@
     <input type="hidden" name="_csrf" value="{{csrfToken}}">
   {{/if}}
   <input type="hidden" name="email" value="{{email}}">
+  <input type="hidden" name="affiliateSignup" value="{{affiliateSignup}}" id="affiliateSignupFlag">
   
   <!-- Code Input -->
   <div class="form-group">
@@ -131,13 +132,16 @@ document.addEventListener('DOMContentLoaded', function() {
     loadingOverlay.classList.add('show');
     
     try {
+      // Get affiliateSignup flag from hidden field
+      const affiliateSignup = document.getElementById('affiliateSignupFlag')?.value === 'true';
+
       const response = await fetch('/auth/sign-up/verify-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         },
-        body: JSON.stringify({ email, code })
+        body: JSON.stringify({ email, code, affiliateSignup: affiliateSignup ? 'true' : 'false' })
       });
       
       const result = await response.json();

@@ -243,6 +243,14 @@ class AuthService {
       if (updateData.subscription_tier) mappedData.subscription_tier = updateData.subscription_tier;
       if (updateData.subscription_status) mappedData.subscription_status = updateData.subscription_status;
 
+      // Handle affiliate fields
+      if (updateData.referred_by_code !== undefined) mappedData.referred_by_code = updateData.referred_by_code;
+      if (updateData.affiliate_code !== undefined) mappedData.affiliate_code = updateData.affiliate_code;
+      if (updateData.is_affiliate !== undefined) mappedData.is_affiliate = updateData.is_affiliate;
+      if (updateData.affiliate_status !== undefined) mappedData.affiliate_status = updateData.affiliate_status;
+      if (updateData.affiliate_joined_at !== undefined) mappedData.affiliate_joined_at = updateData.affiliate_joined_at;
+      if (updateData.refgrow_affiliate_id !== undefined) mappedData.refgrow_affiliate_id = updateData.refgrow_affiliate_id;
+
       const record = await UserModel.updateUser(userId, mappedData);
 
       return this.formatUserRecord(record);

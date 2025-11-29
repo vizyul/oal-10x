@@ -1,0 +1,621 @@
+<div class="affiliate-signup-container">
+    <div class="affiliate-hero">
+        <h1>Join Our Affiliate Program</h1>
+        <p class="hero-subtitle">Earn 20% recurring commission by referring new customers</p>
+        <p class="hero-note">Free to join • No subscription required • Start earning today</p>
+
+        {{#unless user}}
+        <div class="cta-button-container">
+            <a href="/auth/sign-up/affiliate" class="btn btn-cta">Join to Earn 20% TODAY!</a>
+        </div>
+        {{/unless}}
+    </div>
+
+    {{!-- Show signup form at top for logged-in users --}}
+    {{#if user}}
+        {{#if user.is_affiliate}}
+            <div class="already-affiliate">
+                <div class="success-message">
+                    <span class="icon">✓</span>
+                    <span>You're already an affiliate!</span>
+                </div>
+                <a href="/affiliate/dashboard" class="btn btn-primary">Go to Dashboard</a>
+            </div>
+        {{else}}
+            <div class="signup-form-container">
+                <h2>Become an Affiliate Today</h2>
+                <form id="affiliateSignupForm" class="affiliate-form">
+                    <div class="form-notice">
+                        <p>You're signing up as: <strong>{{user.first_name}} {{user.last_name}}</strong></p>
+                        <p>Email: <strong>{{user.email}}</strong></p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="why">Why do you want to become an affiliate? *</label>
+                        <textarea id="why" name="why" rows="4" required
+                                  placeholder="Tell us about your audience and how you plan to promote our product..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="website">Your website or social media (optional)</label>
+                        <input type="url" id="website" name="website"
+                               placeholder="https://yourwebsite.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audience_size">Estimated audience size (optional)</label>
+                        <select id="audience_size" name="audience_size">
+                            <option value="">Select...</option>
+                            <option value="0-1000">0 - 1,000</option>
+                            <option value="1000-5000">1,000 - 5,000</option>
+                            <option value="5000-10000">5,000 - 10,000</option>
+                            <option value="10000-50000">10,000 - 50,000</option>
+                            <option value="50000+">50,000+</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="terms" name="terms" required>
+                            <span>I agree to the <a href="/affiliate/terms" target="_blank">Affiliate Terms & Conditions</a></span>
+                        </label>
+                    </div>
+
+                    <div id="formMessage" class="form-message" style="display: none;"></div>
+
+                    <button type="submit" class="btn btn-primary btn-large" id="submitBtn">
+                        Join Affiliate Program
+                    </button>
+                </form>
+            </div>
+        {{/if}}
+    {{/if}}
+
+    <div class="affiliate-benefits">
+        <h2>Why Join Our Affiliate Program?</h2>
+        <div class="benefits-grid">
+            <div class="benefit-card">
+                <div class="benefit-icon">💰</div>
+                <h3>20% Recurring Commission</h3>
+                <p>Earn 20% of every subscription payment from your referrals, every month</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">🔄</div>
+                <h3>Lifetime Earnings</h3>
+                <p>Continue earning as long as your referrals remain subscribed</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">📊</div>
+                <h3>Real-Time Dashboard</h3>
+                <p>Track clicks, conversions, and earnings in your personalized dashboard</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">⚡</div>
+                <h3>Quick Payouts</h3>
+                <p>Minimum $50 payout threshold via PayPal or bank transfer</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">🎯</div>
+                <h3>Marketing Materials</h3>
+                <p>Access banners, email templates, and promotional content</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">🎉</div>
+                <h3>Free to Join</h3>
+                <p>No subscription required - start earning immediately with zero upfront cost</p>
+            </div>
+            <div class="benefit-card">
+                <div class="benefit-icon">🤝</div>
+                <h3>Dedicated Support</h3>
+                <p>Get help from our affiliate team to maximize your earnings</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="commission-calculator">
+        <h2>Calculate Your Potential Earnings</h2>
+        <div class="calculator-form">
+            <label for="referrals">Number of referrals per month:</label>
+            <input type="number" id="referrals" value="10" min="1" max="1000">
+
+            <label for="plan">Average subscription plan:</label>
+            <select id="plan">
+                <option value="39">Basic - $39/month ($399/year)</option>
+                <option value="69" selected>Premium - $69/month ($699/year)</option>
+                <option value="129">Creator - $129/month ($1,290/year)</option>
+                <option value="399">Enterprise - $399/month ($3,990/year)</option>
+            </select>
+
+            <label for="billingCycle">Billing cycle:</label>
+            <select id="billingCycle">
+                <option value="monthly" selected>Monthly</option>
+                <option value="yearly">Yearly</option>
+            </select>
+
+            <div class="calculator-results">
+                <div class="calculator-result">
+                    <div class="result-label">Commission Per Referral:</div>
+                    <div class="result-amount" id="perReferralEarnings">$13.80</div>
+                </div>
+                <div class="calculator-result highlight">
+                    <div class="result-label">Monthly Earnings:</div>
+                    <div class="result-amount" id="monthlyEarnings">$138.00</div>
+                </div>
+                <div class="calculator-result highlight">
+                    <div class="result-label">Annual Earnings:</div>
+                    <div class="result-amount annual" id="annualEarnings">$1,656.00</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{!-- Bottom CTA: Show for non-authenticated users only --}}
+    {{#unless user}}
+        <div class="signup-cta">
+            <h2>Ready to Start Earning?</h2>
+            <p>Create a free account to join our affiliate program</p>
+            <div class="free-badge">
+                <span class="badge-icon">✨</span>
+                <span class="badge-text">100% Free - No Credit Card Required</span>
+            </div>
+            <div class="cta-buttons">
+                <a href="/auth/sign-up/affiliate" class="btn btn-cta btn-large">Join to Earn 20% TODAY!</a>
+            </div>
+        </div>
+    {{/unless}}
+</div>
+
+<style>
+.affiliate-signup-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.affiliate-hero {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.affiliate-hero h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.hero-note {
+    font-size: 1.1rem;
+    color: var(--success-color);
+    font-weight: 600;
+    margin-bottom: 30px;
+}
+
+.cta-button-container {
+    text-align: center;
+    margin-top: 30px;
+}
+
+.btn-cta {
+    background: var(--green) !important;
+    color: white !important;
+    padding: 18px 48px !important;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1.2rem;
+    text-decoration: none;
+    display: inline-block;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-cta:hover {
+    background: #059669 !important;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    color: white !important;
+}
+
+.btn-cta.btn-large {
+    padding: 20px 60px !important;
+    font-size: 1.3rem;
+}
+
+.affiliate-benefits {
+    margin-bottom: 60px;
+}
+
+.affiliate-benefits h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 40px;
+}
+
+.benefits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.benefit-card {
+    background: var(--bg-secondary);
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.benefit-card:hover {
+    transform: translateY(-5px);
+}
+
+.benefit-icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.benefit-card h3 {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.benefit-card p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.commission-calculator {
+    background: var(--bg-secondary);
+    padding: 40px;
+    border-radius: 12px;
+    margin-bottom: 60px;
+}
+
+.commission-calculator h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 30px;
+}
+
+.calculator-form {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.calculator-form label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.calculator-form input,
+.calculator-form select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 1rem;
+}
+
+.calculator-results {
+    margin-top: 30px;
+    background: var(--bg-primary);
+    padding: 20px;
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+}
+
+.calculator-result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.calculator-result:first-child {
+    border-top: none;
+}
+
+.calculator-result.highlight {
+    background: linear-gradient(135deg, #10b98110 0%, #05966910 100%);
+    margin: 10px -20px -20px;
+    padding: 20px;
+    border-radius: 0 0 8px 8px;
+    border-top: 2px solid #10b981;
+}
+
+.result-label {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+.result-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.result-amount.annual {
+    font-size: 2rem;
+}
+
+.signup-form-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: var(--bg-secondary);
+    padding: 40px;
+    border-radius: 12px;
+}
+
+.signup-form-container h2 {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.form-notice {
+    background: var(--info-bg);
+    border-left: 4px solid var(--info-color);
+    padding: 15px;
+    margin-bottom: 30px;
+    border-radius: 4px;
+}
+
+.form-notice p {
+    margin: 5px 0;
+}
+
+.affiliate-form .form-group {
+    margin-bottom: 25px;
+}
+
+.affiliate-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.affiliate-form input,
+.affiliate-form textarea,
+.affiliate-form select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.affiliate-form textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+}
+
+.form-message {
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.form-message.success {
+    background: var(--success-bg);
+    color: var(--success-color);
+}
+
+.form-message.error {
+    background: var(--error-bg);
+    color: var(--error-color);
+}
+
+.affiliate-signup-container .btn {
+    display: inline-block;
+    padding: 12px 30px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.affiliate-signup-container .btn-primary {
+    background: var(--green);
+    color: white;
+}
+
+.affiliate-signup-container .btn-primary:hover {
+    background: var(--green-hover);
+}
+
+.affiliate-signup-container .btn-large {
+    width: 100%;
+    padding: 15px;
+    font-size: 1.1rem;
+}
+
+.already-affiliate {
+    text-align: center;
+    padding: 40px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+}
+
+.success-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1.3rem;
+    color: var(--success-color);
+    margin-bottom: 30px;
+}
+
+.success-message .icon {
+    font-size: 2rem;
+}
+
+.signup-cta {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+}
+
+.signup-cta h2 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+.signup-cta p {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.free-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--success-bg);
+    color: var(--success-color);
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-weight: 600;
+    margin-bottom: 30px;
+}
+
+.badge-icon {
+    font-size: 1.2rem;
+}
+
+.badge-text {
+    font-size: 1rem;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 30px;
+}
+</style>
+
+<script>
+// Commission calculator with pricing map
+const pricingMap = {
+    monthly: { 39: 39, 69: 69, 129: 129, 399: 399 },
+    yearly: { 39: 399, 69: 699, 129: 1290, 399: 3990 }
+};
+
+// Add event listeners
+document.getElementById('referrals')?.addEventListener('input', updateCalculator);
+document.getElementById('plan')?.addEventListener('change', updateCalculator);
+document.getElementById('billingCycle')?.addEventListener('change', updateCalculator);
+
+function updateCalculator() {
+    const referrals = parseInt(document.getElementById('referrals').value) || 0;
+    const planMonthly = parseFloat(document.getElementById('plan').value) || 0;
+    const billingCycle = document.getElementById('billingCycle').value;
+    const commissionRate = 0.20; // 20%
+
+    // Get the actual price based on billing cycle
+    const actualPrice = pricingMap[billingCycle][planMonthly];
+
+    // Calculate commission per referral
+    const perReferralCommission = actualPrice * commissionRate;
+
+    // Calculate earnings based on billing cycle
+    let monthlyEarnings, annualEarnings;
+
+    if (billingCycle === 'monthly') {
+        // Monthly subscriptions: recurring monthly
+        monthlyEarnings = referrals * perReferralCommission;
+        annualEarnings = monthlyEarnings * 12;
+    } else {
+        // Yearly subscriptions: one-time annual payment
+        const yearlyCommission = referrals * perReferralCommission;
+        monthlyEarnings = yearlyCommission / 12; // Amortized monthly
+        annualEarnings = yearlyCommission;
+    }
+
+    // Update display
+    document.getElementById('perReferralEarnings').textContent = `$${perReferralCommission.toFixed(2)}${billingCycle === 'yearly' ? '/year' : '/month'}`;
+    document.getElementById('monthlyEarnings').textContent = `$${monthlyEarnings.toFixed(2)}`;
+    document.getElementById('annualEarnings').textContent = `$${annualEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Initialize calculator on page load
+updateCalculator();
+
+// Form submission
+document.getElementById('affiliateSignupForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const submitBtn = document.getElementById('submitBtn');
+    const formMessage = document.getElementById('formMessage');
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    formMessage.style.display = 'none';
+
+    const formData = {
+        why: document.getElementById('why').value,
+        website: document.getElementById('website').value,
+        audienceSize: document.getElementById('audience_size').value
+    };
+
+    try {
+        const response = await fetch('/affiliate/api/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            formMessage.textContent = 'Success! Redirecting to your dashboard...';
+            formMessage.className = 'form-message success';
+            formMessage.style.display = 'block';
+
+            // Redirect immediately
+            window.location.href = '/affiliate/dashboard';
+        } else {
+            // Handle error response - check for both 'error' and 'message' properties
+            throw new Error(data.error || data.message || 'Failed to sign up');
+        }
+    } catch (error) {
+        formMessage.textContent = error.message || 'An error occurred. Please try again.';
+        formMessage.className = 'form-message error';
+        formMessage.style.display = 'block';
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Join Affiliate Program';
+    }
+});
+</script>

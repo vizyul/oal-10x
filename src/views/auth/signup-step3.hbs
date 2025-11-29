@@ -23,6 +23,7 @@
   <input type="hidden" name="email" value="{{email}}">
   <input type="hidden" name="token" value="{{token}}">
   <input type="hidden" name="timezone" id="timezoneField" value="">
+  <input type="hidden" name="affiliateSignup" id="affiliateSignupFlag" value="{{affiliateSignup}}">
   
   <!-- Name Fields -->
   <div class="form-row">
@@ -292,7 +293,13 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const formData = new FormData(form);
       const data = Object.fromEntries(formData);
-      
+
+      // Add referral code from localStorage if it exists
+      const referralCode = localStorage.getItem('referral_code');
+      if (referralCode) {
+        data.referralCode = referralCode;
+      }
+
       const response = await fetch('/auth/sign-up/complete', {
         method: 'POST',
         headers: {

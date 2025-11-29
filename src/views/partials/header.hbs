@@ -65,6 +65,7 @@
           </li>
           {{else}}
           <!-- Non-authenticated Navigation -->
+          <li><a href="/affiliate/signup" class="nav-link nav-affiliate">💰 Earn 20%</a></li>
           <li><a href="/auth/sign-up" class="nav-link btn-get-started">Get Started</a></li>
           {{/if}}
           <li>
@@ -111,6 +112,22 @@
                       <span>Subscription</span>
                     </a>
                     
+                    {{#if user.is_affiliate}}
+                    <a href="/affiliate/dashboard" class="profile-menu-item">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                      </svg>
+                      <span>💰 Affiliate Dashboard</span>
+                    </a>
+                    {{else}}
+                    <a href="/affiliate/signup" class="profile-menu-item affiliate-cta">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                      </svg>
+                      <span>💰 Earn 20% Commission</span>
+                    </a>
+                    {{/if}}
+
                     {{#if (eq user.role 'admin')}}
                     <a href="/admin" class="profile-menu-item admin-menu-item">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

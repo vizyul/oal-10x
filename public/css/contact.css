@@ -136,6 +136,32 @@ textarea.form-control {
   min-height: 120px;
 }
 
+/* reCAPTCHA Widget Styling */
+.recaptcha-group {
+  margin-bottom: var(--space-6);
+}
+
+.recaptcha-group .form-label {
+  margin-bottom: var(--space-3);
+}
+
+.recaptcha-group .g-recaptcha {
+  display: block;
+  min-height: 78px;
+  overflow: visible;
+}
+
+/* Hide the g-recaptcha-response textarea that Google creates */
+.recaptcha-group textarea,
+.g-recaptcha textarea,
+textarea#g-recaptcha-response,
+textarea[name="g-recaptcha-response"] {
+  display: none !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

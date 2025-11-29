@@ -44,7 +44,10 @@
     {{#if csrfToken}}
         <input type="hidden" name="_csrf" value="{{csrfToken}}">
     {{/if}}
-    
+    {{#if affiliateSignup}}
+        <input type="hidden" name="affiliateSignup" value="true" id="affiliateSignupFlag">
+    {{/if}}
+
     <!-- Email Field -->
     <div class="form-group">
         <label for="email" class="form-label">Email Address</label>
@@ -121,12 +124,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify(data)
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok && result.success) {
                 // Success - redirect to verification step
-                window.location.href = `/auth/sign-up/verify?email=${encodeURIComponent(data.email)}`;
+                let verifyUrl = `/auth/sign-up/verify?email=${encodeURIComponent(data.email)}`;
+                // Pass affiliateSignup flag forward
+                if (data.affiliateSignup) {
+                    verifyUrl += '&affiliateSignup=true';
+                }
+                window.location.href = verifyUrl;
             } else {
                 // Handle errors
                 if (result.field && result.message) {

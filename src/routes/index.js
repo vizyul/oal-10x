@@ -106,6 +106,9 @@ router.use('/api', require('./api.routes'));
 // Admin routes (protected by admin middleware)
 router.use('/admin', require('./admin.routes'));
 
+// Affiliate routes
+router.use('/affiliate', require('./affiliate.routes'));
+
 // Terms and Privacy pages
 router.get('/terms', (req, res) => {
   res.render('legal/terms', {
@@ -166,7 +169,8 @@ router.get('/contact', (req, res) => {
     showHeader: true,
     showFooter: true,
     showNav: true,
-    additionalCSS: ['/css/contact.css']
+    additionalCSS: ['/css/contact.css'],
+    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY
   });
 });
 
@@ -366,7 +370,57 @@ router.post('/contact', [
         showFooter: true,
         showNav: true,
         additionalCSS: ['/css/contact.css'],
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         success: 'Thank you for your message! We\'ll get back to you soon.'
+      });
+    }
+
+    // Verify reCAPTCHA
+    const recaptchaResponse = req.body['g-recaptcha-response'];
+    if (!recaptchaResponse) {
+      return res.render('contact', {
+        title: 'Contact Us',
+        description: 'Get in touch with AmplifyContent.ai',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        additionalCSS: ['/css/contact.css'],
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
+        error: 'Please complete the reCAPTCHA verification.',
+        formData: req.body
+      });
+    }
+
+    // Verify reCAPTCHA with Google
+    const axios = require('axios');
+    const recaptchaVerify = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      null,
+      {
+        params: {
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaResponse,
+          remoteip: req.ip
+        }
+      }
+    );
+
+    if (!recaptchaVerify.data.success) {
+      logger.warn('reCAPTCHA verification failed', { ip: req.ip, errors: recaptchaVerify.data['error-codes'] });
+      return res.render('contact', {
+        title: 'Contact Us',
+        description: 'Get in touch with AmplifyContent.ai',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        additionalCSS: ['/css/contact.css'],
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
+        error: 'reCAPTCHA verification failed. Please try again.',
+        formData: req.body
       });
     }
 
@@ -389,6 +443,7 @@ router.post('/contact', [
         showFooter: true,
         showNav: true,
         additionalCSS: ['/css/contact.css'],
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         error: firstError,
         formData: req.body
       });
@@ -423,6 +478,7 @@ router.post('/contact', [
         showFooter: true,
         showNav: true,
         additionalCSS: ['/css/contact.css'],
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         success: 'Thank you for your message! We\'ll get back to you soon.'
       });
     } else {
@@ -440,6 +496,7 @@ router.post('/contact', [
       showFooter: true,
       showNav: true,
       additionalCSS: ['/css/contact.css'],
+      recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
       error: 'There was an error sending your message. Please try again.',
       formData: req.body
     });

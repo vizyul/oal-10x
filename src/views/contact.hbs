@@ -1,3 +1,6 @@
+<!-- Google reCAPTCHA Script -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
 <!-- Contact Page -->
 <section class="contact-hero">
   <div class="container">
@@ -48,7 +51,13 @@
             <label for="message" class="form-label">Message</label>
             <textarea id="message" name="message" class="form-control" rows="6" required>{{formData.message}}</textarea>
           </div>
-          
+
+          <!-- reCAPTCHA -->
+          <div class="form-group recaptcha-group">
+            <label class="form-label">Are you human?</label>
+            <div class="g-recaptcha" data-sitekey="{{recaptchaSiteKey}}" data-action="LOGIN"></div>
+          </div>
+
           <button type="submit" class="btn btn-primary btn-large">Send Message</button>
         </form>
       </div>

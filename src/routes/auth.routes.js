@@ -23,6 +23,9 @@ const router = express.Router();
 // Step 1: GET /auth/sign-up - Display email input form
 router.get('/sign-up', authController.renderSignUp);
 
+// AFFILIATE SIGNUP FLOW (separate flow that redirects to /affiliate/signup after completion)
+router.get('/sign-up/affiliate', authController.renderAffiliateSignUp);
+
 // Step 1: POST /auth/sign-up/send-code - Send verification code to email
 router.post('/sign-up/send-code',
   emailVerificationLimit,

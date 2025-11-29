@@ -34,6 +34,34 @@ class AuthController {
     }
   }
 
+  // GET /auth/sign-up/affiliate - Affiliate signup (redirects to /affiliate/signup after completion)
+  async renderAffiliateSignUp(req, res) {
+    try {
+      // Check if user is already authenticated
+      if (req.user) {
+        // If already logged in, redirect to affiliate signup page
+        return res.redirect('/affiliate/signup');
+      }
+
+      res.render('auth/signup-step1', {
+        title: 'Join Our Affiliate Program',
+        subtitle: 'Create your free account to start earning 20% commission',
+        layout: 'auth',
+        showHeader: false,
+        showFooter: false,
+        step: 1,
+        affiliateSignup: true, // Flag to track affiliate signup flow
+        csrfToken: req.csrfToken ? req.csrfToken() : null
+      });
+    } catch (error) {
+      logger.error('Error rendering affiliate sign up page:', error);
+      res.status(500).render('errors/500', {
+        title: 'Server Error',
+        message: 'Unable to load the sign up page. Please try again later.'
+      });
+    }
+  }
+
   // POST /auth/sign-up/send-code - Step 1: Send verification code
   async sendVerificationCode(req, res) {
     try {
@@ -134,20 +162,21 @@ class AuthController {
   // GET /auth/sign-up/verify - Step 2: Code verification
   async renderVerifyCode(req, res) {
     try {
-      const { email } = req.query;
+      const { email, affiliateSignup } = req.query;
 
       if (!email) {
         return res.redirect('/auth/sign-up');
       }
 
       res.render('auth/signup-step2', {
-        title: 'Verify your email',
+        title: affiliateSignup === 'true' ? 'Verify your email to join affiliates' : 'Verify your email',
         subtitle: `We sent a 6-digit code to ${email}`,
         layout: 'auth',
         showHeader: false,
         showFooter: false,
         step: 2,
         email,
+        affiliateSignup: affiliateSignup === 'true',
         csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     } catch (error) {
@@ -211,6 +240,10 @@ class AuthController {
 
       logger.info(`Code verified for user: ${user.id}`);
 
+      // Check if this is affiliate signup flow
+      const affiliateSignup = req.body.affiliateSignup === 'true';
+      const completeUrl = `/auth/sign-up/complete?email=${encodeURIComponent(email)}&token=${tempToken}${affiliateSignup ? '&affiliateSignup=true' : ''}`;
+
       // For API requests
       if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
         return res.status(200).json({
@@ -219,13 +252,13 @@ class AuthController {
           data: {
             email,
             tempToken,
-            redirectTo: `/auth/sign-up/complete?email=${encodeURIComponent(email)}&token=${tempToken}`
+            redirectTo: completeUrl
           }
         });
       }
 
       // Redirect to final step
-      res.redirect(`/auth/sign-up/complete?email=${encodeURIComponent(email)}&token=${tempToken}`);
+      res.redirect(completeUrl);
 
     } catch (error) {
       logger.error('Verify code error:', error);
@@ -248,7 +281,7 @@ class AuthController {
   // GET /auth/sign-up/complete - Step 3: Complete profile
   async renderCompleteProfile(req, res) {
     try {
-      const { email, token } = req.query;
+      const { email, token, affiliateSignup } = req.query;
 
       if (!email || !token) {
         return res.redirect('/auth/sign-up');
@@ -270,15 +303,18 @@ class AuthController {
         return res.redirect('/auth/sign-up');
       }
 
+      const isAffiliateSignup = affiliateSignup === 'true';
+
       res.render('auth/signup-step3', {
-        title: 'Complete your profile',
-        subtitle: 'Just a few more details to get started',
+        title: isAffiliateSignup ? 'Complete your profile to join affiliates' : 'Complete your profile',
+        subtitle: isAffiliateSignup ? 'One more step to start earning commissions' : 'Just a few more details to get started',
         layout: 'auth',
         showHeader: false,
         showFooter: false,
         step: 3,
         email,
         token,
+        affiliateSignup: isAffiliateSignup,
         csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     } catch (error) {
@@ -323,6 +359,9 @@ class AuthController {
       const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+      // Get referral code from request body (passed from frontend localStorage)
+      const referralCode = req.body.referralCode || null;
+
       // Complete user registration
       const updatedUser = await authService.updateUser(user.id, {
         firstName,
@@ -337,6 +376,7 @@ class AuthController {
         'Registration Method': 'email',
         subscription_tier: 'free',
         subscription_status: 'none',
+        referred_by_code: referralCode, // Store referral code
         updatedAt: new Date().toISOString()
       });
 
@@ -391,11 +431,19 @@ class AuthController {
       // Record signup session
       await sessionService.recordSignup(updatedUser, req, 'email');
 
+      // Check if this is an affiliate signup flow
+      const isAffiliateSignup = req.body.affiliateSignup === 'true';
+      const redirectUrl = isAffiliateSignup
+        ? '/affiliate/signup'
+        : getPostAuthRedirectUrl({ id: user.id, email: user.email, firstName, lastName, subscription_tier: 'free' });
+
       // For API requests
       if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
         return res.status(201).json({
           success: true,
-          message: 'Account created successfully! Welcome to Our AI Legacy.',
+          message: isAffiliateSignup
+            ? 'Account created! Now complete your affiliate registration.'
+            : 'Account created successfully! Welcome to Our AI Legacy.',
           data: {
             user: {
               id: user.id,
@@ -404,14 +452,15 @@ class AuthController {
               lastName
             },
             token: jwtToken,
-            redirectTo: getPostAuthRedirectUrl({ id: user.id, email: user.email, firstName, lastName, subscription_tier: 'free' })
+            redirectTo: redirectUrl
           }
         });
       }
 
-      // Redirect based on subscription tier
-      req.flash('success', 'Welcome to Our AI Legacy! Your account has been created successfully.');
-      const redirectUrl = getPostAuthRedirectUrl({ id: user.id, email: user.email, firstName, lastName, subscription_tier: 'free' });
+      // Redirect based on signup flow
+      req.flash('success', isAffiliateSignup
+        ? 'Account created! Complete your affiliate registration below.'
+        : 'Welcome to Our AI Legacy! Your account has been created successfully.');
       res.redirect(redirectUrl);
 
     } catch (error) {
