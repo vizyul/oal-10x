@@ -24,6 +24,10 @@ class StripeService {
       // Get or create Stripe customer
       const customer = await this.getOrCreateCustomer(userId, customerEmail);
 
+      // Get user record to check for affiliate referral code
+      const user = await UserModel.findById(userId);
+      const referredByCode = user?.referred_by_code || null;
+
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
@@ -35,11 +39,15 @@ class StripeService {
         success_url: `${stripeConfig.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: stripeConfig.cancelUrl,
         metadata: {
-          user_id: userId
+          user_id: userId,
+          referred_by_code: referredByCode,
+          is_referred: referredByCode ? 'true' : 'false'
         },
         subscription_data: {
           metadata: {
-            user_id: userId
+            user_id: userId,
+            referred_by_code: referredByCode,
+            is_referred: referredByCode ? 'true' : 'false'
           }
         }
       });
@@ -47,7 +55,8 @@ class StripeService {
       logger.info('Checkout session created:', {
         sessionId: session.id,
         userId,
-        customerId: customer.id
+        customerId: customer.id,
+        referredByCode: referredByCode || 'none'
       });
 
       return session;
@@ -449,6 +458,32 @@ class StripeService {
 
     // Create initial usage record for the subscription
     await this.createUsageRecord(userId, subscription, subscriptionRecord, tier);
+
+    // Track affiliate conversion if user was referred
+    try {
+      const refgrowService = require('./refgrow.service');
+      const userRecord = await UserModel.findById(pgUserId);
+
+      if (userRecord && userRecord.referred_by_code) {
+        const subscriptionAmount = subscription.items.data[0].price.unit_amount / 100;
+
+        await refgrowService.trackConversion(
+          userRecord.referred_by_code,
+          pgUserId,
+          subscriptionAmount,
+          subscription.id
+        );
+
+        logger.info('Affiliate conversion tracked', {
+          userId: pgUserId,
+          referralCode: userRecord.referred_by_code,
+          amount: subscriptionAmount
+        });
+      }
+    } catch (affiliateError) {
+      logger.error('Error tracking affiliate conversion:', affiliateError);
+      // Don't fail subscription creation if affiliate tracking fails
+    }
 
     logger.info('Subscription created:', {
       subscriptionId: subscription.id,

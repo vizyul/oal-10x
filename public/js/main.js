@@ -1,5 +1,28 @@
 // Main JavaScript for Our AI Legacy App
 
+// Affiliate Referral Code Capture
+// Captures ?ref= parameter from URL and stores in localStorage for signup attribution
+(function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const refCode = urlParams.get('ref');
+
+  if (refCode) {
+    // Store referral code with 30-day expiry
+    localStorage.setItem('referralCode', refCode);
+    localStorage.setItem('referralCodeExpiry', Date.now() + (30 * 24 * 60 * 60 * 1000));
+
+    // Clean URL without losing other parameters (optional UX improvement)
+    // Users can still see they came from an affiliate link
+  }
+
+  // Clean up expired referral codes
+  const expiry = localStorage.getItem('referralCodeExpiry');
+  if (expiry && Date.now() > parseInt(expiry)) {
+    localStorage.removeItem('referralCode');
+    localStorage.removeItem('referralCodeExpiry');
+  }
+})();
+
 // Theme Management
 class ThemeManager {
   constructor() {
