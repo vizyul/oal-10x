@@ -18,9 +18,18 @@ class AffiliateController {
         }
       }
 
+      // Format user data for template (convert snake_case to camelCase for header)
+      const formattedUser = user ? {
+        ...user,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        subscriptionTier: user.subscription_tier,
+        isAffiliate: user.is_affiliate
+      } : null;
+
       res.render('affiliate-signup', {
         title: 'Join Our Affiliate Program - Earn 20% Commission',
-        user: user,
+        user: formattedUser,
         layout: 'main'
       });
     } catch (error) {
@@ -136,9 +145,18 @@ class AffiliateController {
       // Get payment method (would come from user preferences)
       const paymentMethod = freshUser.metadata?.affiliate_payment_method || null;
 
+      // Format user data for template (convert snake_case to camelCase for header)
+      const formattedUser = {
+        ...freshUser,
+        firstName: freshUser.first_name,
+        lastName: freshUser.last_name,
+        subscriptionTier: freshUser.subscription_tier,
+        isAffiliate: freshUser.is_affiliate
+      };
+
       res.render('affiliate-dashboard', {
         title: 'Affiliate Dashboard',
-        user: freshUser,
+        user: formattedUser,
         stats,
         referralLink,
         referrals,
