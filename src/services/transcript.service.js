@@ -57,11 +57,25 @@ class TranscriptService {
     }
 
     return captions.map(caption => {
-      if (typeof caption === 'object' && caption.start !== undefined && caption.end !== undefined && caption.text) {
+      // Skip null, undefined, or non-object entries
+      if (!caption || typeof caption !== 'object') {
+        return '';
+      }
+
+      // Check for required properties
+      if (caption.start !== undefined && caption.start !== null &&
+          caption.end !== undefined && caption.end !== null &&
+          caption.text) {
         const start = parseFloat(caption.start).toFixed(1);
         const end = parseFloat(caption.end).toFixed(1);
         return `${start} - ${end} ${caption.text}`;
       }
+
+      // Handle captions with only text (no timing)
+      if (caption.text) {
+        return caption.text;
+      }
+
       return '';
     }).filter(line => line.length > 0).join('\n');
   }
