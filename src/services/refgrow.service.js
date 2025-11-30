@@ -38,6 +38,60 @@ class RefGrowService {
   }
 
   /**
+   * Check if affiliate already exists in RefGrow by email
+   * @param {string} email - User email to check
+   * @returns {Promise<Object|null>} Existing affiliate data or null if not found
+   */
+  async findAffiliateByEmail(email) {
+    try {
+      if (!this.isConfigured()) {
+        return null;
+      }
+
+      // Try to find existing affiliate by email
+      const response = await axios.get(
+        `${this.baseUrl}/affiliates`,
+        {
+          headers: this.getHeaders(),
+          params: { email }
+        }
+      );
+
+      const data = response.data;
+
+      // Check various response formats RefGrow might use
+      if (data.success && data.data) {
+        // Format: { success: true, data: { id, user_email, referral_code, ... } }
+        if (data.data.id) {
+          return data.data;
+        }
+        // Format: { success: true, data: [{ id, user_email, referral_code, ... }] }
+        if (Array.isArray(data.data) && data.data.length > 0) {
+          return data.data.find(a => a.user_email === email || a.email === email) || null;
+        }
+      }
+
+      // Direct array response
+      if (Array.isArray(data) && data.length > 0) {
+        return data.find(a => a.user_email === email || a.email === email) || null;
+      }
+
+      return null;
+    } catch (error) {
+      // 404 means not found, which is expected
+      if (error.response?.status === 404) {
+        return null;
+      }
+      logger.warn('Error checking for existing RefGrow affiliate:', {
+        email,
+        error: error.message,
+        status: error.response?.status
+      });
+      return null;
+    }
+  }
+
+  /**
    * Create affiliate account in RefGrow when user opts in
    * @param {number} userId - Local PostgreSQL user ID
    * @param {string} email - User email
@@ -58,34 +112,50 @@ class RefGrowService {
       // Try RefGrow API if configured
       if (this.isConfigured()) {
         try {
-          // RefGrow API: POST /api/v1/affiliates
-          // Only email is required, referral_code is optional (auto-generated if omitted)
-          const response = await axios.post(
-            `${this.baseUrl}/affiliates`,
-            {
+          // First, check if affiliate already exists in RefGrow
+          const existingAffiliate = await this.findAffiliateByEmail(email);
+
+          if (existingAffiliate) {
+            // Affiliate already exists in RefGrow - use existing data
+            logger.info('Affiliate already exists in RefGrow, linking existing account', {
+              userId,
               email,
-              // Let RefGrow generate the referral code, or pass our own
-              // referral_code: localAffiliateCode
-            },
-            { headers: this.getHeaders() }
-          );
+              refgrowAffiliateId: existingAffiliate.id
+            });
 
-          const affiliateData = response.data;
-
-          // Response format: { success: true, data: { id, user_email, referral_code, created_at, status } }
-          if (affiliateData.success && affiliateData.data) {
-            refgrowAffiliateId = affiliateData.data.id;
-            affiliateCode = affiliateData.data.referral_code || localAffiliateCode;
+            refgrowAffiliateId = existingAffiliate.id;
+            affiliateCode = existingAffiliate.referral_code || localAffiliateCode;
           } else {
-            refgrowAffiliateId = affiliateData.id;
-            affiliateCode = affiliateData.referral_code || localAffiliateCode;
-          }
+            // Create new affiliate in RefGrow
+            // RefGrow API: POST /api/v1/affiliates
+            // Only email is required, referral_code is optional (auto-generated if omitted)
+            const response = await axios.post(
+              `${this.baseUrl}/affiliates`,
+              {
+                email,
+                // Let RefGrow generate the referral code, or pass our own
+                // referral_code: localAffiliateCode
+              },
+              { headers: this.getHeaders() }
+            );
 
-          logger.info('RefGrow affiliate created successfully', {
-            userId,
-            refgrowAffiliateId,
-            affiliateCode
-          });
+            const affiliateData = response.data;
+
+            // Response format: { success: true, data: { id, user_email, referral_code, created_at, status } }
+            if (affiliateData.success && affiliateData.data) {
+              refgrowAffiliateId = affiliateData.data.id;
+              affiliateCode = affiliateData.data.referral_code || localAffiliateCode;
+            } else {
+              refgrowAffiliateId = affiliateData.id;
+              affiliateCode = affiliateData.referral_code || localAffiliateCode;
+            }
+
+            logger.info('RefGrow affiliate created successfully', {
+              userId,
+              refgrowAffiliateId,
+              affiliateCode
+            });
+          }
         } catch (apiError) {
           logger.warn('RefGrow API call failed, creating local affiliate only:', {
             userId,
