@@ -1,16 +1,23 @@
 const axios = require('axios');
+const { ApifyClient } = require('apify-client');
 const { aiPrompts, video: videoModel } = require('../models');
 const { logger } = require('../utils');
 
 class TranscriptService {
   constructor() {
-    this.apiUrl = 'https://io.ourailegacy.com/api/appify/get-transcript';
-    this.apiKey = process.env.TRANSCRIPT_API_KEY;
+    this.apifyToken = process.env.APIFY_TOKEN;
+    // Legacy support - still check for external API config
+    this.legacyApiUrl = 'https://io.ourailegacy.com/api/appify/get-transcript';
+    this.legacyApiKey = process.env.TRANSCRIPT_API_KEY;
+    // Use internal Apify integration by default if token is available
+    this.useInternalApi = !!this.apifyToken;
 
-    if (!this.apiKey) {
-      logger.warn('TRANSCRIPT_API_KEY not configured. Transcript extraction will be disabled.');
+    if (this.useInternalApi) {
+      logger.info('Transcript service initialized with internal Apify integration');
+    } else if (this.legacyApiKey) {
+      logger.info('Transcript service initialized with legacy external API');
     } else {
-      logger.info('Transcript service initialized successfully');
+      logger.warn('No transcript API configured (APIFY_TOKEN or TRANSCRIPT_API_KEY). Transcript extraction will be disabled.');
     }
   }
 
@@ -81,6 +88,73 @@ class TranscriptService {
   }
 
   /**
+   * Extract transcript using internal Apify integration
+   * @param {string} videoId - YouTube video ID
+   * @param {string} videoUrl - Full YouTube video URL
+   * @returns {Promise<Object|null>} Raw transcript data or null if failed
+   */
+  async extractTranscriptViaApify(videoId, videoUrl) {
+    const client = new ApifyClient({
+      token: this.apifyToken,
+    });
+
+    // Prepare Actor input
+    const input = {
+      outputFormat: 'textWithTimestamps',
+      urls: [videoUrl],
+      maxRetries: 10,
+      proxyOptions: {
+        useApifyProxy: true,
+        apifyProxyGroups: ['BUYPROXIES94952']
+      }
+    };
+
+    logger.info(`Calling Apify actor for video: ${videoId}`);
+
+    // Run the Apify actor for YouTube transcript extraction
+    const run = await client.actor('1s7eXiaukVuOr4Ueg').call(input);
+
+    // Fetch results from the run's dataset
+    const { items } = await client.dataset(run.defaultDatasetId).listItems();
+
+    if (!items || items.length === 0) {
+      logger.warn(`No transcript data returned from Apify for video: ${videoId}`);
+      return null;
+    }
+
+    // Return the transcript data from the first item
+    return items[0];
+  }
+
+  /**
+   * Extract transcript using legacy external API
+   * @param {string} videoId - YouTube video ID
+   * @param {string} videoUrl - Full YouTube video URL
+   * @returns {Promise<Object|null>} Raw transcript data or null if failed
+   */
+  async extractTranscriptViaLegacyApi(videoId, videoUrl) {
+    const payload = {
+      videoId: videoId,
+      videoUrl: videoUrl,
+      api_key: this.legacyApiKey
+    };
+
+    const response = await axios.post(this.legacyApiUrl, payload, {
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'AmplifyContent/1.0'
+      }
+    });
+
+    if (response.status === 200 && response.data) {
+      return response.data;
+    }
+
+    return null;
+  }
+
+  /**
    * Extract transcript for a YouTube video
    * @param {string} videoId - YouTube video ID
    * @param {string} videoUrl - Full YouTube video URL
@@ -94,26 +168,26 @@ class TranscriptService {
         return null;
       }
 
-      if (!this.apiKey) {
-        logger.warn('Transcript API key not configured, skipping transcript extraction');
+      // Check if any transcript API is configured
+      if (!this.useInternalApi && !this.legacyApiKey) {
+        logger.warn('No transcript API configured, skipping transcript extraction');
         return null;
       }
 
-      logger.info(`Extracting transcript for video: ${videoId}`);
+      logger.info(`Extracting transcript for video: ${videoId} (using ${this.useInternalApi ? 'Apify' : 'legacy API'})`);
 
-      const payload = {
-        videoId: videoId,
-        videoUrl: videoUrl,
-        api_key: this.apiKey
-      };
-
-      const response = await axios.post(this.apiUrl, payload, {
-        timeout: 30000, // 30 second timeout
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'OurAILegacy/1.0'
+      // Get raw transcript data from the appropriate source
+      let responseData;
+      try {
+        if (this.useInternalApi) {
+          responseData = await this.extractTranscriptViaApify(videoId, videoUrl);
+        } else {
+          responseData = await this.extractTranscriptViaLegacyApi(videoId, videoUrl);
         }
-      });
+      } catch (apiError) {
+        logger.error(`Transcript API error for video ${videoId}:`, apiError.message);
+        return null;
+      }
 
       // Check again for cancellation after API call (in case cancelled during processing)
       if (await this.isVideoCancelled(videoId)) {
@@ -121,44 +195,44 @@ class TranscriptService {
         return null;
       }
 
-      if (response.status === 200 && response.data) {
+      if (responseData) {
         // Handle different response formats
         let transcript = null;
 
-        if (typeof response.data === 'string') {
-          transcript = response.data;
-        } else if (typeof response.data === 'object') {
-          // Check for captions array first (new format)
-          if (response.data.captions && Array.isArray(response.data.captions)) {
-            transcript = this.formatCaptions(response.data.captions);
+        if (typeof responseData === 'string') {
+          transcript = responseData;
+        } else if (typeof responseData === 'object') {
+          // Check for captions array first (Apify format)
+          if (responseData.captions && Array.isArray(responseData.captions)) {
+            transcript = this.formatCaptions(responseData.captions);
           // Check if captions are nested in transcript object
-          } else if (response.data.transcript && typeof response.data.transcript === 'object' && response.data.transcript.captions && Array.isArray(response.data.transcript.captions)) {
-            transcript = this.formatCaptions(response.data.transcript.captions);
+          } else if (responseData.transcript && typeof responseData.transcript === 'object' && responseData.transcript.captions && Array.isArray(responseData.transcript.captions)) {
+            transcript = this.formatCaptions(responseData.transcript.captions);
           // Try multiple possible object structures
-          } else if (response.data.transcript) {
-            transcript = response.data.transcript;
-          } else if (response.data.text) {
-            transcript = response.data.text;
-          } else if (response.data.content) {
-            transcript = response.data.content;
-          } else if (response.data.data) {
-            transcript = response.data.data;
-          } else if (response.data.result) {
-            transcript = response.data.result;
-          } else if (Array.isArray(response.data) && response.data.length > 0) {
+          } else if (responseData.transcript) {
+            transcript = responseData.transcript;
+          } else if (responseData.text) {
+            transcript = responseData.text;
+          } else if (responseData.content) {
+            transcript = responseData.content;
+          } else if (responseData.data) {
+            transcript = responseData.data;
+          } else if (responseData.result) {
+            transcript = responseData.result;
+          } else if (Array.isArray(responseData) && responseData.length > 0) {
             // Handle array of transcript segments
-            transcript = response.data.map(segment => {
+            transcript = responseData.map(segment => {
               if (typeof segment === 'string') return segment;
               if (segment.text) return segment.text;
               if (segment.content) return segment.content;
               return '';
             }).join(' ');
           } else {
-            logger.warn(`Unexpected object structure for video ${videoId}:`, Object.keys(response.data));
+            logger.warn(`Unexpected object structure for video ${videoId}:`, Object.keys(responseData));
             logger.debug('Object structure details logged in debug mode');
 
             // Try to extract any string values from the object
-            const stringValues = Object.values(response.data)
+            const stringValues = Object.values(responseData)
               .filter(val => typeof val === 'string' && val.length > 10);
 
             if (stringValues.length > 0) {
@@ -168,7 +242,7 @@ class TranscriptService {
             }
           }
         } else {
-          logger.warn(`Unexpected response format for video ${videoId}:`, typeof response.data);
+          logger.warn(`Unexpected response format for video ${videoId}:`, typeof responseData);
           return null;
         }
 
@@ -196,6 +270,7 @@ class TranscriptService {
               logger.warn(`Transcript truncated for ${videoId}: ${trimmedTranscript.length} -> ${finalTranscript.length} characters`);
             }
 
+            logger.info(`Transcript extracted successfully for video ${videoId}: ${finalTranscript.length} characters`);
             return finalTranscript;
           } else {
             return null;
@@ -204,22 +279,12 @@ class TranscriptService {
           return null;
         }
       } else {
-        logger.warn(`Unexpected response status ${response.status} for video ${videoId}`);
+        logger.warn(`No transcript data returned for video ${videoId}`);
         return null;
       }
 
     } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-        logger.warn(`Transcript extraction timeout for video ${videoId}`);
-      } else if (error.response) {
-        logger.warn(`Transcript API error for video ${videoId}:`, {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        });
-      } else {
-        logger.error(`Error extracting transcript for video ${videoId}:`, error.message);
-      }
+      logger.error(`Error extracting transcript for video ${videoId}:`, error.message);
       return null;
     }
   }

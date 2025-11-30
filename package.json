@@ -41,6 +41,7 @@
     "@eslint/js": "^9.35.0",
     "@google/generative-ai": "^0.24.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "apify-client": "^2.20.0",
     "archiver": "^7.0.1",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",

@@ -261,6 +261,33 @@ class SubscriptionPlansService {
       };
     }
   }
+
+  /**
+   * Get tier (plan_key) from Stripe price ID
+   * @param {string} stripePriceId - Stripe price ID
+   * @returns {string|null} Plan key (free, basic, premium, creator, enterprise) or null
+   */
+  async getTierFromPrice(stripePriceId) {
+    try {
+      const result = await database.query(`
+        SELECT sp.plan_key
+        FROM subscription_plans sp
+        JOIN subscription_plan_prices spp ON sp.id = spp.subscription_plan_id
+        WHERE spp.stripe_price_id = $1 AND sp.is_active = true
+        LIMIT 1
+      `, [stripePriceId]);
+
+      if (result.rows.length === 0) {
+        logger.warn(`No tier found for Stripe price ID: ${stripePriceId}`);
+        return null;
+      }
+
+      return result.rows[0].plan_key;
+    } catch (error) {
+      logger.error('Error getting tier from price ID:', error);
+      return null;
+    }
+  }
 }
 
 module.exports = new SubscriptionPlansService();

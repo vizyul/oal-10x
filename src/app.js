@@ -120,6 +120,9 @@ app.get('/webhook/test', (req, res) => {
   });
 });
 
+// Internal transcript API route (no auth required - called by internal services)
+app.use('/api/transcript', require('./routes/transcript.routes'));
+
 // Routes
 app.use('/', routes);
 
