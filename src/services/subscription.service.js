@@ -438,6 +438,15 @@ class SubscriptionService {
         return false;
       }
 
+      // Also increment videos_processed in subscription_usage table for dashboard display
+      try {
+        await this.incrementUsage(pgUserId, 'videos_processed', 1);
+        logger.info(`✅ Incremented videos_processed for free user ${pgUserId}`);
+      } catch (usageError) {
+        logger.warn(`Could not increment videos_processed for user ${pgUserId}:`, usageError.message);
+        // Don't fail the whole operation if usage increment fails
+      }
+
       logger.info(`✅ Marked free video as used for user ${pgUserId}`);
       return true;
     } catch (error) {

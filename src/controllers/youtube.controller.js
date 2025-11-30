@@ -500,10 +500,9 @@ class YouTubeController {
             try {
               // Use the already fetched user tier from earlier in the function
               if (userTier === 'free') {
-                // Mark free video as used AND increment usage counter for display
+                // Mark free video as used (also increments videos_processed internally)
                 await subscriptionService.markFreeVideoAsUsed(actualUserId);
-                await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
-                logger.info(`✅ Marked free video as used and incremented usage for user ${actualUserId}`);
+                logger.info(`✅ Marked free video as used for user ${actualUserId}`);
               } else {
                 // Regular subscription usage tracking for paid users
                 await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
