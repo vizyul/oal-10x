@@ -30,6 +30,24 @@ if (process.env.NODE_ENV === 'production' || isRailway) {
   logger.info('Trust proxy enabled for Railway deployment');
 }
 
+// Cloudflare real IP middleware - extracts visitor IP from CF-Connecting-IP header
+app.use((req, res, next) => {
+  // Cloudflare provides the real visitor IP in CF-Connecting-IP header
+  const cloudflareIP = req.headers['cf-connecting-ip'];
+  if (cloudflareIP) {
+    req.realIP = cloudflareIP;
+    // Also useful headers from Cloudflare
+    req.cloudflare = {
+      ip: cloudflareIP,
+      country: req.headers['cf-ipcountry'],
+      ray: req.headers['cf-ray']
+    };
+  } else {
+    req.realIP = req.ip;
+  }
+  next();
+});
+
 // View engine setup - Handlebars
 app.engine('.hbs', engine({
   extname: '.hbs',

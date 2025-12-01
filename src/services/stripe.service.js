@@ -1314,7 +1314,7 @@ class StripeService {
 
       await subscriptionEvents.createEvent({
         stripe_event_id: event.id,
-        users_id: pgUserId,
+        user_id: pgUserId,
         event_type: event.type,
         stripe_subscription_id: event.data.object.id,
         event_data: JSON.stringify(event.data.object, null, 2),
