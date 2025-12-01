@@ -1278,8 +1278,13 @@ class StripeService {
         periodEnd
       });
     } catch (error) {
-      logger.error('Error creating record in subscription_usage:', error);
-      logger.error('Error creating usage record:', {});
+      logger.error('Error creating record in subscription_usage:', {
+        message: error.message,
+        stack: error.stack,
+        userId,
+        subscriptionId: subscription?.id,
+        tier
+      });
     }
   }
 
