@@ -28,7 +28,7 @@ class UserSubscription extends BaseModel {
 
     // Define allowed values
     // Note: allowedTiers removed - subscription_tier is now on users table
-    this.allowedStatuses = ['active', 'cancelled', 'past_due', 'unpaid', 'trialing'];
+    this.allowedStatuses = ['active', 'canceled', 'cancelled', 'past_due', 'unpaid', 'trialing', 'paused'];
   }
 
   /**
@@ -164,7 +164,10 @@ class UserSubscription extends BaseModel {
 
       return await this.update(id, safeUpdateData);
     } catch (error) {
-      logger.error(`Error updating subscription ${id}:`, error);
+      logger.error(`Error updating subscription ${id}:`, {
+        message: error.message,
+        updateData: safeUpdateData
+      });
       throw error;
     }
   }
