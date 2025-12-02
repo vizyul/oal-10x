@@ -267,10 +267,13 @@ class RefGrowService {
       const commissionAmount = (subscriptionAmount * this.commissionRate) / 100;
 
       // Track conversion in RefGrow API
+      // RefGrow requires 'type' and 'value' fields for conversions
       const response = await axios.post(
         `${this.baseUrl}/conversions`,
         {
           referral_code: referralCode,
+          type: 'subscription',
+          value: subscriptionAmount,
           customer_id: userId.toString(),
           amount: subscriptionAmount,
           currency: 'usd',
