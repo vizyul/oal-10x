@@ -159,8 +159,43 @@ router.get('/success', async (req, res) => {
     try {
       const authService = require('../services/auth.service');
       const { forceTokenRefresh } = require('../middleware');
+      const stripeService = require('../services/stripe.service');
 
-      // Get fresh user data from database
+      // First, ensure webhook has processed by manually syncing from Stripe
+      // This handles the race condition where user arrives before webhook
+      try {
+        const stripeConfigModule = require('../config/stripe.config');
+        const stripe = require('stripe')(stripeConfigModule.getSecretKey());
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+
+          // Check if webhook has processed this subscription
+          const UserSubscription = require('../models/UserSubscription');
+          const userSubscription = new UserSubscription();
+          const existingRecord = await userSubscription.getByStripeId(subscription.id);
+
+          if (!existingRecord) {
+            logger.info('Webhook not yet processed, manually syncing subscription', {
+              sessionId,
+              subscriptionId: subscription.id,
+              userId: req.user.id
+            });
+
+            // Manually trigger subscription processing
+            await stripeService.handleSubscriptionCreated(subscription);
+          }
+        }
+      } catch (syncError) {
+        logger.error('Error syncing subscription on success page:', {
+          error: syncError.message,
+          sessionId
+        });
+        // Continue anyway - we'll show whatever data we have
+      }
+
+      // Get fresh user data from database (should now have updated tier)
       const freshUser = await authService.findUserById(req.user.id);
 
       if (freshUser) {
