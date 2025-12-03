@@ -82,7 +82,18 @@ class AIChatService {
         promptLength: prompt.length
       });
 
-      const genAI = this.gemini.getGenerativeModel({ model });
+      // Configure relaxed safety settings for legitimate content (religious, educational, etc.)
+      const safetySettings = [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
+      ];
+
+      const genAI = this.gemini.getGenerativeModel({
+        model,
+        safetySettings
+      });
 
       // Combine system message with prompt if provided
       const fullPrompt = systemMessage ? `${systemMessage}\n\n${prompt}` : prompt;
@@ -101,10 +112,39 @@ class AIChatService {
       });
 
       const response = await result.response;
+
+      // Check for content filtering/blocking
+      const blockReason = response.promptFeedback?.blockReason;
+      const finishReason = response.candidates?.[0]?.finishReason;
+
+      if (blockReason) {
+        logger.warn('Gemini blocked content due to safety filter', {
+          blockReason,
+          safetyRatings: response.promptFeedback?.safetyRatings
+        });
+        const error = new Error(`Content blocked by safety filter: ${blockReason}`);
+        error.code = 'CONTENT_FILTERED';
+        error.blockReason = blockReason;
+        throw error;
+      }
+
+      if (finishReason === 'SAFETY') {
+        logger.warn('Gemini stopped generation due to safety', {
+          finishReason,
+          safetyRatings: response.candidates?.[0]?.safetyRatings
+        });
+        const error = new Error('Content generation stopped due to safety filters');
+        error.code = 'CONTENT_FILTERED';
+        error.finishReason = finishReason;
+        throw error;
+      }
+
       const text = response.text();
 
       if (!text || text.trim().length === 0) {
-        throw new Error('Gemini returned empty content');
+        const error = new Error('Gemini returned empty content');
+        error.code = 'EMPTY_RESPONSE';
+        throw error;
       }
 
       const endTime = Date.now();

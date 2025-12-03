@@ -459,7 +459,7 @@ class ProcessingStatusManager {
                       View ${type.label}
                     </button>
                   ` : ''}
-                  ${type.data?.status === 'failed' ? `<div class="error-info" title="${type.data?.error || 'Processing failed'}">⚠️</div>` : ''}
+                  ${type.data?.status === 'failed' ? `<div class="error-info ${type.data?.isContentFiltered ? 'content-filtered' : ''}" title="${type.data?.isContentFiltered ? 'Content blocked by AI safety filters. This may happen with religious, political, or sensitive topics. Try a different AI provider in Settings.' : (type.data?.error || 'Processing failed')}">${type.data?.isContentFiltered ? '🛡️' : '⚠️'}</div>` : ''}
                 </div>
               </li>
             `).join('')}
@@ -2033,6 +2033,13 @@ async function populateProcessingTable() {
   color: #dc3545;
   font-size: 16px;
   cursor: help;
+}
+
+.error-info.content-filtered {
+  color: #856404;
+  background-color: #fff3cd;
+  border-radius: 4px;
+  padding: 2px 4px;
 }
 
 /* Responsive Design */

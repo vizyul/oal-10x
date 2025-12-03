@@ -415,12 +415,20 @@ class ContentGenerationService {
         apiCost: llmErrorDetails.estimatedCost
       });
 
-      // Update content status to failed
-      processingStatusService.updateContentStatus(videoId, prompt.content_type, 'failed', error.message);
+      // Update content status to failed with metadata
+      processingStatusService.updateContentStatus(videoId, prompt.content_type, 'failed', error.message, {
+        isContentFiltered: llmErrorDetails.isContentFiltered || false,
+        errorCode: error.code || llmErrorDetails.category,
+        suggestedFix: llmErrorDetails.suggestedFix
+      });
 
       return {
         success: false,
         error: error.message,
+        errorCode: error.code || llmErrorDetails.category,
+        isContentFiltered: llmErrorDetails.isContentFiltered || false,
+        failureReason: llmErrorDetails.reason,
+        suggestedFix: llmErrorDetails.suggestedFix,
         contentType: prompt.content_type,
         provider: prompt.ai_provider,
         promptName: prompt.name,
@@ -934,12 +942,13 @@ class ContentGenerationService {
       analysis.suggestedFix = 'Wait before retrying or upgrade API plan';
       analysis.retryable = true;
     }
-    // Content policy violations
-    else if (error.status === 400 && (error.message.includes('content policy') || error.message.includes('safety') || error.message.includes('inappropriate'))) {
+    // Content policy violations and safety filter blocks
+    else if (error.code === 'CONTENT_FILTERED' || (error.status === 400 && (error.message.includes('content policy') || error.message.includes('safety') || error.message.includes('inappropriate')))) {
       analysis.category = 'content_policy_violation';
-      analysis.reason = `Content violates ${prompt.ai_provider} safety policies`;
-      analysis.suggestedFix = 'Review and modify prompt content for policy compliance';
+      analysis.reason = `The video content triggered ${prompt.ai_provider} safety filters. This may happen with religious, political, or other sensitive topics.`;
+      analysis.suggestedFix = 'The video content may contain topics that AI providers restrict. Try using a different AI provider in your settings, or the content may need to be manually created.';
       analysis.retryable = false;
+      analysis.isContentFiltered = true;
     }
     // Token limit exceeded
     else if (error.message.includes('token') && (error.message.includes('limit') || error.message.includes('exceeded') || error.message.includes('maximum'))) {

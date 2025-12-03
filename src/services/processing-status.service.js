@@ -152,7 +152,7 @@ class ProcessingStatusService extends EventEmitter {
    * @param {string} status - Status ('pending', 'completed', 'failed')
    * @param {string} error - Error message if failed
    */
-  updateContentStatus(videoId, contentType, status, error = null) {
+  updateContentStatus(videoId, contentType, status, error = null, metadata = {}) {
     const videoStatus = this.processingVideos.get(videoId);
     if (!videoStatus) {
       logger.warn(`No video status found for ${videoId} when updating ${contentType}`);
@@ -167,6 +167,9 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.content[contentType].status = status;
     videoStatus.content[contentType].completedAt = status === 'completed' ? new Date().toISOString() : null;
     videoStatus.content[contentType].error = error;
+    videoStatus.content[contentType].isContentFiltered = metadata.isContentFiltered || false;
+    videoStatus.content[contentType].errorCode = metadata.errorCode || null;
+    videoStatus.content[contentType].suggestedFix = metadata.suggestedFix || null;
     videoStatus.lastUpdate = new Date().toISOString();
 
     this.processingVideos.set(videoId, videoStatus);
