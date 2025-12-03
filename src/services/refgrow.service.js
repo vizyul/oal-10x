@@ -243,6 +243,27 @@ class RefGrowService {
   }
 
   /**
+   * Get affiliate by referral code from local database
+   * @param {string} referralCode - Affiliate referral code
+   * @returns {Promise<Object|null>} Affiliate user record or null
+   */
+  async getAffiliateByReferralCode(referralCode) {
+    try {
+      const result = await database.query(
+        'SELECT id, email, first_name, refgrow_affiliate_id, affiliate_code FROM users WHERE affiliate_code = $1 AND is_affiliate = TRUE',
+        [referralCode]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error looking up affiliate by referral code:', {
+        referralCode,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  /**
    * Track conversion when user subscribes via referral
    * @param {string} referralCode - Affiliate referral code
    * @param {number} userId - User ID who subscribed
@@ -251,47 +272,80 @@ class RefGrowService {
    * @returns {Promise<Object>} Conversion tracking result
    */
   async trackConversion(referralCode, userId, subscriptionAmount, stripeSubscriptionId) {
+    // Calculate commission for local record
+    const commissionAmount = (subscriptionAmount * this.commissionRate) / 100;
+    let refgrowConversionId = null;
+
     try {
       if (!this.isConfigured()) {
-        logger.warn('RefGrow not configured, skipping conversion tracking');
-        return null;
-      }
+        logger.warn('RefGrow not configured, creating local record only');
+      } else {
+        // Look up the affiliate's RefGrow ID from our database
+        const affiliate = await this.getAffiliateByReferralCode(referralCode);
 
-      logger.info('Tracking RefGrow conversion', {
+        if (!affiliate) {
+          logger.warn('Affiliate not found for referral code, creating local record only', { referralCode });
+        } else if (!affiliate.refgrow_affiliate_id) {
+          logger.warn('Affiliate has no RefGrow ID, creating local record only', {
+            referralCode,
+            affiliateUserId: affiliate.id
+          });
+        } else {
+          logger.info('Tracking RefGrow conversion', {
+            referralCode,
+            userId,
+            amount: subscriptionAmount,
+            affiliateId: affiliate.refgrow_affiliate_id
+          });
+
+          // Track conversion in RefGrow API using correct field names
+          // API spec: POST /api/v1/conversions
+          // Required: type ('signup' or 'purchase')
+          // Optional: affiliate_id, referred_user_id, value, base_value, base_value_currency, reference
+          const response = await axios.post(
+            `${this.baseUrl}/conversions`,
+            {
+              type: 'purchase',
+              affiliate_id: parseInt(affiliate.refgrow_affiliate_id),
+              referred_user_id: userId,
+              base_value: subscriptionAmount,
+              base_value_currency: 'USD',
+              reference: stripeSubscriptionId
+            },
+            { headers: this.getHeaders() }
+          );
+
+          // Parse response - RefGrow returns { success: true, data: { id, ... } }
+          const responseData = response.data;
+          if (responseData.success && responseData.data) {
+            refgrowConversionId = responseData.data.id;
+          } else if (responseData.id) {
+            // Direct response format
+            refgrowConversionId = responseData.id;
+          }
+
+          logger.info('RefGrow API conversion created', {
+            refgrowConversionId,
+            referralCode,
+            userId
+          });
+        }
+      }
+    } catch (apiError) {
+      // Log the API error but continue to create local record
+      logger.error('RefGrow API call failed, creating local record only:', {
         referralCode,
         userId,
-        amount: subscriptionAmount
+        error: apiError.message,
+        response: apiError.response?.data
       });
+    }
 
-      // Calculate commission
-      const commissionAmount = (subscriptionAmount * this.commissionRate) / 100;
-
-      // Track conversion in RefGrow API
-      // RefGrow requires 'type' and 'value' fields for conversions
-      const response = await axios.post(
-        `${this.baseUrl}/conversions`,
-        {
-          referral_code: referralCode,
-          type: 'subscription',
-          value: subscriptionAmount,
-          customer_id: userId.toString(),
-          amount: subscriptionAmount,
-          currency: 'usd',
-          commission_amount: commissionAmount,
-          metadata: {
-            stripe_subscription_id: stripeSubscriptionId,
-            commission_rate: this.commissionRate
-          }
-        },
-        { headers: this.getHeaders() }
-      );
-
-      const conversionData = response.data;
-
-      // Create local referral record
+    // Always create local referral record (even if RefGrow API fails)
+    try {
       const referralRecord = await database.create('affiliate_referrals', {
         users_id: userId,
-        refgrow_referral_id: conversionData.id || conversionData.referral_id,
+        refgrow_referral_id: refgrowConversionId,
         referral_code: referralCode,
         commission_amount: commissionAmount,
         commission_rate: this.commissionRate,
@@ -306,21 +360,21 @@ class RefGrowService {
         [userId, referralCode]
       );
 
-      logger.info('RefGrow conversion tracked successfully', {
+      logger.info('Affiliate conversion tracked', {
         userId,
         referralCode,
-        commissionAmount
+        commissionAmount,
+        refgrowConversionId: refgrowConversionId || 'local-only'
       });
 
-      return { referralRecord, conversionData };
-    } catch (error) {
-      logger.error('Error tracking RefGrow conversion:', {
+      return { referralRecord, refgrowConversionId };
+    } catch (dbError) {
+      logger.error('Error creating local affiliate referral record:', {
         referralCode,
         userId,
-        error: error.message,
-        response: error.response?.data
+        error: dbError.message
       });
-      throw error;
+      throw dbError;
     }
   }
 
