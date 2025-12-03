@@ -102,6 +102,11 @@ class AIChatService {
 
       const response = await result.response;
       const text = response.text();
+
+      if (!text || text.trim().length === 0) {
+        throw new Error('Gemini returned empty content');
+      }
+
       const endTime = Date.now();
       const duration = endTime - startTime;
 
