@@ -300,18 +300,23 @@ class RefGrowService {
 
           // Track conversion in RefGrow API using correct field names
           // API spec: POST /api/v1/conversions
-          // Required: type ('signup' or 'purchase')
-          // Optional: affiliate_id, referred_user_id, value, base_value, base_value_currency, reference
+          // Required: type ('signup' or 'purchase'), value (number)
+          // Optional: affiliate_id, base_value, base_value_currency, reference
+          const conversionPayload = {
+            type: 'purchase',
+            value: subscriptionAmount,  // Required: transaction value
+            affiliate_id: parseInt(affiliate.refgrow_affiliate_id),
+            reference: stripeSubscriptionId
+          };
+
+          logger.info('RefGrow conversion API request', {
+            url: `${this.baseUrl}/conversions`,
+            payload: conversionPayload
+          });
+
           const response = await axios.post(
             `${this.baseUrl}/conversions`,
-            {
-              type: 'purchase',
-              affiliate_id: parseInt(affiliate.refgrow_affiliate_id),
-              referred_user_id: userId,
-              base_value: subscriptionAmount,
-              base_value_currency: 'USD',
-              reference: stripeSubscriptionId
-            },
+            conversionPayload,
             { headers: this.getHeaders() }
           );
 
@@ -337,7 +342,9 @@ class RefGrowService {
         referralCode,
         userId,
         error: apiError.message,
-        response: apiError.response?.data
+        status: apiError.response?.status,
+        responseData: apiError.response?.data,
+        responseHeaders: apiError.response?.headers
       });
     }
 
