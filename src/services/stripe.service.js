@@ -272,7 +272,12 @@ class StripeService {
       return result;
 
     } catch (error) {
-      logger.error('Error processing webhook event:', error);
+      logger.error('Error processing webhook event:', {
+        message: error.message,
+        stack: error.stack,
+        eventType: event.type,
+        eventId: event.id
+      });
 
       // Update event log with error
       await this.updateEventLog(event.id, false, error.message);
@@ -1102,7 +1107,14 @@ class StripeService {
       }
 
     } catch (error) {
-      logger.error('Error handling tier change usage:', error);
+      logger.error('Error handling tier change usage:', {
+        message: error.message,
+        stack: error.stack,
+        userId,
+        subscriptionId,
+        oldTier,
+        newTier
+      });
       // Don't fail webhook if usage update fails
     }
   }
