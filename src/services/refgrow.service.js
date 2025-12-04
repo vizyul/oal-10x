@@ -301,10 +301,15 @@ class RefGrowService {
           // Track conversion in RefGrow API using correct field names
           // API spec: POST /api/v1/conversions
           // Required: type ('signup' or 'purchase'), value (number)
+          // - value = commission amount (what affiliate earns)
+          // - base_value = original transaction amount (sale price)
           // Optional: affiliate_id, base_value, base_value_currency, reference
+          const calculatedCommission = (subscriptionAmount * this.commissionRate) / 100;
           const conversionPayload = {
             type: 'purchase',
-            value: subscriptionAmount,  // Required: transaction value
+            value: calculatedCommission,  // Commission amount (20% of sale)
+            base_value: subscriptionAmount,  // Original sale amount
+            base_value_currency: 'USD',
             affiliate_id: parseInt(affiliate.refgrow_affiliate_id),
             reference: stripeSubscriptionId
           };
