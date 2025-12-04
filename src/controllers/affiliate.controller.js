@@ -120,7 +120,7 @@ class AffiliateController {
       // Get referral link - use affiliate_code from user record
       const referralCode = freshUser.affiliate_code || await refgrowService.getReferralCode(freshUser.id);
       const baseUrl = process.env.CORS_ORIGIN || 'https://dev.amplifycontent.ai';
-      const referralLink = `${baseUrl}/?ref=${referralCode}`;
+      const referralLink = `${baseUrl}/auth/signup?ref=${referralCode}`;
 
       // Get recent referrals
       const referralsResult = await database.query(`

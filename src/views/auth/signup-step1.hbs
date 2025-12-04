@@ -89,11 +89,19 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Capture referral code from URL and store in localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+        localStorage.setItem('referral_code', refCode);
+        console.log('Referral code captured:', refCode);
+    }
+
     const form = document.getElementById('emailForm');
     const submitBtn = document.getElementById('submitBtn');
     const btnText = document.querySelector('.btn-text');
     const btnSpinner = document.querySelector('.btn-spinner');
-    
+
     if (!form) return;
     
     form.addEventListener('submit', async function(e) {
