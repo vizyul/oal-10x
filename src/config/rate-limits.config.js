@@ -229,11 +229,16 @@ const RATE_LIMIT_CATEGORIES = {
   },
 
   // API endpoints (user-tier aware)
+  // Note: Only applies to POST/PUT/DELETE operations, GET requests are excluded
   API_GENERAL: {
     paths: [
-      '/api/videos*',
-      '/api/preferences*',
-      '/api/subscription*'
+      'POST /api/videos*',
+      'PUT /api/videos*',
+      'DELETE /api/videos*',
+      'POST /api/preferences*',
+      'PUT /api/preferences*',
+      'POST /api/subscription*',
+      'PUT /api/subscription*'
     ],
     config: 'USER_TIER_BASED', // Special handling in middleware
     getUserTier: (req) => req.user?.subscription_tier || (req.user ? 'free' : 'anonymous')
