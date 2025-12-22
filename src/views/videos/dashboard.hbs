@@ -116,6 +116,7 @@ class ProcessingStatusManager {
     this.socket = null;
     this.processingVideos = new Map();
     this.cancelledVideos = new Set(); // Track cancelled videos to prevent re-adding
+    this.progressCache = new Map(); // Cache highest progress to prevent backward jumps
     this.isCollapsed = false;
     this.contentTypes = null; // Dynamic content types from API
     this.contentTypesLoaded = false; // Flag to track if content types are loaded
@@ -278,12 +279,43 @@ class ProcessingStatusManager {
 
   handleStatusUpdate(data) {
     const { videoId, status } = data;
-    
+
     // Don't add cancelled videos back to processing
     if (this.cancelledVideos.has(videoId)) {
       return;
     }
-    
+
+    // Log any content generation errors to browser console
+    if (status && status.content) {
+      Object.entries(status.content).forEach(([contentType, contentStatus]) => {
+        if (contentStatus.status === 'failed') {
+          // Log error details to browser console for debugging
+          console.error(`[CONTENT GENERATION ERROR] ${videoId}/${contentType}`, {
+            errorCode: contentStatus.errorCode,
+            errorType: contentStatus.errorType,
+            error: contentStatus.error,
+            frontendMessage: contentStatus.frontendMessage,
+            failureReason: contentStatus.failureReason,
+            suggestedFix: contentStatus.suggestedFix,
+            isContentFiltered: contentStatus.isContentFiltered,
+            aiProvider: contentStatus.aiProvider,
+            errorDetails: contentStatus.errorDetails
+          });
+
+          // Also log a more prominent message for safety filter and token limit issues
+          if (contentStatus.isContentFiltered) {
+            console.warn(`🚫 [SAFETY FILTER] Content generation for ${contentType} was blocked by AI safety filters`);
+          }
+          if (contentStatus.errorCode === 'token_limit_exceeded' || contentStatus.errorType === 'token_limit_exceeded') {
+            console.warn(`⚠️ [TOKEN LIMIT] Content generation for ${contentType} exceeded token limits`);
+          }
+          if (contentStatus.errorCode === 'EMPTY_RESPONSE') {
+            console.warn(`❌ [EMPTY RESPONSE] AI returned no content for ${contentType}`);
+          }
+        }
+      });
+    }
+
     this.processingVideos.set(videoId, status);
     this.updateStatusTable();
     this.showProcessingDashboard();
@@ -294,14 +326,30 @@ class ProcessingStatusManager {
       // Don't add cancelled videos back to processing
       if (!this.cancelledVideos.has(status.videoId)) {
         this.processingVideos.set(status.videoId, status);
+
+        // Log any existing failures from batch load
+        if (status.content) {
+          Object.entries(status.content).forEach(([contentType, contentStatus]) => {
+            if (contentStatus.status === 'failed') {
+              console.error(`[CONTENT GENERATION ERROR] ${status.videoId}/${contentType}`, {
+                errorCode: contentStatus.errorCode,
+                errorType: contentStatus.errorType,
+                error: contentStatus.error,
+                frontendMessage: contentStatus.frontendMessage,
+                failureReason: contentStatus.failureReason,
+                isContentFiltered: contentStatus.isContentFiltered
+              });
+            }
+          });
+        }
       }
     });
-    
+
     if (videos.length > 0) {
       this.updateStatusTable();
       this.showProcessingDashboard();
     }
-    
+
     // Refresh completed videos to remove any that are now processing
     if (typeof refreshCompletedVideos === 'function') {
       refreshCompletedVideos();
@@ -1238,27 +1286,57 @@ class ProcessingStatusManager {
   }
 
   calculateProgress(video) {
-    if (!this.contentTypesLoaded || !this.contentTypes) {
-      return { completed: 0, total: 1 };
-    }
-
     let completed = 0;
     let total = 0;
-    
-    // Check each content type (including transcript), but only count non-skipped ones
-    this.contentTypes.forEach(ct => {
-      if (ct.isTranscript) {
-        total++;
-        if (video.transcript?.status === 'completed') completed++;
-      } else {
-        const contentData = video.content[ct.key];
+
+    // Only count content types from video.content - this is the authoritative source
+    // We do NOT count video.transcript separately to avoid inconsistent progress updates
+    if (video.content) {
+      Object.entries(video.content).forEach(([key, contentData]) => {
+        // Skip transcript_text - it's extracted (not generated) and its status is tracked
+        // via video.transcript, not video.content. It stays 'pending' in video.content
+        // which would cause progress to never reach 100%
+        if (key === 'transcript_text') {
+          return;
+        }
+
+        // Skip any image-related entries (ebook images are part of ebook_text generation)
+        if (key.includes('_image') || key.startsWith('image_')) {
+          return;
+        }
+
         if (contentData && contentData.status !== 'skipped') {
           total++;
-          if (contentData.status === 'completed') completed++;
+          // Content is 'done' if completed or failed (processing finished)
+          if (contentData.status === 'completed' || contentData.status === 'failed') {
+            completed++;
+          }
         }
-      }
-    });
-    
+      });
+    }
+
+    // Ensure we never divide by zero
+    total = Math.max(total, 1);
+
+    // Cache the highest progress to prevent backward jumps from out-of-order updates
+    // Once progress reaches a certain level, it should never decrease
+    const cacheKey = video.videoId;
+    const cached = this.progressCache.get(cacheKey) || { completed: 0, total: total };
+
+    // Update cache if we have more completed items (progress is increasing)
+    if (completed > cached.completed) {
+      this.progressCache.set(cacheKey, { completed, total });
+    } else {
+      // Use cached higher value to prevent progress from decreasing
+      completed = cached.completed;
+    }
+
+    // If video is marked as completed by server, ensure 100% progress
+    if (video.completed) {
+      completed = total;
+      this.progressCache.set(cacheKey, { completed, total });
+    }
+
     return { completed, total };
   }
 

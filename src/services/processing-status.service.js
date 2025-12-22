@@ -108,11 +108,18 @@ class ProcessingStatusService extends EventEmitter {
 
     this.processingVideos.set(videoId, status);
 
+    // Verify video was added to Map
+    const verifyInMap = this.processingVideos.has(videoId);
+    const mapSize = this.processingVideos.size;
+
     logger.info(`Initialized processing status for video ${videoId}`, {
       userId,
       contentTypes: contentTypes.length,
       recordId: videoRecordId,
-      allAvailableTypes: allContentTypes.length
+      allAvailableTypes: allContentTypes.length,
+      videoIdType: typeof videoId,
+      verifiedInMap: verifyInMap,
+      totalVideosInMap: mapSize
     });
 
     // Emit status update to connected clients
@@ -155,7 +162,15 @@ class ProcessingStatusService extends EventEmitter {
   updateContentStatus(videoId, contentType, status, error = null, metadata = {}) {
     const videoStatus = this.processingVideos.get(videoId);
     if (!videoStatus) {
-      logger.warn(`No video status found for ${videoId} when updating ${contentType}`);
+      // Enhanced diagnostic logging to identify why video is not in Map
+      const allVideoIds = Array.from(this.processingVideos.keys());
+      logger.warn(`No video status found for ${videoId} when updating ${contentType}`, {
+        requestedVideoId: videoId,
+        requestedVideoIdType: typeof videoId,
+        videosInMap: allVideoIds.length,
+        mapVideoIds: allVideoIds.slice(0, 5), // Show first 5 video IDs in map
+        mapVideoIdTypes: allVideoIds.slice(0, 3).map(id => typeof id)
+      });
       return;
     }
 
@@ -169,12 +184,29 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.content[contentType].error = error;
     videoStatus.content[contentType].isContentFiltered = metadata.isContentFiltered || false;
     videoStatus.content[contentType].errorCode = metadata.errorCode || null;
+    videoStatus.content[contentType].errorType = metadata.errorType || null;
     videoStatus.content[contentType].suggestedFix = metadata.suggestedFix || null;
+    videoStatus.content[contentType].failureReason = metadata.failureReason || null;
+    videoStatus.content[contentType].frontendMessage = metadata.frontendMessage || null;
+    videoStatus.content[contentType].errorDetails = metadata.errorDetails || null;
+    videoStatus.content[contentType].aiProvider = metadata.aiProvider || null;
     videoStatus.lastUpdate = new Date().toISOString();
 
     this.processingVideos.set(videoId, videoStatus);
 
-    logger.debug(`Updated ${contentType} status for ${videoId}: ${status}`);
+    // Log status update with error details if failed
+    if (status === 'failed') {
+      logger.warn(`❌ Content generation failed for ${videoId}/${contentType}`, {
+        errorCode: metadata.errorCode,
+        errorType: metadata.errorType,
+        isContentFiltered: metadata.isContentFiltered,
+        frontendMessage: metadata.frontendMessage,
+        aiProvider: metadata.aiProvider
+      });
+    } else {
+      logger.debug(`Updated ${contentType} status for ${videoId}: ${status}`);
+    }
+
     this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
 
     // Check if all processing is complete
@@ -301,8 +333,9 @@ class ProcessingStatusService extends EventEmitter {
       userSessions.delete(session);
       if (userSessions.size === 0) {
         this.userSessions.delete(userId);
-        // Clear all processing videos for this user when they have no active sessions
-        this.clearUserProcessingVideos(userId);
+        // Only clear videos that are fully completed - don't clear videos still being processed
+        // This prevents "No video status found" errors when background content generation continues
+        this.clearCompletedUserVideos(userId);
       }
     }
 
@@ -310,21 +343,69 @@ class ProcessingStatusService extends EventEmitter {
   }
 
   /**
-   * Clear all processing videos for a specific user
+   * Clear only completed processing videos for a specific user
+   * Leaves actively processing videos intact so background generation can update status
    * @param {string} userId - User ID
    */
-  clearUserProcessingVideos(userId) {
+  clearCompletedUserVideos(userId) {
     let clearedCount = 0;
 
     this.processingVideos.forEach((status, videoId) => {
-      if (status.userId === userId) {
+      if (status.userId === userId && status.completed) {
         this.processingVideos.delete(videoId);
         clearedCount++;
       }
     });
 
     if (clearedCount > 0) {
-      logger.info(`Cleared ${clearedCount} processing videos for user ${userId} (no active sessions)`);
+      logger.info(`Cleared ${clearedCount} completed videos for user ${userId} (no active sessions)`);
+    }
+
+    // Count videos still processing for this user
+    let stillProcessingCount = 0;
+    this.processingVideos.forEach((status) => {
+      if (status.userId === userId && !status.completed) {
+        stillProcessingCount++;
+      }
+    });
+
+    if (stillProcessingCount > 0) {
+      logger.info(`User ${userId} has ${stillProcessingCount} videos still processing - kept in memory`);
+    }
+
+    return clearedCount;
+  }
+
+  /**
+   * Force clear ALL processing videos for a specific user (including those still processing)
+   * WARNING: This will cause "No video status found" errors if background generation is still running.
+   * Use clearCompletedUserVideos() for graceful cleanup when session ends.
+   * This method should only be used for explicit user logout or admin force-clear.
+   * @param {string} userId - User ID
+   */
+  clearUserProcessingVideos(userId) {
+    // Log call stack to identify who triggered this clear
+    const stack = new Error().stack;
+    logger.info(`clearUserProcessingVideos called for user ${userId}`, {
+      calledFrom: stack.split('\n').slice(2, 5).join(' <- ')
+    });
+
+    let clearedCount = 0;
+    const clearedVideoIds = [];
+
+    this.processingVideos.forEach((status, videoId) => {
+      if (status.userId === userId) {
+        clearedVideoIds.push(videoId);
+        this.processingVideos.delete(videoId);
+        clearedCount++;
+      }
+    });
+
+    if (clearedCount > 0) {
+      logger.warn(`Force-cleared ${clearedCount} processing videos for user ${userId}`, {
+        clearedVideoIds,
+        remainingInMap: this.processingVideos.size
+      });
     }
 
     return clearedCount;

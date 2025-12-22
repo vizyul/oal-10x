@@ -1,0 +1,172 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Subscription Grants</h1>
+    <a href="/admin/grants/new" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+      + New Grant
+    </a>
+  </div>
+
+  <!-- Success/Error Messages -->
+  {{#if (lookup @root.query 'success')}}
+  <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+    {{lookup @root.query 'success'}}
+  </div>
+  {{/if}}
+  {{#if (lookup @root.query 'error')}}
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+    {{lookup @root.query 'error'}}
+  </div>
+  {{/if}}
+
+  <!-- Filter Bar -->
+  <div class="bg-white p-4 rounded-lg shadow mb-6">
+    <form method="GET" action="/admin/grants" class="flex gap-4">
+      <select name="status" class="border rounded px-3 py-2">
+        <option value="all" {{#if (eq status 'all')}}selected{{/if}}>All Grants</option>
+        <option value="active" {{#if (eq status 'active')}}selected{{/if}}>Active</option>
+        <option value="expired" {{#if (eq status 'expired')}}selected{{/if}}>Expired</option>
+        <option value="revoked" {{#if (eq status 'revoked')}}selected{{/if}}>Revoked</option>
+      </select>
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filter</button>
+    </form>
+  </div>
+
+  <!-- Info Card -->
+  <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded mb-6">
+    <strong>About Subscription Grants:</strong> Grants allow admins to give users access to the platform without requiring a paid subscription.
+    Grant types include full tier access, custom video limits, or unlimited videos.
+  </div>
+
+  <!-- Grants Table -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200" style="border: 1px solid #e5e7eb;">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">User</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Grant Type</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Details</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Granted By</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Expires</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style="border: 1px solid #e5e7eb;">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {{#each grants}}
+        <tr>
+          <td class="px-6 py-4 whitespace-nowrap" style="border: 1px solid #e5e7eb;">
+            <div class="text-sm font-medium text-gray-900">{{this.user_email}}</div>
+            <div class="text-sm text-gray-500">{{this.user_first_name}} {{this.user_last_name}}</div>
+            <div class="text-xs text-gray-400">ID: {{this.user_id}}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap" style="border: 1px solid #e5e7eb;">
+            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+              {{#if (eq this.grant_type 'full_access')}}bg-purple-100 text-purple-800{{/if}}
+              {{#if (eq this.grant_type 'unlimited_videos')}}bg-green-100 text-green-800{{/if}}
+              {{#if (eq this.grant_type 'video_limit_override')}}bg-blue-100 text-blue-800{{/if}}
+              {{#if (eq this.grant_type 'trial_extension')}}bg-yellow-100 text-yellow-800{{/if}}">
+              {{this.grant_type}}
+            </span>
+          </td>
+          <td class="px-6 py-4" style="border: 1px solid #e5e7eb;">
+            {{#if (eq this.grant_type 'full_access')}}
+              <div class="text-sm text-gray-900">Tier: <strong>{{this.tier_override}}</strong></div>
+            {{/if}}
+            {{#if (eq this.grant_type 'video_limit_override')}}
+              <div class="text-sm text-gray-900">Limit: <strong>{{this.video_limit_override}} videos/month</strong></div>
+            {{/if}}
+            {{#if (eq this.grant_type 'unlimited_videos')}}
+              <div class="text-sm text-gray-900"><strong>Unlimited</strong></div>
+            {{/if}}
+            {{#if (eq this.grant_type 'trial_extension')}}
+              <div class="text-sm text-gray-900">Extended Trial</div>
+            {{/if}}
+            <div class="text-xs text-gray-500 mt-1 max-w-xs truncate" title="{{this.reason}}">{{this.reason}}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap" style="border: 1px solid #e5e7eb;">
+            <div class="text-sm text-gray-900">{{this.granted_by_email}}</div>
+            <div class="text-xs text-gray-500">{{formatDate this.created_at 'MMM DD, YYYY'}}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" style="border: 1px solid #e5e7eb;">
+            {{#if this.expires_at}}
+              {{formatDate this.expires_at 'MMM DD, YYYY'}}
+            {{else}}
+              <span class="text-green-600">Never</span>
+            {{/if}}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap" style="border: 1px solid #e5e7eb;">
+            {{#if this.is_active}}
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                Active
+              </span>
+            {{else}}
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                Revoked
+              </span>
+            {{/if}}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" style="border: 1px solid #e5e7eb;">
+            <a href="/admin/grants/{{this.id}}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
+            {{#if this.is_active}}
+              <form method="POST" action="/admin/grants/{{this.id}}/revoke" style="display: inline;">
+                <button type="submit" class="text-red-600 hover:text-red-900"
+                  onclick="return handleRevokeConfirm(event, '{{this.user_email}}')">
+                  Revoke
+                </button>
+              </form>
+            {{/if}}
+          </td>
+        </tr>
+        {{else}}
+        <tr>
+          <td colspan="7" class="px-6 py-4 text-center text-gray-500" style="border: 1px solid #e5e7eb;">
+            No grants found. <a href="/admin/grants/new" class="text-blue-600 hover:underline">Create one</a>
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {{#if (gt totalPages 1)}}
+  <div class="mt-6 flex justify-center gap-2">
+    {{#if (gt page 1)}}
+    <a href="/admin/grants?status={{status}}&page={{subtract page 1}}&limit={{limit}}"
+       class="px-4 py-2 bg-white border rounded hover:bg-gray-50">Previous</a>
+    {{/if}}
+    <span class="px-4 py-2">Page {{page}} of {{totalPages}}</span>
+    {{#if (lt page totalPages)}}
+    <a href="/admin/grants?status={{status}}&page={{add page 1}}&limit={{limit}}"
+       class="px-4 py-2 bg-white border rounded hover:bg-gray-50">Next</a>
+    {{/if}}
+  </div>
+  {{/if}}
+  
+</div>
+
+<p>&nbsp;</p>
+
+<script>
+function handleRevokeConfirm(event, userEmail) {
+  event.preventDefault();
+  const form = event.target.closest('form');
+
+  // Create confirmation modal
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  modal.innerHTML = `
+    <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+      <h3 class="text-lg font-bold mb-4">Confirm Revoke Grant</h3>
+      <p class="text-gray-600 mb-6">Are you sure you want to revoke the grant for <strong>${userEmail}</strong>? This will remove their access.</p>
+      <div class="flex justify-end gap-3">
+        <button type="button" class="px-4 py-2 border rounded hover:bg-gray-50" onclick="this.closest('.fixed').remove()">Cancel</button>
+        <button type="button" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" onclick="this.closest('.fixed').remove(); document.getElementById('revoke-form-${userEmail}').submit();">Revoke</button>
+      </div>
+    </div>
+  `;
+  form.id = `revoke-form-${userEmail}`;
+  document.body.appendChild(modal);
+  return false;
+}
+</script>

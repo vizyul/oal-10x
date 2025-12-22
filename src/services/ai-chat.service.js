@@ -71,8 +71,9 @@ class AIChatService {
         maxTokens = 2000,
         //model = 'gemini-1.5-flash'
         //model = 'gemini-flash-lite-latest'
-        model = 'gemini-flash-latest'
+        model = 'gemini-flash-latest',
         //model = 'gemini-2.5-pro'
+        contentType = 'unknown'
       } = options;
 
       logger.debug('Generating content with Gemini', {
@@ -116,34 +117,107 @@ class AIChatService {
       // Check for content filtering/blocking
       const blockReason = response.promptFeedback?.blockReason;
       const finishReason = response.candidates?.[0]?.finishReason;
+      const safetyRatings = response.candidates?.[0]?.safetyRatings || response.promptFeedback?.safetyRatings;
+      const usageMetadata = response?.usageMetadata;
 
+      // ===== SAFETY FILTER DETECTION =====
       if (blockReason) {
-        logger.warn('Gemini blocked content due to safety filter', {
+        const errorDetails = {
+          type: 'SAFETY_FILTER',
           blockReason,
-          safetyRatings: response.promptFeedback?.safetyRatings
-        });
-        const error = new Error(`Content blocked by safety filter: ${blockReason}`);
+          safetyRatings,
+          message: `Content blocked by safety filter: ${blockReason}`,
+          promptLength: fullPrompt.length,
+          inputTokens: usageMetadata?.promptTokenCount || 'unknown'
+        };
+
+        // Log prominently for server
+        logger.error('🚫 SAFETY FILTER BLOCKED - Gemini refused to generate content', errorDetails);
+        console.error('[GEMINI SAFETY FILTER]', JSON.stringify(errorDetails, null, 2));
+
+        const error = new Error(errorDetails.message);
         error.code = 'CONTENT_FILTERED';
         error.blockReason = blockReason;
+        error.frontendMessage = `Safety Filter: ${blockReason}`;
+        error.details = errorDetails;
         throw error;
       }
 
       if (finishReason === 'SAFETY') {
-        logger.warn('Gemini stopped generation due to safety', {
+        const errorDetails = {
+          type: 'SAFETY_FILTER',
           finishReason,
-          safetyRatings: response.candidates?.[0]?.safetyRatings
-        });
-        const error = new Error('Content generation stopped due to safety filters');
+          safetyRatings,
+          message: 'Content generation stopped due to safety filters',
+          promptLength: fullPrompt.length,
+          inputTokens: usageMetadata?.promptTokenCount || 'unknown'
+        };
+
+        // Log prominently for server
+        logger.error('🚫 SAFETY FILTER STOPPED - Gemini stopped generation mid-way', errorDetails);
+        console.error('[GEMINI SAFETY FILTER]', JSON.stringify(errorDetails, null, 2));
+
+        const error = new Error(errorDetails.message);
         error.code = 'CONTENT_FILTERED';
         error.finishReason = finishReason;
+        error.frontendMessage = 'Safety Filter: Generation stopped';
+        error.details = errorDetails;
         throw error;
       }
+
+      // ===== TOKEN LIMIT DETECTION =====
+      if (finishReason === 'MAX_TOKENS') {
+        const errorDetails = {
+          type: 'TOKEN_LIMIT',
+          finishReason,
+          message: 'Response truncated due to token limit',
+          requestedMaxTokens: maxTokens,
+          inputTokens: usageMetadata?.promptTokenCount || 'unknown',
+          outputTokens: usageMetadata?.candidatesTokenCount || 'unknown',
+          totalTokens: usageMetadata?.totalTokenCount || 'unknown'
+        };
+
+        // Log prominently for server - this is a warning, content may still be usable
+        logger.warn(`⚠️ TOKEN LIMIT REACHED [${contentType}] - Response was truncated`, errorDetails);
+        console.warn(`[GEMINI TOKEN LIMIT] ${contentType}`, JSON.stringify(errorDetails, null, 2));
+
+        // Don't throw, just log - the content may still be usable
+      }
+
+      // Log full response details before extracting text
+      logger.debug('Gemini raw response details', {
+        hasResponse: !!response,
+        hasCandidates: !!response?.candidates,
+        candidatesCount: response?.candidates?.length || 0,
+        finishReason: response?.candidates?.[0]?.finishReason,
+        hasContent: !!response?.candidates?.[0]?.content,
+        partsCount: response?.candidates?.[0]?.content?.parts?.length || 0,
+        usageMetadata: response?.usageMetadata
+      });
 
       const text = response.text();
 
       if (!text || text.trim().length === 0) {
+        // ===== EMPTY RESPONSE DETECTION =====
+        const errorDetails = {
+          type: 'EMPTY_RESPONSE',
+          message: 'Gemini returned empty content',
+          finishReason: response?.candidates?.[0]?.finishReason,
+          promptLength: fullPrompt.length,
+          inputTokens: usageMetadata?.promptTokenCount || 'unknown',
+          outputTokens: usageMetadata?.candidatesTokenCount || 0,
+          candidates: response?.candidates?.length || 0,
+          promptFeedback: response?.promptFeedback
+        };
+
+        // Log prominently for server
+        logger.error('❌ EMPTY RESPONSE - Gemini returned no content', errorDetails);
+        console.error('[GEMINI EMPTY RESPONSE]', JSON.stringify(errorDetails, null, 2));
+
         const error = new Error('Gemini returned empty content');
         error.code = 'EMPTY_RESPONSE';
+        error.frontendMessage = 'Empty Response: No content generated';
+        error.details = errorDetails;
         throw error;
       }
 
@@ -158,17 +232,35 @@ class AIChatService {
         duration: duration
       };
 
-      logger.debug('Gemini generation successful', metrics);
+      logger.info('✅ Gemini generation successful', {
+        responseLength: text.length,
+        inputTokens: metrics.inputTokens,
+        outputTokens: metrics.outputTokens,
+        duration: `${duration}ms`
+      });
 
       return { text, metrics };
 
     } catch (error) {
-      logger.error('Error generating content with Gemini:', {
-        error: error.message,
+      // Preserve detailed error information
+      const errorDetails = {
+        type: error.code || 'UNKNOWN_ERROR',
+        message: error.message,
         code: error.code,
-        status: error.status
-      });
-      throw new Error(`Gemini generation failed: ${error.message}`);
+        status: error.status,
+        frontendMessage: error.frontendMessage || error.message,
+        details: error.details || null
+      };
+
+      logger.error('❌ Error generating content with Gemini:', errorDetails);
+      console.error('[GEMINI ERROR]', JSON.stringify(errorDetails, null, 2));
+
+      // Create new error that preserves all the details
+      const newError = new Error(`Gemini generation failed: ${error.message}`);
+      newError.code = error.code || 'GENERATION_FAILED';
+      newError.frontendMessage = error.frontendMessage || error.message;
+      newError.details = error.details || errorDetails;
+      throw newError;
     }
   }
 

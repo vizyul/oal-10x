@@ -75,10 +75,60 @@ const subscriptionMiddleware = {
 
         const userId = req.user.id;
         const userTier = req.user.subscription_tier || 'free';
+        const subscriptionService = require('../services/subscription.service');
+
+        // PRIORITY 1: Check for admin grants first
+        if (resource === 'videos') {
+          const grantAccess = await subscriptionService.checkGrantAccess(userId);
+
+          if (grantAccess.hasGrant) {
+            logger.info(`User ${userId} has active admin grant: ${grantAccess.grantType}`);
+
+            // Unlimited videos grant - always allow
+            if (grantAccess.videoLimit === Infinity) {
+              req.usageInfo = {
+                userId,
+                resource,
+                increment,
+                currentUsage: 0,
+                limit: Infinity,
+                hasAdminGrant: true,
+                grantType: grantAccess.grantType
+              };
+              return next();
+            }
+
+            // Grant with specific limit - check against grant limit
+            const currentUsage = await getCurrentUsage(userId, resource);
+            const newUsage = currentUsage + increment;
+
+            if (newUsage > grantAccess.videoLimit) {
+              return handleSubscriptionError(req, res, 'Admin grant video limit exceeded', 429, {
+                current_usage: currentUsage,
+                limit: grantAccess.videoLimit,
+                resource_type: resource,
+                grant_type: grantAccess.grantType,
+                has_admin_grant: true
+              });
+            }
+
+            req.usageInfo = {
+              userId,
+              resource,
+              increment,
+              currentUsage,
+              limit: grantAccess.videoLimit,
+              hasAdminGrant: true,
+              grantType: grantAccess.grantType
+            };
+            return next();
+          }
+        }
+
+        // PRIORITY 2: Standard subscription logic
 
         // Special handling for free tier users with video resources
         if (userTier === 'free' && resource === 'videos') {
-          const subscriptionService = require('../services/subscription.service');
           const freeVideoUsed = await subscriptionService.hasFreeVideoBeenUsed(userId);
 
           if (freeVideoUsed) {
@@ -223,10 +273,38 @@ const subscriptionMiddleware = {
       if (req.user) {
         const userTier = req.user.subscription_tier || 'free';
         const subscriptionPlansService = require('../services/subscription-plans.service');
+        const subscriptionService = require('../services/subscription.service');
         const planData = await subscriptionPlansService.getPlanByKey(userTier);
         const usage = await getCurrentUsageAll(req.user.id);
 
-        const videoLimit = planData ? planData.videoLimit : 0;
+        // Check for admin grants
+        const grantAccess = await subscriptionService.checkGrantAccess(req.user.id);
+
+        let videoLimit = planData ? planData.videoLimit : 0;
+        let effectiveTier = userTier;
+        let grantInfo = null;
+
+        // If user has an admin grant, use grant limits instead
+        if (grantAccess.hasGrant) {
+          grantInfo = {
+            type: grantAccess.grantType,
+            tierOverride: grantAccess.tierOverride,
+            videoLimit: grantAccess.videoLimit,
+            expiresAt: grantAccess.expiresAt
+          };
+
+          // Override video limit with grant limit
+          if (grantAccess.videoLimit === Infinity) {
+            videoLimit = -1; // Use -1 to indicate unlimited
+          } else {
+            videoLimit = grantAccess.videoLimit;
+          }
+
+          // If full_access grant, use the tier override
+          if (grantAccess.grantType === 'full_access' && grantAccess.tierOverride) {
+            effectiveTier = grantAccess.tierOverride;
+          }
+        }
 
         const limits = {
           videos: videoLimit,
@@ -242,12 +320,15 @@ const subscriptionMiddleware = {
 
         req.subscriptionInfo = {
           tier: userTier,
+          effectiveTier: effectiveTier,
           status: req.user.subscription_status || 'none',
           features: planData ? planData.features : [],
           usage: usage,
           limits: limits,
           percentages: percentages,
-          remainingVideos: Math.max(0, limits.videos - usage.videos)
+          remainingVideos: limits.videos === -1 ? Infinity : Math.max(0, limits.videos - usage.videos),
+          hasAdminGrant: grantAccess.hasGrant,
+          grantInfo: grantInfo
         };
       }
       next();

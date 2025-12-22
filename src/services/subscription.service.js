@@ -1,7 +1,270 @@
 const { logger } = require('../utils');
 const { user, userSubscription, subscriptionUsage } = require('../models');
+const database = require('./database.service');
 
 class SubscriptionService {
+  // ===========================================
+  // ADMIN SUBSCRIPTION GRANTS METHODS
+  // ===========================================
+
+  /**
+   * Check if user has an active admin grant
+   * @param {number} userId - PostgreSQL user ID
+   * @returns {Promise<Object|null>} Active grant or null
+   */
+  async getActiveGrant(userId) {
+    try {
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) return null;
+
+      const result = await database.query(`
+        SELECT * FROM admin_subscription_grants
+        WHERE user_id = $1
+          AND is_active = TRUE
+          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [pgUserId]);
+
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error checking active grant:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if user has grant that bypasses video limits
+   * @param {number} userId - PostgreSQL user ID
+   * @returns {Promise<{hasGrant: boolean, grant?: Object, videoLimit?: number}>}
+   */
+  async checkGrantAccess(userId) {
+    try {
+      const grant = await this.getActiveGrant(userId);
+
+      if (!grant) {
+        return { hasGrant: false };
+      }
+
+      // Determine video limit based on grant type
+      let videoLimit = null;
+      const tierLimits = {
+        'basic': 4,
+        'premium': 8,
+        'creator': 16,
+        'enterprise': 50
+      };
+
+      switch (grant.grant_type) {
+        case 'unlimited_videos':
+          videoLimit = Infinity;
+          break;
+        case 'video_limit_override':
+          videoLimit = grant.video_limit_override;
+          break;
+        case 'full_access':
+          videoLimit = tierLimits[grant.tier_override] || 4;
+          break;
+        case 'trial_extension':
+          videoLimit = 1; // Same as free tier
+          break;
+      }
+
+      return {
+        hasGrant: true,
+        grant,
+        videoLimit,
+        grantType: grant.grant_type,
+        tierOverride: grant.tier_override,
+        expiresAt: grant.expires_at
+      };
+    } catch (error) {
+      logger.error('Error checking grant access:', error);
+      return { hasGrant: false };
+    }
+  }
+
+  /**
+   * Create a new admin subscription grant
+   * @param {Object} grantData - Grant details
+   * @returns {Promise<Object>} Created grant
+   */
+  async createGrant(grantData) {
+    try {
+      const {
+        userId,
+        grantedById,
+        grantType,
+        tierOverride,
+        videoLimitOverride,
+        reason,
+        expiresAt
+      } = grantData;
+
+      // Deactivate any existing active grants for this user
+      await database.query(`
+        UPDATE admin_subscription_grants
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1 AND is_active = TRUE
+      `, [userId]);
+
+      // Create new grant
+      const result = await database.query(`
+        INSERT INTO admin_subscription_grants
+          (user_id, granted_by_id, grant_type, tier_override, video_limit_override, reason, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [userId, grantedById, grantType, tierOverride, videoLimitOverride, reason, expiresAt]);
+
+      const grant = result.rows[0];
+      logger.info(`Admin grant created: User ${userId} granted ${grantType} by admin ${grantedById}`);
+
+      // If full_access grant, update user's subscription_tier
+      if (grantType === 'full_access' && tierOverride) {
+        await database.query(`
+          UPDATE users
+          SET subscription_tier = $1, subscription_status = 'active', updated_at = CURRENT_TIMESTAMP
+          WHERE id = $2
+        `, [tierOverride, userId]);
+        logger.info(`User ${userId} tier updated to ${tierOverride} via admin grant`);
+      }
+
+      return grant;
+    } catch (error) {
+      logger.error('Error creating admin grant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke an admin subscription grant
+   * @param {number} grantId - Grant ID to revoke
+   * @param {number} revokedById - Admin user ID who is revoking
+   * @returns {Promise<Object>} Revoked grant
+   */
+  async revokeGrant(grantId, revokedById) {
+    try {
+      const result = await database.query(`
+        UPDATE admin_subscription_grants
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *
+      `, [grantId]);
+
+      if (result.rows.length === 0) {
+        throw new Error('Grant not found');
+      }
+
+      const grant = result.rows[0];
+      logger.info(`Admin grant ${grantId} revoked for user ${grant.user_id} by admin ${revokedById}`);
+
+      // If it was a full_access grant, revert user to free tier
+      if (grant.grant_type === 'full_access') {
+        await database.query(`
+          UPDATE users
+          SET subscription_tier = 'free', updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+        `, [grant.user_id]);
+        logger.info(`User ${grant.user_id} reverted to free tier after grant revocation`);
+      }
+
+      return grant;
+    } catch (error) {
+      logger.error('Error revoking admin grant:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all grants (with optional filters)
+   * @param {Object} filters - Filter options
+   * @returns {Promise<Array>} List of grants
+   */
+  async getAllGrants(filters = {}) {
+    try {
+      const { status = 'active', page = 1, limit = 50 } = filters;
+      const offset = (page - 1) * limit;
+
+      let whereClause = '';
+      const params = [];
+
+      if (status === 'active') {
+        whereClause = 'WHERE g.is_active = TRUE AND (g.expires_at IS NULL OR g.expires_at > CURRENT_TIMESTAMP)';
+      } else if (status === 'expired') {
+        whereClause = 'WHERE g.is_active = TRUE AND g.expires_at <= CURRENT_TIMESTAMP';
+      } else if (status === 'revoked') {
+        whereClause = 'WHERE g.is_active = FALSE';
+      }
+
+      const result = await database.query(`
+        SELECT
+          g.*,
+          u.email as user_email,
+          u.first_name as user_first_name,
+          u.last_name as user_last_name,
+          admin.email as granted_by_email,
+          admin.first_name as granted_by_first_name,
+          admin.last_name as granted_by_last_name
+        FROM admin_subscription_grants g
+        JOIN users u ON g.user_id = u.id
+        JOIN users admin ON g.granted_by_id = admin.id
+        ${whereClause}
+        ORDER BY g.created_at DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `, [...params, limit, offset]);
+
+      // Get total count
+      const countResult = await database.query(`
+        SELECT COUNT(*) FROM admin_subscription_grants g
+        ${whereClause}
+      `, params);
+
+      return {
+        grants: result.rows,
+        total: parseInt(countResult.rows[0].count),
+        page,
+        limit,
+        totalPages: Math.ceil(parseInt(countResult.rows[0].count) / limit)
+      };
+    } catch (error) {
+      logger.error('Error getting all grants:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get grants for a specific user
+   * @param {number} userId - User ID
+   * @returns {Promise<Array>} List of grants for user
+   */
+  async getUserGrants(userId) {
+    try {
+      const pgUserId = await this._resolveUserId(userId);
+      if (!pgUserId) return [];
+
+      const result = await database.query(`
+        SELECT
+          g.*,
+          admin.email as granted_by_email,
+          admin.first_name as granted_by_first_name,
+          admin.last_name as granted_by_last_name
+        FROM admin_subscription_grants g
+        JOIN users admin ON g.granted_by_id = admin.id
+        WHERE g.user_id = $1
+        ORDER BY g.created_at DESC
+      `, [pgUserId]);
+
+      return result.rows;
+    } catch (error) {
+      logger.error('Error getting user grants:', error);
+      return [];
+    }
+  }
+
+  // ===========================================
+  // END ADMIN SUBSCRIPTION GRANTS METHODS
+  // ===========================================
+
   /**
    * Helper method to resolve user ID to PostgreSQL ID
    * @param {string|number} userId - User identifier
@@ -456,9 +719,9 @@ class SubscriptionService {
   }
 
   /**
-   * Check if user can process a video (enhanced with free trial logic)
+   * Check if user can process a video (enhanced with free trial logic and admin grants)
    * @param {string|number} userId - User identifier
-   * @returns {Promise<{canProcess: boolean, reason?: string, requiresUpgrade?: boolean}>}
+   * @returns {Promise<{canProcess: boolean, reason?: string, requiresUpgrade?: boolean, grantInfo?: Object}>}
    */
   async canProcessVideoEnhanced(userId) {
     try {
@@ -469,17 +732,49 @@ class SubscriptionService {
         return { canProcess: false, reason: 'User not found' };
       }
 
+      // PRIORITY 1: Check for admin grants first
+      const grantAccess = await this.checkGrantAccess(pgUserId);
+      if (grantAccess.hasGrant) {
+        logger.debug(`User ${pgUserId} has active admin grant: ${grantAccess.grantType}`);
+
+        // For unlimited access, always allow
+        if (grantAccess.videoLimit === Infinity) {
+          return {
+            canProcess: true,
+            reason: 'Admin grant: Unlimited video access',
+            grantInfo: grantAccess
+          };
+        }
+
+        // For grants with limits, check current usage against grant limit
+        const currentUsage = await this.getCurrentPeriodUsage(pgUserId);
+        if (currentUsage < grantAccess.videoLimit) {
+          return {
+            canProcess: true,
+            reason: `Admin grant: ${currentUsage}/${grantAccess.videoLimit} videos used`,
+            grantInfo: grantAccess
+          };
+        } else {
+          return {
+            canProcess: false,
+            reason: `Admin grant limit reached (${grantAccess.videoLimit} videos/month)`,
+            requiresUpgrade: false,
+            grantInfo: grantAccess
+          };
+        }
+      }
+
+      // PRIORITY 2: Check normal subscription logic
       // Get user's subscription tier
-      const database = require('./database.service');
       const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [pgUserId]);
 
       if (userResult.rows.length === 0) {
         return { canProcess: false, reason: 'User not found' };
       }
 
-      const user = userResult.rows[0];
-      const userTier = user.subscription_tier || 'free';
-      const freeVideoUsed = user.free_video_used;
+      const userData = userResult.rows[0];
+      const userTier = userData.subscription_tier || 'free';
+      const freeVideoUsed = userData.free_video_used;
 
       logger.debug(`User ${pgUserId} tier: ${userTier}, free video used: ${freeVideoUsed}`);
 

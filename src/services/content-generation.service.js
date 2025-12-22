@@ -246,7 +246,8 @@ class ContentGenerationService {
           prompt: processedPrompt,
           systemMessage: prompt.system_message,
           temperature: prompt.temperature || 0.7,
-          maxTokens: prompt.max_tokens || 2000
+          maxTokens: prompt.max_tokens || 2000,
+          contentType: prompt.content_type
         },
         2 // Max retries
       );
@@ -415,11 +416,17 @@ class ContentGenerationService {
         apiCost: llmErrorDetails.estimatedCost
       });
 
-      // Update content status to failed with metadata
+      // Update content status to failed with detailed metadata for frontend logging
       processingStatusService.updateContentStatus(videoId, prompt.content_type, 'failed', error.message, {
         isContentFiltered: llmErrorDetails.isContentFiltered || false,
         errorCode: error.code || llmErrorDetails.category,
-        suggestedFix: llmErrorDetails.suggestedFix
+        errorType: llmErrorDetails.category,
+        suggestedFix: llmErrorDetails.suggestedFix,
+        failureReason: llmErrorDetails.reason,
+        frontendMessage: error.frontendMessage || error.message,
+        errorDetails: error.details || null,
+        aiProvider: prompt.ai_provider,
+        contentType: prompt.content_type
       });
 
       return {

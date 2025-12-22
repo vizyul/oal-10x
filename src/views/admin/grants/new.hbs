@@ -1,0 +1,338 @@
+<div class="container mx-auto px-4 py-8">
+  <div class="mb-6">
+    <a href="/admin/grants" class="text-blue-600 hover:underline">&larr; Back to Grants</a>
+  </div>
+
+  <div class="max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold mb-4">Create Subscription Grant</h1>
+
+    <!-- Grant Types Explanation -->
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+      <h3 class="font-medium text-gray-800 mb-2">Grant Types</h3>
+      <ul class="text-sm text-gray-600 space-y-1">
+        <li><strong>Full Tier Access:</strong> Grants a user complete access to a specific subscription tier (Basic, Premium, Creator, or Enterprise) without payment.</li>
+        <li><strong>Custom Video Limit:</strong> Sets a specific number of videos the user can process per month, regardless of their subscription tier.</li>
+        <li><strong>Unlimited Videos:</strong> Removes all video processing limits, allowing the user to process unlimited videos.</li>
+        <li><strong>Trial Extension:</strong> Resets the user's free trial, giving them one additional free video to process.</li>
+      </ul>
+    </div>
+
+    <!-- Error Messages -->
+    {{#if (lookup @root.query 'error')}}
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+      {{lookup @root.query 'error'}}
+    </div>
+    {{/if}}
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <form method="POST" action="/admin/grants" id="grantForm">
+        <!-- User Search -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Select User *</label>
+          <div class="relative">
+            <input type="text" id="userSearch" placeholder="Search by email or name..."
+              class="w-full border rounded px-3 py-2"
+              {{#if selectedUser}}value="{{selectedUser.email}}"{{/if}}
+              autocomplete="off">
+            <div id="searchResults" class="absolute z-10 w-full bg-white border rounded-b shadow-lg hidden max-h-60 overflow-y-auto"></div>
+          </div>
+          <input type="hidden" name="userId" id="userId" value="{{#if selectedUser}}{{selectedUser.id}}{{/if}}" required>
+        </div>
+
+        <!-- Selected User Info -->
+        <div id="selectedUserInfo" class="mb-6 p-4 bg-gray-50 rounded {{#unless selectedUser}}hidden{{/unless}}">
+          <h3 class="font-medium mb-2">Selected User</h3>
+          <div id="userDetails">
+            {{#if selectedUser}}
+            <p><strong>Email:</strong> {{selectedUser.email}}</p>
+            <p><strong>Name:</strong> {{selectedUser.first_name}} {{selectedUser.last_name}}</p>
+            <p><strong>Current Tier:</strong> {{selectedUser.subscription_tier}}</p>
+            {{/if}}
+          </div>
+          <div id="existingGrant" class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded hidden">
+            <p class="text-yellow-800 font-medium">This user has an active grant that will be replaced.</p>
+          </div>
+        </div>
+
+        <!-- Grant Type -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Grant Type *</label>
+          <select name="grantType" id="grantType" class="w-full border rounded px-3 py-2" required>
+            <option value="">Select a grant type...</option>
+            <option value="full_access">Full Tier Access</option>
+            <option value="video_limit_override">Custom Video Limit</option>
+            <option value="unlimited_videos">Unlimited Videos</option>
+            <option value="trial_extension">Trial Extension</option>
+          </select>
+          <p class="text-sm text-gray-500 mt-1" id="grantTypeHelp"></p>
+        </div>
+
+        <!-- Tier Selection (for full_access) -->
+        <div id="tierSection" class="mb-6 hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Access Tier *</label>
+          <select name="tierOverride" id="tierOverride" class="w-full border rounded px-3 py-2">
+            <option value="basic">Basic (4 videos/month)</option>
+            <option value="premium">Premium (8 videos/month)</option>
+            <option value="creator">Creator (16 videos/month)</option>
+            <option value="enterprise">Enterprise (50 videos/month)</option>
+          </select>
+        </div>
+
+        <!-- Video Limit (for video_limit_override) -->
+        <div id="videoLimitSection" class="mb-6 hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Monthly Video Limit *</label>
+          <input type="number" name="videoLimitOverride" id="videoLimitOverride" min="1" max="1000"
+            class="w-full border rounded px-3 py-2" placeholder="e.g., 10">
+        </div>
+
+        <!-- Reason -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
+          <textarea name="reason" id="reason" rows="3" class="w-full border rounded px-3 py-2"
+            placeholder="Explain why this grant is being given..." required></textarea>
+          <p class="text-sm text-gray-500 mt-1">This will be logged for audit purposes.</p>
+        </div>
+
+        <!-- Expiration -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Expiration Date (Optional)</label>
+          <input type="datetime-local" name="expiresAt" id="expiresAt" class="w-full border rounded px-3 py-2">
+          <p class="text-sm text-gray-500 mt-1">Leave empty for permanent access (until manually revoked).</p>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex justify-end gap-3">
+          <a href="/admin/grants" class="px-4 py-2 border rounded hover:bg-gray-50">Cancel</a>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" id="submitBtn">
+            Create Grant
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<p>&nbsp;</p>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const userSearch = document.getElementById('userSearch');
+  const searchResults = document.getElementById('searchResults');
+  const userIdInput = document.getElementById('userId');
+  const selectedUserInfo = document.getElementById('selectedUserInfo');
+  const userDetails = document.getElementById('userDetails');
+  const existingGrant = document.getElementById('existingGrant');
+  const grantType = document.getElementById('grantType');
+  const tierSection = document.getElementById('tierSection');
+  const videoLimitSection = document.getElementById('videoLimitSection');
+  const grantTypeHelp = document.getElementById('grantTypeHelp');
+
+  let searchTimeout;
+
+  // Function to select a user
+  async function selectUser(user) {
+    console.log('selectUser called with:', user);
+
+    userSearch.value = user.email;
+    userIdInput.value = user.id;
+    searchResults.classList.add('hidden');
+
+    console.log('userId input set to:', userIdInput.value);
+
+    // Fetch full user details including grant history
+    try {
+      const response = await fetch(`/admin/api/grants/user/${user.id}`);
+      const data = await response.json();
+      console.log('User details fetched:', data);
+
+      userDetails.innerHTML = `
+        <p><strong>Email:</strong> ${data.user.email}</p>
+        <p><strong>Name:</strong> ${data.user.first_name || ''} ${data.user.last_name || ''}</p>
+        <p><strong>Current Tier:</strong> ${data.user.subscription_tier || 'free'}</p>
+        <p><strong>Free Video Used:</strong> ${data.user.free_video_used ? 'Yes' : 'No'}</p>
+      `;
+
+      if (data.activeGrant) {
+        existingGrant.classList.remove('hidden');
+        existingGrant.innerHTML = `
+          <p class="text-yellow-800 font-medium">This user has an active grant:</p>
+          <p class="text-sm text-yellow-700">Type: ${data.activeGrant.grant_type} | Created: ${new Date(data.activeGrant.created_at).toLocaleDateString()}</p>
+          <p class="text-sm text-yellow-700">Creating a new grant will replace the existing one.</p>
+        `;
+      } else {
+        existingGrant.classList.add('hidden');
+      }
+
+      selectedUserInfo.classList.remove('hidden');
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    }
+  }
+
+  // User search functionality
+  userSearch.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+
+    if (query.length < 2) {
+      searchResults.classList.add('hidden');
+      return;
+    }
+
+    searchTimeout = setTimeout(async () => {
+      try {
+        const response = await fetch(`/admin/api/grants/search-users?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        console.log('Search results:', data);
+
+        if (data.users && data.users.length > 0) {
+          searchResults.innerHTML = '';
+          data.users.forEach(user => {
+            const div = document.createElement('div');
+            div.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer border-b search-result-item';
+            div.style.cursor = 'pointer';
+            div.dataset.userId = user.id;
+            div.dataset.userEmail = user.email || '';
+            div.dataset.userFirstname = user.first_name || '';
+            div.dataset.userLastname = user.last_name || '';
+            div.dataset.userTier = user.subscription_tier || 'free';
+            div.dataset.userFreevideo = user.free_video_used || false;
+            div.innerHTML = `<span class="font-medium">${user.email}</span> <span class="text-gray-400">|</span> ${user.first_name || ''} ${user.last_name || ''} <span class="text-gray-400">|</span> <span class="text-gray-500">Tier: ${user.subscription_tier || 'free'}</span>`;
+
+            // Add click handler directly to each result
+            div.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Click on user:', user.id, user.email);
+              selectUser(user);
+            });
+
+            searchResults.appendChild(div);
+          });
+          searchResults.classList.remove('hidden');
+        } else {
+          searchResults.innerHTML = '<div class="px-4 py-2 text-gray-500">No users found</div>';
+          searchResults.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Search error:', error);
+      }
+    }, 300);
+  });
+
+  // Hide search results when pressing Escape or clicking elsewhere
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      searchResults.classList.add('hidden');
+    }
+  });
+
+  // Only hide when clicking outside both the search input AND results
+  document.addEventListener('click', function(e) {
+    if (!userSearch.contains(e.target) && !searchResults.contains(e.target)) {
+      searchResults.classList.add('hidden');
+    }
+  });
+
+  // Grant type change handler
+  grantType.addEventListener('change', function() {
+    const type = this.value;
+
+    tierSection.classList.add('hidden');
+    videoLimitSection.classList.add('hidden');
+
+    switch (type) {
+      case 'full_access':
+        tierSection.classList.remove('hidden');
+        grantTypeHelp.textContent = 'Grants the user full access to a specific subscription tier without payment.';
+        break;
+      case 'video_limit_override':
+        videoLimitSection.classList.remove('hidden');
+        grantTypeHelp.textContent = 'Sets a custom monthly video processing limit for the user.';
+        break;
+      case 'unlimited_videos':
+        grantTypeHelp.textContent = 'Grants unlimited video processing with no monthly limits.';
+        break;
+      case 'trial_extension':
+        grantTypeHelp.textContent = 'Resets the free trial video so the user can process one more video.';
+        break;
+      default:
+        grantTypeHelp.textContent = '';
+    }
+  });
+
+  // Form validation
+  document.getElementById('grantForm').addEventListener('submit', function(e) {
+    console.log('Form submit triggered');
+    console.log('userId:', userIdInput.value);
+    console.log('grantType:', grantType.value);
+    console.log('reason:', document.getElementById('reason').value);
+
+    // Clear previous error states
+    userSearch.classList.remove('border-red-500');
+    document.getElementById('reason').classList.remove('border-red-500');
+    grantType.classList.remove('border-red-500');
+
+    let hasError = false;
+
+    if (!userIdInput.value) {
+      e.preventDefault();
+      userSearch.focus();
+      userSearch.classList.add('border-red-500');
+      showError('Please select a user from the search results');
+      hasError = true;
+    }
+
+    if (!grantType.value) {
+      e.preventDefault();
+      grantType.focus();
+      grantType.classList.add('border-red-500');
+      showError('Please select a grant type');
+      hasError = true;
+    }
+
+    if (!document.getElementById('reason').value.trim()) {
+      e.preventDefault();
+      document.getElementById('reason').focus();
+      document.getElementById('reason').classList.add('border-red-500');
+      showError('Please provide a reason for the grant');
+      hasError = true;
+    }
+
+    if (grantType.value === 'video_limit_override') {
+      const limit = document.getElementById('videoLimitOverride').value;
+      if (!limit || parseInt(limit) < 1) {
+        e.preventDefault();
+        document.getElementById('videoLimitOverride').focus();
+        document.getElementById('videoLimitOverride').classList.add('border-red-500');
+        showError('Please enter a valid video limit (minimum 1)');
+        hasError = true;
+      }
+    }
+
+    if (!hasError) {
+      console.log('Form validation passed, submitting...');
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('submitBtn').textContent = 'Creating Grant...';
+    }
+  });
+
+  function showError(message) {
+    // Remove existing error message if any
+    const existingError = document.getElementById('formError');
+    if (existingError) existingError.remove();
+
+    // Create and insert error message
+    const errorDiv = document.createElement('div');
+    errorDiv.id = 'formError';
+    errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4';
+    errorDiv.textContent = message;
+
+    const form = document.getElementById('grantForm');
+    form.parentNode.insertBefore(errorDiv, form);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (errorDiv.parentNode) errorDiv.remove();
+    }, 5000);
+  }
+});
+</script>
