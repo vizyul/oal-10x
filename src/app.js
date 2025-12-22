@@ -120,6 +120,12 @@ app.use(cookieParser());
 const oauthService = require('./services/oauth.service');
 app.use(oauthService.initialize());
 
+// Microsoft identity verification - serve with correct Content-Type for domain validation
+app.get('/.well-known/microsoft-identity-association', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.sendFile(path.join(__dirname, '..', 'public', '.well-known', 'microsoft-identity-association'));
+});
+
 // Static files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
