@@ -289,6 +289,10 @@ class ContentGenerationService {
         // Update content status to completed ONLY after successful database write
         processingStatusService.updateContentStatus(videoId, prompt.content_type, 'completed');
 
+        // Auto-upload to cloud storage if user has it configured (runs in background)
+        this.triggerCloudStorageUpload(videoRecordId, prompt.content_type, generatedContent, _userId)
+          .catch(err => logger.warn(`Cloud storage upload failed for ${prompt.content_type}:`, err.message));
+
         // Post-processing: If this is clips_text, trigger automatic clip downloads
         if (prompt.content_type === 'clips_text') {
           logger.info(`Clips JSON generated, triggering automatic clip downloads for video ${videoId}`);
@@ -1310,6 +1314,122 @@ class ContentGenerationService {
     } catch (error) {
       logger.error(`Error updating YouTube description for video ${videoId}:`, error.message);
       // Don't throw - this is a non-critical enhancement
+    }
+  }
+
+  /**
+   * Trigger cloud storage upload for generated content (runs in background)
+   * @param {string} videoRecordId - PostgreSQL video record ID
+   * @param {string} contentType - Content type that was generated
+   * @param {string} content - Generated content text
+   * @param {number} userId - User ID
+   */
+  async triggerCloudStorageUpload(videoRecordId, contentType, content, userId) {
+    try {
+      if (!userId) {
+        return; // No user ID, can't check preferences
+      }
+
+      // Get user preferences for cloud storage
+      const prefResult = await database.query(`
+        SELECT cloud_storage_provider, cloud_storage_auto_upload,
+               cloud_storage_upload_format, cloud_storage_folder_per_video
+        FROM user_preferences WHERE users_id = $1
+      `, [userId]);
+
+      const prefs = prefResult.rows[0];
+
+      // Check if auto-upload is enabled
+      if (!prefs || !prefs.cloud_storage_auto_upload || !prefs.cloud_storage_provider) {
+        return; // Auto-upload not enabled
+      }
+
+      const provider = prefs.cloud_storage_provider;
+      const uploadFormat = prefs.cloud_storage_upload_format || 'both';
+
+      // Skip certain content types that shouldn't be auto-uploaded
+      if (['clips_text'].includes(contentType)) {
+        return;
+      }
+
+      logger.info(`Auto-uploading ${contentType} to ${provider} for video ${videoRecordId}`);
+
+      // Get video info for folder naming
+      const { video: videoModel } = require('../models');
+      const video = await videoModel.findById(videoRecordId);
+      if (!video) {
+        logger.warn(`Video ${videoRecordId} not found for cloud upload`);
+        return;
+      }
+
+      const cloudStorageService = require('./cloud-storage.service');
+      const documentService = require('./document-generation.service');
+
+      // Get video title for folder naming
+      const videoTitle = video.video_title || 'Untitled Video';
+
+      // Create folder structure (AmplifyContent/VideoTitle_Code/)
+      // Pass videoRecordId to reuse existing folder for same video
+      const folder = await cloudStorageService.ensureContentFolder(userId, provider, contentType, videoTitle, videoRecordId);
+
+      const formatsToUpload = uploadFormat === 'both' ? ['docx', 'pdf'] : [uploadFormat];
+
+      for (const format of formatsToUpload) {
+        try {
+          const fileName = `${contentType.replace(/_text$/, '')}.${format}`;
+          let fileContent, mimeType;
+
+          if (format === 'docx') {
+            fileContent = await documentService.generateDocx(content, contentType, videoTitle);
+            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          } else {
+            fileContent = await documentService.generatePdf(content, contentType, videoTitle);
+            mimeType = 'application/pdf';
+          }
+
+          const result = await cloudStorageService.uploadFile(
+            userId, provider, fileName, fileContent, mimeType,
+            folder.folderPath || folder.folderId
+          );
+
+          // Track upload in database
+          const cloudStorageCredentials = require('../models/CloudStorageCredentials');
+          const credential = await cloudStorageCredentials.getUserProviderCredential(userId, provider);
+
+          await database.query(`
+            INSERT INTO cloud_storage_uploads (
+              users_id, cloud_storage_credentials_id, videos_id,
+              provider, content_type, file_format, file_name, file_size,
+              cloud_file_id, cloud_file_url, cloud_folder_id, cloud_folder_path,
+              status, completed_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'completed', CURRENT_TIMESTAMP)
+          `, [
+            userId,
+            credential?.id,
+            videoRecordId,
+            provider,
+            contentType,
+            format,
+            fileName,
+            fileContent.length,
+            result.fileId,
+            result.webViewLink || result.webUrl || result.sharedLink,
+            folder.folderId,
+            folder.folderPath
+          ]);
+
+          logger.info(`Auto-uploaded ${fileName} to ${provider} successfully`);
+
+        } catch (formatError) {
+          logger.error(`Failed to upload ${format} ${contentType} to ${provider}:`, formatError.message);
+          logger.info(`Continuing with remaining formats for ${contentType} - one format failure doesn't block others`);
+          // Continue with other formats even if one fails
+        }
+      }
+
+    } catch (error) {
+      logger.error(`Cloud storage auto-upload failed for ${contentType}:`, error.message);
+      // Don't throw - this is a non-critical background task
     }
   }
 }

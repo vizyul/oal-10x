@@ -1,0 +1,782 @@
+<div class="settings-container">
+  <div class="settings-header">
+    <h1>Cloud Storage Settings</h1>
+    <p>Connect your cloud storage accounts to automatically save generated content.</p>
+  </div>
+
+  {{#if successMessage}}
+  <div class="alert alert-success" id="success-alert">
+    <span class="alert-icon">✓</span>
+    <span>{{successMessage}}</span>
+    <button type="button" class="alert-close" data-dismiss="alert">×</button>
+  </div>
+  {{/if}}
+
+  {{#if errorMessage}}
+  <div class="alert alert-error" id="error-alert">
+    <span class="alert-icon">!</span>
+    <span>{{errorMessage}}</span>
+    <button type="button" class="alert-close" data-dismiss="alert">×</button>
+  </div>
+  {{/if}}
+
+  <div class="settings-section">
+    <h2>Connected Accounts</h2>
+    <p class="section-description">Link your cloud storage providers to enable automatic uploads.</p>
+
+    <div class="provider-cards">
+      {{!-- Google Drive --}}
+      <div class="provider-card {{#if connectionStatus.google_drive.connected}}connected{{/if}}">
+        <div class="provider-header">
+          <div class="provider-icon google-drive">
+            <svg viewBox="0 0 24 24" width="32" height="32">
+              <path fill="#4285F4" d="M12 11L7.5 3h9L12 11z"/>
+              <path fill="#34A853" d="M7.5 3L3 11l4.5 8h9L12 11 7.5 3z"/>
+              <path fill="#FBBC05" d="M16.5 19l4.5-8H12l4.5 8z"/>
+              <path fill="#EA4335" d="M7.5 19h9L12 11l-4.5 8z"/>
+            </svg>
+          </div>
+          <div class="provider-info">
+            <h3>Google Drive</h3>
+            {{#if connectionStatus.google_drive.connected}}
+            <span class="status connected">Connected</span>
+            {{else}}
+            <span class="status disconnected">Not connected</span>
+            {{/if}}
+          </div>
+        </div>
+
+        {{#if connectionStatus.google_drive.connected}}
+        <div class="provider-details">
+          <p><strong>Account:</strong> {{connectionStatus.google_drive.accountEmail}}</p>
+          <p><strong>Upload Folder:</strong> <span class="folder-path">/AmplifyContent</span></p>
+        </div>
+        <div class="provider-actions">
+          <button class="btn btn-outline btn-sm disconnect-btn" data-provider="google_drive">Disconnect</button>
+        </div>
+        {{else}}
+        <div class="provider-actions">
+          <a href="/cloud-storage/connect/google_drive" class="btn btn-primary btn-sm">Connect Google Drive</a>
+        </div>
+        {{/if}}
+      </div>
+
+      {{!-- OneDrive --}}
+      <div class="provider-card {{#if connectionStatus.onedrive.connected}}connected{{/if}}">
+        <div class="provider-header">
+          <div class="provider-icon onedrive">
+            <svg viewBox="0 0 24 24" width="32" height="32">
+              <path fill="#0078D4" d="M10.5 18.5c-2.5 0-4.5-2-4.5-4.5 0-2.2 1.6-4 3.7-4.4C10.3 7.1 12.5 5 15.2 5c2.3 0 4.3 1.5 5 3.6.2 0 .5-.1.8-.1 2.2 0 4 1.8 4 4s-1.8 4-4 4H10.5z"/>
+            </svg>
+          </div>
+          <div class="provider-info">
+            <h3>OneDrive</h3>
+            {{#if connectionStatus.onedrive.connected}}
+            <span class="status connected">Connected</span>
+            {{else}}
+            <span class="status disconnected">Not connected</span>
+            {{/if}}
+          </div>
+        </div>
+
+        {{#if connectionStatus.onedrive.connected}}
+        <div class="provider-details">
+          <p><strong>Account:</strong> {{connectionStatus.onedrive.accountEmail}}</p>
+          <p><strong>Upload Folder:</strong> <span class="folder-path">/AmplifyContent</span></p>
+        </div>
+        <div class="provider-actions">
+          <button class="btn btn-outline btn-sm disconnect-btn" data-provider="onedrive">Disconnect</button>
+        </div>
+        {{else}}
+        <div class="provider-actions">
+          <a href="/cloud-storage/connect/onedrive" class="btn btn-primary btn-sm">Connect OneDrive</a>
+        </div>
+        {{/if}}
+      </div>
+
+      {{!-- Dropbox --}}
+      <div class="provider-card {{#if connectionStatus.dropbox.connected}}connected{{/if}}">
+        <div class="provider-header">
+          <div class="provider-icon dropbox">
+            <svg viewBox="0 0 24 24" width="32" height="32">
+              <path fill="#0061FF" d="M6 2l6 4-6 4 6 4-6 4-6-4 6-4-6-4 6-4zm12 0l6 4-6 4 6 4-6 4-6-4 6-4-6-4 6-4zm-6 10l6 4-6 4-6-4 6-4z"/>
+            </svg>
+          </div>
+          <div class="provider-info">
+            <h3>Dropbox</h3>
+            {{#if connectionStatus.dropbox.connected}}
+            <span class="status connected">Connected</span>
+            {{else}}
+            <span class="status disconnected">Not connected</span>
+            {{/if}}
+          </div>
+        </div>
+
+        {{#if connectionStatus.dropbox.connected}}
+        <div class="provider-details">
+          <p><strong>Account:</strong> {{connectionStatus.dropbox.accountEmail}}</p>
+          <p><strong>Upload Folder:</strong> <span class="folder-path">/AmplifyContent</span></p>
+        </div>
+        <div class="provider-actions">
+          <button class="btn btn-outline btn-sm disconnect-btn" data-provider="dropbox">Disconnect</button>
+        </div>
+        {{else}}
+        <div class="provider-actions">
+          <a href="/cloud-storage/connect/dropbox" class="btn btn-primary btn-sm">Connect Dropbox</a>
+        </div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2>Auto-Upload Settings</h2>
+    <p class="section-description">Configure automatic upload behavior for generated content.</p>
+
+    <div class="info-banner">
+      <span class="info-icon">ℹ</span>
+      <div class="info-content">
+        <strong>How auto-upload works:</strong> To automatically upload content after AI generation, select a connected provider below and enable the auto-upload option. Files will be saved to <code>/AmplifyContent/{VideoTitle}/</code> in your cloud storage.
+      </div>
+    </div>
+
+    <form id="preferences-form" class="preferences-form">
+      <div class="form-group">
+        <label for="cloudStorageProvider">Default Upload Provider</label>
+        <select id="cloudStorageProvider" name="cloudStorageProvider" class="form-control">
+          <option value="" {{#unless preferences.cloud_storage_provider}}selected{{/unless}}>None (Manual upload only)</option>
+          <option value="google_drive" {{#if (eq preferences.cloud_storage_provider "google_drive")}}selected{{/if}} {{#unless connectionStatus.google_drive.connected}}disabled{{/unless}}>
+            Google Drive {{#unless connectionStatus.google_drive.connected}}(Not connected){{/unless}}
+          </option>
+          <option value="onedrive" {{#if (eq preferences.cloud_storage_provider "onedrive")}}selected{{/if}} {{#unless connectionStatus.onedrive.connected}}disabled{{/unless}}>
+            OneDrive {{#unless connectionStatus.onedrive.connected}}(Not connected){{/unless}}
+          </option>
+          <option value="dropbox" {{#if (eq preferences.cloud_storage_provider "dropbox")}}selected{{/if}} {{#unless connectionStatus.dropbox.connected}}disabled{{/unless}}>
+            Dropbox {{#unless connectionStatus.dropbox.connected}}(Not connected){{/unless}}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="cloudStorageAutoUpload" name="cloudStorageAutoUpload"
+                 {{#if preferences.cloud_storage_auto_upload}}checked{{/if}}>
+          <span>Automatically upload content after generation</span>
+        </label>
+        <p class="form-hint">When enabled, generated content will be automatically uploaded to your selected provider.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="cloudStorageUploadFormat">Upload Format</label>
+        <select id="cloudStorageUploadFormat" name="cloudStorageUploadFormat" class="form-control">
+          <option value="both" {{#if (eq preferences.cloud_storage_upload_format "both")}}selected{{/if}}>Both DOCX and PDF</option>
+          <option value="docx" {{#if (eq preferences.cloud_storage_upload_format "docx")}}selected{{/if}}>DOCX only</option>
+          <option value="pdf" {{#if (eq preferences.cloud_storage_upload_format "pdf")}}selected{{/if}}>PDF only</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="cloudStorageFolderPerVideo" name="cloudStorageFolderPerVideo"
+                 {{#if preferences.cloud_storage_folder_per_video}}checked{{/if}}>
+          <span>Create separate folder for each video</span>
+        </label>
+        <p class="form-hint">Organizes uploads into folders named by content type and video code.</p>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="save-preferences-btn">Save Preferences</button>
+        <span class="save-status" id="save-status"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="settings-section">
+    <h2>Upload History</h2>
+    <p class="section-description">Recent uploads to your cloud storage.</p>
+    <div id="upload-history" class="upload-history">
+      <p class="loading">Loading upload history...</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.settings-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.settings-header {
+  margin-bottom: 2rem;
+}
+
+.settings-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.settings-header p {
+  color: var(--text-secondary, #666);
+  margin: 0;
+}
+
+.settings-section {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.settings-section h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.section-description {
+  color: var(--text-secondary, #666);
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.alert-success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.alert-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.alert-icon {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.alert-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.alert-close:hover {
+  opacity: 1;
+}
+
+.provider-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.provider-card {
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  padding: 1.25rem;
+  background: var(--bg-secondary, #f9f9f9);
+}
+
+.provider-card.connected {
+  border-color: #28a745;
+  background: #f8fff9;
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.provider-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.provider-info h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.status {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.status.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status.disconnected {
+  background: #e9ecef;
+  color: #6c757d;
+}
+
+.provider-details {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.provider-details p {
+  margin: 0.25rem 0;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.preferences-form {
+  max-width: 500px;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.625rem;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.form-hint {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  margin: 0.5rem 0 0 1.75rem;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.save-status {
+  font-size: 0.9rem;
+  color: #28a745;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary-color, #10b981);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover, #059669);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-color, #ccc);
+  color: var(--text-primary, #333);
+}
+
+.btn-outline:hover {
+  background: var(--bg-secondary, #f5f5f5);
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.upload-history {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.upload-history .loading {
+  color: var(--text-secondary, #666);
+  font-style: italic;
+}
+
+.upload-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.upload-item:last-child {
+  border-bottom: none;
+}
+
+.upload-info {
+  flex: 1;
+}
+
+.upload-info .filename {
+  font-weight: 500;
+}
+
+.upload-info .meta {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.upload-status {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.upload-status.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.upload-status.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.upload-status.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary, #666);
+}
+</style>
+
+<script>
+async function disconnectProvider(provider) {
+  const providerNames = {
+    google_drive: 'Google Drive',
+    onedrive: 'OneDrive',
+    dropbox: 'Dropbox'
+  };
+
+  const confirmed = await showConfirmDialog(
+    'Disconnect ' + providerNames[provider] + '?',
+    'This will remove the connection. You can reconnect at any time.'
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch('/cloud-storage/disconnect/' + provider, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      window.location.reload();
+    } else {
+      showNotification('Failed to disconnect: ' + result.message, 'error');
+    }
+  } catch (error) {
+    showNotification('Failed to disconnect. Please try again.', 'error');
+  }
+}
+
+async function showConfirmDialog(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-dialog">
+        <h3>${title}</h3>
+        <p>${message}</p>
+        <div class="confirm-actions">
+          <button class="btn btn-outline" id="confirm-cancel">Cancel</button>
+          <button class="btn btn-primary" id="confirm-ok">Disconnect</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#confirm-cancel').addEventListener('click', () => {
+      overlay.remove();
+      resolve(false);
+    });
+
+    overlay.querySelector('#confirm-ok').addEventListener('click', () => {
+      overlay.remove();
+      resolve(true);
+    });
+  });
+}
+
+function showNotification(message, type) {
+  const existing = document.querySelector('.notification');
+  if (existing) existing.remove();
+
+  const notification = document.createElement('div');
+  notification.className = 'notification notification-' + type;
+
+  const span = document.createElement('span');
+  span.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', () => notification.remove());
+
+  notification.appendChild(span);
+  notification.appendChild(closeBtn);
+  document.body.appendChild(notification);
+
+  setTimeout(() => notification.remove(), 5000);
+}
+
+// Preferences form handling
+document.getElementById('preferences-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const btn = document.getElementById('save-preferences-btn');
+  const status = document.getElementById('save-status');
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  status.textContent = '';
+
+  try {
+    const response = await fetch('/cloud-storage/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cloudStorageProvider: document.getElementById('cloudStorageProvider').value || null,
+        cloudStorageAutoUpload: document.getElementById('cloudStorageAutoUpload').checked,
+        cloudStorageUploadFormat: document.getElementById('cloudStorageUploadFormat').value,
+        cloudStorageFolderPerVideo: document.getElementById('cloudStorageFolderPerVideo').checked
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      status.textContent = 'Saved!';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    } else {
+      showNotification('Failed to save preferences', 'error');
+    }
+  } catch (error) {
+    showNotification('Failed to save preferences', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Preferences';
+  }
+});
+
+// Load upload history
+async function loadUploadHistory() {
+  const container = document.getElementById('upload-history');
+
+  try {
+    const response = await fetch('/cloud-storage/uploads?limit=10');
+    const result = await response.json();
+
+    if (!result.success || !result.data.length) {
+      container.innerHTML = '<div class="empty-state">No uploads yet. Generated content will appear here after uploading.</div>';
+      return;
+    }
+
+    container.innerHTML = result.data.map(upload => `
+      <div class="upload-item">
+        <div class="upload-info">
+          <div class="filename">${upload.file_name}</div>
+          <div class="meta">${upload.video_title || 'Unknown video'} • ${new Date(upload.created_at).toLocaleDateString()}</div>
+        </div>
+        <span class="upload-status ${upload.status}">${upload.status}</span>
+      </div>
+    `).join('');
+  } catch (error) {
+    container.innerHTML = '<div class="empty-state">Failed to load upload history.</div>';
+  }
+}
+
+loadUploadHistory();
+
+// Initialize event listeners when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Alert dismiss buttons
+  document.querySelectorAll('[data-dismiss="alert"]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      this.parentElement.remove();
+    });
+  });
+
+  // Disconnect buttons
+  document.querySelectorAll('.disconnect-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      disconnectProvider(this.dataset.provider);
+    });
+  });
+});
+</script>
+
+<style>
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 0.5rem;
+}
+
+.confirm-dialog p {
+  margin: 0 0 1.5rem;
+  color: var(--text-secondary, #666);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.notification {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 1rem 1.5rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.notification-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.notification-success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.notification button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.notification button:hover {
+  opacity: 1;
+}
+
+.folder-path {
+  color: var(--text-secondary, #666);
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.info-banner {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.info-icon {
+  font-size: 1.25rem;
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.info-content {
+  font-size: 0.9rem;
+  color: #065f46;
+  line-height: 1.5;
+}
+
+.info-content code {
+  background: rgba(16, 185, 129, 0.15);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+}
+</style>

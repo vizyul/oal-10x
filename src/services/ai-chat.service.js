@@ -447,20 +447,37 @@ class AIChatService {
    */
   async generateContentWithRetry(provider, options, maxRetries = 2) {
     let lastError;
+    let currentProvider = provider;
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
-        logger.debug(`AI generation attempt ${attempt}/${maxRetries + 1} for ${provider}`);
-        const result = await this.generateContent(provider, options);
+        logger.debug(`AI generation attempt ${attempt}/${maxRetries + 1} for ${currentProvider}`);
+        const result = await this.generateContent(currentProvider, options);
 
         if (attempt > 1) {
-          logger.info(`AI generation succeeded on attempt ${attempt} for ${provider}`);
+          logger.info(`AI generation succeeded on attempt ${attempt} for ${currentProvider}`);
         }
 
         return result;
       } catch (error) {
         lastError = error;
-        logger.warn(`AI generation attempt ${attempt} failed for ${provider}:`, error.message);
+        logger.warn(`AI generation attempt ${attempt} failed for ${currentProvider}:`, error.message);
+
+        // Check for RECITATION error (Gemini content policy)
+        const isRecitationError = error.message && error.message.includes('RECITATION');
+
+        if (isRecitationError) {
+          logger.warn(`RECITATION error detected - Gemini blocked content due to similarity to copyrighted material`);
+
+          // Try fallback to OpenAI if available and we were using Gemini
+          if (currentProvider === 'gemini' && this.isProviderAvailable('openai')) {
+            logger.info(`Attempting fallback to OpenAI for ${options.contentType || 'content'}`);
+            currentProvider = 'openai';
+            // Don't count this as a retry attempt - it's a provider switch
+            attempt--;
+            continue;
+          }
+        }
 
         if (attempt <= maxRetries) {
           // Wait before retry (exponential backoff)

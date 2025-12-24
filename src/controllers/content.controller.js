@@ -1,4 +1,5 @@
 const contentService = require('../services/content.service');
+const documentGenerationService = require('../services/document-generation.service');
 const { logger } = require('../utils');
 const { validationResult } = require('express-validator');
 
@@ -627,6 +628,172 @@ class ContentController {
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve content',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Download content as DOCX document
+   * GET /api/content/videos/:videoId/:contentType/download/docx
+   */
+  async downloadDocx(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+      }
+
+      const { videoId, contentType } = req.params;
+      const userId = req.user.id;
+
+      // Verify user owns this video and get video title (and transcript if needed)
+      const database = require('../services/database.service');
+      const videoCheck = await database.query(
+        'SELECT id, video_title, transcript_text FROM videos WHERE id = $1 AND users_id = $2',
+        [videoId, userId]
+      );
+
+      if (videoCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found or access denied'
+        });
+      }
+
+      const videoTitle = videoCheck.rows[0].video_title;
+      let contentText = null;
+
+      // Handle transcript specially - it's stored in videos table, not video_content
+      if (contentType === 'transcript' || contentType === 'transcript_text') {
+        contentText = videoCheck.rows[0].transcript_text;
+      } else {
+        // Get the content from video_content table
+        const content = await contentService.getVideoContentByType(
+          videoId,
+          contentType,
+          { publishedOnly: false }
+        );
+        contentText = content?.content_text;
+      }
+
+      if (!contentText) {
+        return res.status(404).json({
+          success: false,
+          message: `No ${contentType} content found for this video`
+        });
+      }
+
+      // Generate DOCX
+      const docxBuffer = await documentGenerationService.generateDocx(
+        contentText,
+        contentType,
+        videoTitle
+      );
+
+      const filename = documentGenerationService.generateFilename(videoTitle, contentType, 'docx');
+
+      logger.info(`User ${userId} downloading DOCX for video ${videoId}, content type ${contentType}`);
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', docxBuffer.length);
+
+      res.send(docxBuffer);
+
+    } catch (error) {
+      logger.error('Error downloading DOCX:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate DOCX document',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Download content as PDF document
+   * GET /api/content/videos/:videoId/:contentType/download/pdf
+   */
+  async downloadPdf(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+      }
+
+      const { videoId, contentType } = req.params;
+      const userId = req.user.id;
+
+      // Verify user owns this video and get video title (and transcript if needed)
+      const database = require('../services/database.service');
+      const videoCheck = await database.query(
+        'SELECT id, video_title, transcript_text FROM videos WHERE id = $1 AND users_id = $2',
+        [videoId, userId]
+      );
+
+      if (videoCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found or access denied'
+        });
+      }
+
+      const videoTitle = videoCheck.rows[0].video_title;
+      let contentText = null;
+
+      // Handle transcript specially - it's stored in videos table, not video_content
+      if (contentType === 'transcript' || contentType === 'transcript_text') {
+        contentText = videoCheck.rows[0].transcript_text;
+      } else {
+        // Get the content from video_content table
+        const content = await contentService.getVideoContentByType(
+          videoId,
+          contentType,
+          { publishedOnly: false }
+        );
+        contentText = content?.content_text;
+      }
+
+      if (!contentText) {
+        return res.status(404).json({
+          success: false,
+          message: `No ${contentType} content found for this video`
+        });
+      }
+
+      // Generate PDF
+      const pdfBuffer = await documentGenerationService.generatePdf(
+        contentText,
+        contentType,
+        videoTitle
+      );
+
+      const filename = documentGenerationService.generateFilename(videoTitle, contentType, 'pdf');
+
+      logger.info(`User ${userId} downloading PDF for video ${videoId}, content type ${contentType}`);
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+
+      res.send(pdfBuffer);
+
+    } catch (error) {
+      logger.error('Error downloading PDF:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate PDF document',
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }

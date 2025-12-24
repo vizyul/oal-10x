@@ -1,6 +1,16 @@
 const refgrowService = require('../services/refgrow.service');
 const database = require('../services/database.service');
+const subscriptionService = require('../services/subscription.service');
 const { logger } = require('../utils');
+
+// Video limits by tier (matches subscription service)
+const TIER_VIDEO_LIMITS = {
+  'free': 1,
+  'basic': 4,
+  'premium': 8,
+  'creator': 16,
+  'enterprise': 50
+};
 
 class AffiliateController {
   /**
@@ -27,9 +37,22 @@ class AffiliateController {
         isAffiliate: user.is_affiliate
       } : null;
 
+      // Build subscription object for header display
+      let subscription = null;
+      if (user) {
+        const tier = user.subscription_tier || 'free';
+        const usage = await subscriptionService.getCurrentUsage(user.id);
+        subscription = {
+          tier,
+          usage: { videos: usage.videos_processed || 0 },
+          limits: { videos: TIER_VIDEO_LIMITS[tier] || 1 }
+        };
+      }
+
       res.render('affiliate-signup', {
         title: 'Join Our Affiliate Program - Earn 20% Commission',
         user: formattedUser,
+        subscription,
         layout: 'main'
       });
     } catch (error) {
@@ -154,9 +177,24 @@ class AffiliateController {
         isAffiliate: freshUser.is_affiliate
       };
 
+      // Get subscription usage and limits for header display
+      const tier = freshUser.subscription_tier || 'free';
+      const usage = await subscriptionService.getCurrentUsage(freshUser.id);
+
+      const subscription = {
+        tier,
+        usage: {
+          videos: usage.videos_processed || 0
+        },
+        limits: {
+          videos: TIER_VIDEO_LIMITS[tier] || 1
+        }
+      };
+
       res.render('affiliate-dashboard', {
         title: 'Affiliate Dashboard',
         user: formattedUser,
+        subscription,
         stats,
         referralLink,
         referrals,
@@ -257,9 +295,29 @@ class AffiliateController {
    */
   async showTermsPage(req, res) {
     try {
+      // Format user data for header if logged in
+      const formattedUser = req.user ? {
+        ...req.user,
+        firstName: req.user.first_name,
+        lastName: req.user.last_name
+      } : null;
+
+      // Build subscription object for header display
+      let subscription = null;
+      if (req.user) {
+        const tier = req.user.subscription_tier || 'free';
+        const usage = await subscriptionService.getCurrentUsage(req.user.id);
+        subscription = {
+          tier,
+          usage: { videos: usage.videos_processed || 0 },
+          limits: { videos: TIER_VIDEO_LIMITS[tier] || 1 }
+        };
+      }
+
       res.render('affiliate-terms', {
         title: 'Affiliate Terms & Conditions',
-        user: req.user,
+        user: formattedUser,
+        subscription,
         layout: 'main'
       });
     } catch (error) {

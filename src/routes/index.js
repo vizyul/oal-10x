@@ -109,6 +109,85 @@ router.use('/admin', require('./admin.routes'));
 // Affiliate routes
 router.use('/affiliate', require('./affiliate.routes'));
 
+// Cloud storage routes
+router.use('/cloud-storage', require('./cloud-storage.routes'));
+
+// Cloud storage settings page
+router.get('/settings/cloud-storage', require('../middleware').authMiddleware, async (req, res) => {
+  try {
+    const cloudStorageService = require('../services/cloud-storage.service');
+    const database = require('../services/database.service');
+
+    // Get connection status
+    const connectionStatus = await cloudStorageService.getConnectionStatus(req.user.id);
+
+    // Get preferences
+    const prefResult = await database.query(`
+      SELECT cloud_storage_provider, cloud_storage_auto_upload,
+             cloud_storage_upload_format, cloud_storage_folder_per_video
+      FROM user_preferences WHERE users_id = $1
+    `, [req.user.id]);
+
+    const preferences = prefResult.rows[0] || {
+      cloud_storage_provider: null,
+      cloud_storage_auto_upload: false,
+      cloud_storage_upload_format: 'both',
+      cloud_storage_folder_per_video: true
+    };
+
+    // Get query params for success/error messages
+    const { success, error } = req.query;
+
+    res.render('settings/cloud-storage', {
+      title: 'Cloud Storage Settings',
+      description: 'Connect your cloud storage accounts for automatic content uploads',
+      user: req.user,
+      subscription: req.subscriptionInfo,
+      connectionStatus,
+      preferences,
+      successMessage: success ? getSuccessMessage(success) : null,
+      errorMessage: error ? getErrorMessage(error) : null,
+      showHeader: true,
+      showFooter: true,
+      showNav: true
+    });
+  } catch (err) {
+    require('../utils').logger.error('Cloud storage settings page error:', err);
+    res.render('settings/cloud-storage', {
+      title: 'Cloud Storage Settings',
+      user: req.user,
+      subscription: req.subscriptionInfo,
+      connectionStatus: {},
+      preferences: {},
+      errorMessage: 'Failed to load cloud storage settings',
+      showHeader: true,
+      showFooter: true,
+      showNav: true
+    });
+  }
+});
+
+// Helper functions for cloud storage messages
+function getSuccessMessage(code) {
+  const messages = {
+    'google_drive_connected': 'Google Drive connected successfully!',
+    'onedrive_connected': 'OneDrive connected successfully!',
+    'dropbox_connected': 'Dropbox connected successfully!',
+    'preferences_saved': 'Your preferences have been saved.'
+  };
+  return messages[code] || 'Operation completed successfully.';
+}
+
+function getErrorMessage(code) {
+  const messages = {
+    'oauth_denied': 'Connection was cancelled or denied.',
+    'invalid_callback': 'Invalid callback. Please try again.',
+    'invalid_state': 'Session expired. Please try again.',
+    'connection_failed': 'Failed to connect. Please try again.'
+  };
+  return messages[code] || 'An error occurred. Please try again.';
+}
+
 // Terms and Privacy pages
 router.get('/terms', (req, res) => {
   res.render('legal/terms', {

@@ -365,6 +365,12 @@ class TranscriptService {
       // Update transcript status
       if (success) {
         processingStatusService.updateTranscriptStatus(videoId, 'completed');
+
+        // Trigger cloud storage upload for transcript if user has auto-upload enabled
+        if (userId) {
+          this.triggerTranscriptCloudUpload(videoRecordId, transcript, userId)
+            .catch(err => logger.warn(`Transcript cloud storage upload failed:`, err.message));
+        }
       } else {
         processingStatusService.updateTranscriptStatus(videoId, 'failed', 'Database update failed');
       }
@@ -430,6 +436,117 @@ class TranscriptService {
         transcript: null,
         updates: null
       };
+    }
+  }
+
+  /**
+   * Trigger cloud storage upload for transcript (runs in background)
+   * @param {string} videoRecordId - PostgreSQL video record ID
+   * @param {string} transcript - Transcript text
+   * @param {number} userId - User ID
+   */
+  async triggerTranscriptCloudUpload(videoRecordId, transcript, userId) {
+    try {
+      if (!userId) {
+        return; // No user ID, can't check preferences
+      }
+
+      const database = require('./database.service');
+
+      // Get user preferences for cloud storage
+      const prefResult = await database.query(`
+        SELECT cloud_storage_provider, cloud_storage_auto_upload,
+               cloud_storage_upload_format, cloud_storage_folder_per_video
+        FROM user_preferences WHERE users_id = $1
+      `, [userId]);
+
+      const prefs = prefResult.rows[0];
+
+      // Check if auto-upload is enabled
+      if (!prefs || !prefs.cloud_storage_auto_upload || !prefs.cloud_storage_provider) {
+        return; // Auto-upload not enabled
+      }
+
+      const provider = prefs.cloud_storage_provider;
+      const uploadFormat = prefs.cloud_storage_upload_format || 'both';
+
+      logger.info(`Auto-uploading transcript to ${provider} for video ${videoRecordId}`);
+
+      // Get video info for folder naming
+      const video = await videoModel.findById(videoRecordId);
+      if (!video) {
+        logger.warn(`Video ${videoRecordId} not found for cloud upload`);
+        return;
+      }
+
+      const cloudStorageService = require('./cloud-storage.service');
+      const documentService = require('./document-generation.service');
+
+      // Get video title for folder naming
+      const videoTitle = video.video_title || 'Untitled Video';
+
+      // Create folder structure (AmplifyContent/VideoTitle_Code/)
+      // Pass videoRecordId to reuse existing folder for same video
+      const folder = await cloudStorageService.ensureContentFolder(userId, provider, 'transcript_text', videoTitle, videoRecordId);
+
+      const formatsToUpload = uploadFormat === 'both' ? ['docx', 'pdf'] : [uploadFormat];
+
+      for (const format of formatsToUpload) {
+        try {
+          const fileName = `transcript.${format}`;
+          let fileContent, mimeType;
+
+          if (format === 'docx') {
+            fileContent = await documentService.generateDocx(transcript, 'transcript_text', videoTitle);
+            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          } else {
+            fileContent = await documentService.generatePdf(transcript, 'transcript_text', videoTitle);
+            mimeType = 'application/pdf';
+          }
+
+          const result = await cloudStorageService.uploadFile(
+            userId, provider, fileName, fileContent, mimeType,
+            folder.folderPath || folder.folderId
+          );
+
+          // Track upload in database
+          const cloudStorageCredentials = require('../models/CloudStorageCredentials');
+          const credential = await cloudStorageCredentials.getUserProviderCredential(userId, provider);
+
+          await database.query(`
+            INSERT INTO cloud_storage_uploads (
+              users_id, cloud_storage_credentials_id, videos_id,
+              provider, content_type, file_format, file_name, file_size,
+              cloud_file_id, cloud_file_url, cloud_folder_id, cloud_folder_path,
+              status, completed_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'completed', CURRENT_TIMESTAMP)
+          `, [
+            userId,
+            credential?.id,
+            videoRecordId,
+            provider,
+            'transcript_text',
+            format,
+            fileName,
+            fileContent.length,
+            result.fileId,
+            result.webViewLink || result.webUrl || result.sharedLink,
+            folder.folderId,
+            folder.folderPath
+          ]);
+
+          logger.info(`Auto-uploaded ${fileName} to ${provider} successfully`);
+
+        } catch (formatError) {
+          logger.error(`Failed to upload ${format} transcript to ${provider}:`, formatError.message);
+          logger.info(`Continuing with remaining formats for transcript - one format failure doesn't block others`);
+          // Continue with other formats even if one fails
+        }
+      }
+
+    } catch (error) {
+      logger.error(`Transcript cloud storage auto-upload failed:`, error.message);
+      // Don't throw - this is a non-critical background task
     }
   }
 

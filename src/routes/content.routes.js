@@ -116,4 +116,26 @@ router.get('/videos/:videoId/legacy',
   contentController.getVideoContentLegacy
 );
 
+/**
+ * GET /api/content/videos/:videoId/:contentType/download/docx
+ * Download content as DOCX document
+ */
+router.get('/videos/:videoId/:contentType/download/docx',
+  authMiddleware,
+  param('videoId').isInt().withMessage('Video ID must be an integer'),
+  param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
+  contentController.downloadDocx
+);
+
+/**
+ * GET /api/content/videos/:videoId/:contentType/download/pdf
+ * Download content as PDF document
+ */
+router.get('/videos/:videoId/:contentType/download/pdf',
+  authMiddleware,
+  param('videoId').isInt().withMessage('Video ID must be an integer'),
+  param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
+  contentController.downloadPdf
+);
+
 module.exports = router;
