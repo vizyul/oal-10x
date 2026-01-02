@@ -116,6 +116,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parser
 app.use(cookieParser());
 
+// Auto-set canonicalUrl for all templates
+app.use((req, res, next) => {
+  const baseUrl = process.env.BASE_URL || 'https://amplifycontent.ai';
+  res.locals.canonicalUrl = `${baseUrl}${req.originalUrl.split('?')[0]}`;
+  next();
+});
+
 // Initialize OAuth service and Passport
 const oauthService = require('./services/oauth.service');
 app.use(oauthService.initialize());

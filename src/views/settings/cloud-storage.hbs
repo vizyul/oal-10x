@@ -142,7 +142,7 @@
 
     <form id="preferences-form" class="preferences-form">
       <div class="form-group">
-        <label for="cloudStorageProvider">Default Upload Provider</label>
+        <label for="cloudStorageProvider">Default Storage Provider &nbsp;&nbsp;<span style="color:#D00000;">* required</span></label>
         <select id="cloudStorageProvider" name="cloudStorageProvider" class="form-control">
           <option value="" {{#unless preferences.cloud_storage_provider}}selected{{/unless}}>None (Manual upload only)</option>
           <option value="google_drive" {{#if (eq preferences.cloud_storage_provider "google_drive")}}selected{{/if}} {{#unless connectionStatus.google_drive.connected}}disabled{{/unless}}>

@@ -119,12 +119,13 @@
 
 /* Get Started Button Styling - Match Home Page Style */
 .btn-get-started {
-  background: var(--green) !important;
-  color: var(--text-primary) !important;
+  /* background: var(--green) !important; */
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
   padding: var(--space-3) var(--space-6) !important;
   border-radius: var(--radius-md);
   font-weight: 600;
-  border: 3px solid var(--text-primary) !important;
+  border: 1px solid var(--text-primary) !important;
   font-size: var(--font-size-base);
 }
 

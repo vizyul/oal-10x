@@ -262,7 +262,8 @@ router.get('/demo', (req, res) => {
     subscription: req.subscriptionInfo,
     showHeader: true,
     showFooter: true,
-    showNav: true
+    showNav: true,
+    recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY
   });
 });
 
@@ -324,7 +325,55 @@ router.post('/demo', [
         showHeader: true,
         showFooter: true,
         showNav: true,
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         success: 'Thank you for your demo request! Our team will contact you within 24 hours to schedule your personalized demonstration.'
+      });
+    }
+
+    // Verify reCAPTCHA
+    const recaptchaResponse = req.body['g-recaptcha-response'];
+    if (!recaptchaResponse) {
+      return res.render('demo', {
+        title: 'Request Demo',
+        description: 'Schedule a demo of AmplifyContent.ai platform',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
+        error: 'Please complete the reCAPTCHA verification.',
+        formData: req.body
+      });
+    }
+
+    // Verify reCAPTCHA with Google
+    const axios = require('axios');
+    const recaptchaVerify = await axios.post(
+      'https://www.google.com/recaptcha/api/siteverify',
+      null,
+      {
+        params: {
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: recaptchaResponse,
+          remoteip: req.ip
+        }
+      }
+    );
+
+    if (!recaptchaVerify.data.success) {
+      logger.warn('reCAPTCHA verification failed on demo form', { ip: req.ip });
+      return res.render('demo', {
+        title: 'Request Demo',
+        description: 'Schedule a demo of AmplifyContent.ai platform',
+        user: req.user,
+        subscription: req.subscriptionInfo,
+        showHeader: true,
+        showFooter: true,
+        showNav: true,
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
+        error: 'reCAPTCHA verification failed. Please try again.',
+        formData: req.body
       });
     }
 
@@ -346,6 +395,7 @@ router.post('/demo', [
         showHeader: true,
         showFooter: true,
         showNav: true,
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         error: firstError,
         formData: req.body
       });
@@ -382,6 +432,7 @@ router.post('/demo', [
         showHeader: true,
         showFooter: true,
         showNav: true,
+        recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
         success: 'Thank you for your demo request! Our team will contact you within 24 hours to schedule your personalized demonstration.'
       });
     } else {
@@ -398,6 +449,7 @@ router.post('/demo', [
       showHeader: true,
       showFooter: true,
       showNav: true,
+      recaptchaSiteKey: process.env.RECAPTCHA_SITE_KEY,
       error: 'There was an error submitting your demo request. Please try again.',
       formData: req.body
     });

@@ -1,3 +1,6 @@
+<!-- Google reCAPTCHA Script -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
 <!-- Demo Page Header -->
 <section class="demo-header">
   <div class="container">
@@ -88,7 +91,13 @@
                 <option value="exploring">Just exploring</option>
               </select>
             </div>
-            
+
+            <!-- reCAPTCHA -->
+            <div class="form-group recaptcha-group">
+              <label class="form-label">Are you human?</label>
+              <div class="g-recaptcha" data-sitekey="{{recaptchaSiteKey}}" data-action="LOGIN"></div>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-large">Request Demo</button>
           </form>
         </div>
@@ -272,6 +281,32 @@ select.form-control {
 textarea.form-control {
   resize: vertical;
   min-height: 80px;
+}
+
+/* reCAPTCHA Widget Styling */
+.recaptcha-group {
+  margin-bottom: 24px;
+}
+
+.recaptcha-group .form-label {
+  margin-bottom: 12px;
+}
+
+.recaptcha-group .g-recaptcha {
+  display: block;
+  min-height: 78px;
+  overflow: visible;
+}
+
+/* Hide the g-recaptcha-response textarea that Google creates */
+.recaptcha-group textarea,
+.g-recaptcha textarea,
+textarea#g-recaptcha-response,
+textarea[name="g-recaptcha-response"] {
+  display: none !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
 }
 
 .btn {
