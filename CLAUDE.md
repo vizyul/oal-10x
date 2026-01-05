@@ -5,11 +5,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## System Environment
 
 **Operating System**: Windows 11
-**Important**: ALWAYS use Windows commands, never Unix/Linux/Mac commands
-- Use `dir` instead of `ls` to list files
-- Use `type` instead of `cat` to read files  
-- Use Windows path separators (`\` or `/` both work)
-- Use `cd /d` to change drives if needed
+
+### CRITICAL: Windows-Only Commands
+**NEVER use Unix/Linux/Mac commands. This is a STRICT requirement.**
+
+**FORBIDDEN commands (will create errors or artifacts):**
+- `ls` → Use `dir` instead
+- `cat` → Use `type` instead (or use the Read tool)
+- `rm` → Use `del` for files, `rmdir` for directories
+- `rm -rf` → Use `rmdir /s /q`
+- `touch` → Use `echo. >` or `type nul >`
+- `cp` → Use `copy`
+- `mv` → Use `move`
+- `grep` → Use `findstr` (or use the Grep tool)
+- `pwd` → Use `cd` with no arguments
+- `chmod` → Not applicable on Windows
+- `/dev/null` → Use `NUL` (but avoid redirecting to null entirely)
+- `cd /d` with path → Just use `cd` (the `/d` causes parsing issues)
+
+**ALWAYS prefer Claude Code's built-in tools over shell commands:**
+- Use `Read` tool instead of `type` or `cat`
+- Use `Glob` tool instead of `dir` with patterns
+- Use `Grep` tool instead of `findstr`
+- Use `Edit` tool instead of text manipulation commands
+- Use `Write` tool instead of `echo >` redirects
+
+**Other Windows notes:**
 - PowerShell and Command Prompt both available
 - Use `netstat -ano | findstr :PORT` to check ports
 - Use `taskkill //F //PID <process_id>` to kill processes
