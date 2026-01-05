@@ -39,6 +39,7 @@
     "@anthropic-ai/sdk": "^0.61.0",
     "@azure/msal-node": "^3.7.3",
     "@eslint/js": "^9.35.0",
+    "@google-cloud/vertexai": "^1.10.0",
     "@google/generative-ai": "^0.24.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "apify-client": "^2.20.0",

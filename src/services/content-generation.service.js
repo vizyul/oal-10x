@@ -166,7 +166,7 @@ class ContentGenerationService {
 
           // Generate image using Gemini
           const imageResult = await aiChatService.generateImage(imagePrompt, {
-            model: 'gemini-2.0-flash-exp'
+            aspectRatio: '16:9'
           });
 
           if (imageResult.success && imageResult.image) {

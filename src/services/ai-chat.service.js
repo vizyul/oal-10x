@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { VertexAI } = require('@google-cloud/vertexai');
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
 const { logger } = require('../utils');
@@ -6,6 +7,7 @@ const { logger } = require('../utils');
 class AIChatService {
   constructor() {
     this.gemini = null;
+    this.vertexai = null;
     this.openai = null;
     this.anthropic = null;
     this.init();
@@ -42,6 +44,41 @@ class AIChatService {
         logger.info('Anthropic Claude service initialized');
       } else {
         logger.warn('ANTHROPIC_API_KEY not found - Claude features disabled');
+      }
+
+      // Initialize Google Vertex AI (for Imagen 4 image generation)
+      if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
+        try {
+          const vertexConfig = {
+            project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+            location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
+          };
+
+          // Support credentials from JSON string in env var (recommended for production)
+          if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+            try {
+              const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+              vertexConfig.googleAuthOptions = { credentials };
+              logger.info('Using Vertex AI credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON');
+            } catch (parseError) {
+              logger.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', parseError.message);
+              throw parseError;
+            }
+          } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+            // File path approach - SDK will use this automatically
+            logger.info('Using Vertex AI credentials from file:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+          } else {
+            logger.warn('No Vertex AI credentials configured - using Application Default Credentials');
+          }
+
+          this.vertexai = new VertexAI(vertexConfig);
+          logger.info('Google Vertex AI service initialized (Imagen 4 available)');
+        } catch (vertexError) {
+          logger.warn('Failed to initialize Vertex AI:', vertexError.message);
+          this.vertexai = null;
+        }
+      } else {
+        logger.warn('GOOGLE_CLOUD_PROJECT_ID not found - Vertex AI Imagen 4 disabled');
       }
 
       if (!this.gemini && !this.openai && !this.anthropic) {
@@ -576,12 +613,136 @@ class AIChatService {
   }
 
   /**
-   * Generate an image using Gemini Imagen model
+   * Generate an image using Google Vertex AI Imagen 4
    * @param {string} prompt - Image generation prompt
    * @param {Object} options - Generation options
    * @returns {Promise<Object>} Generated image data (base64)
    */
   async generateImage(prompt, options = {}) {
+    try {
+      // Use Gemini for image generation
+      if (this.gemini) {
+        return await this.generateImageWithGemini(prompt, options);
+      } else {
+        throw new Error('No image generation service configured');
+      }
+    } catch (error) {
+      logger.error('Error generating image:', {
+        error: error.message,
+        code: error.code,
+        status: error.status
+      });
+      throw new Error(`Image generation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate an image using Vertex AI Imagen 4
+   * @param {string} prompt - Image generation prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generated image data (base64)
+   */
+  async generateImageWithImagen4(prompt, options = {}) {
+    try {
+      if (!this.vertexai) {
+        throw new Error('Vertex AI not configured - cannot generate images with Imagen 4');
+      }
+
+      const {
+        aspectRatio = '16:9',
+        numberOfImages = 1,
+        negativePrompt = '',
+        personGeneration = 'dont_allow'
+      } = options;
+
+      logger.info('Generating image with Vertex AI Imagen 4', {
+        promptLength: prompt.length,
+        aspectRatio,
+        numberOfImages
+      });
+
+      const startTime = Date.now();
+
+      // Get the Imagen 4 model from environment variable
+      const imagenModel = process.env.VERTEX_IMAGE_MODEL || 'imagen-4.0-generate-001';
+      const imageModel = this.vertexai.preview.getGenerativeModel({
+        model: imagenModel,
+        generationConfig: {
+          responseModalities: ['image', 'text']
+        }
+      });
+
+      // Enhance prompt for better ebook illustrations
+      const enhancedPrompt = `Create a professional, high-quality illustration suitable for an ebook.
+Style: Clean, modern, educational illustration with good contrast and clarity.
+Subject: ${prompt}
+Requirements: No text or watermarks in the image. Professional quality suitable for print.`;
+
+      // Generate image
+      const result = await imageModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: enhancedPrompt }] }]
+      });
+
+      const response = await result.response;
+
+      // Extract image from response
+      let imageData = null;
+      let textResponse = '';
+
+      if (response.candidates && response.candidates[0]) {
+        const parts = response.candidates[0].content.parts;
+        for (const part of parts) {
+          if (part.inlineData) {
+            imageData = {
+              base64: part.inlineData.data,
+              mimeType: part.inlineData.mimeType || 'image/png'
+            };
+          } else if (part.text) {
+            textResponse = part.text;
+          }
+        }
+      }
+
+      if (!imageData) {
+        throw new Error('No image data returned from Imagen 4');
+      }
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      logger.info('Imagen 4 image generation successful', {
+        duration: `${duration}ms`,
+        mimeType: imageData.mimeType,
+        dataLength: imageData.base64.length
+      });
+
+      return {
+        success: true,
+        image: imageData,
+        textResponse,
+        metrics: {
+          duration,
+          model: imagenModel
+        }
+      };
+
+    } catch (error) {
+      logger.error('Error generating image with Imagen 4:', {
+        error: error.message,
+        code: error.code,
+        status: error.status
+      });
+      throw new Error(`Imagen 4 generation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate an image using Gemini native image generation (fallback)
+   * @param {string} prompt - Image generation prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generated image data (base64)
+   */
+  async generateImageWithGemini(prompt, options = {}) {
     try {
       if (!this.gemini) {
         throw new Error('Gemini not configured - cannot generate images');
@@ -592,7 +753,7 @@ class AIChatService {
         aspectRatio = '16:9'
       } = options;
 
-      logger.info('Generating image with Gemini Imagen', {
+      logger.info('Generating image with Gemini', {
         model,
         promptLength: prompt.length,
         aspectRatio
@@ -600,7 +761,7 @@ class AIChatService {
 
       const startTime = Date.now();
 
-      // Use the Imagen model for image generation
+      // Use the Gemini model for image generation
       const imageModel = this.gemini.getGenerativeModel({
         model,
         generationConfig: {
@@ -608,7 +769,21 @@ class AIChatService {
         }
       });
 
-      const result = await imageModel.generateContent(prompt);
+      // Enhance prompt for hyperrealistic, photographic images
+      const enhancedPrompt = `Create a hyperrealistic photograph with the following subject:
+${prompt}
+
+Style requirements:
+- Hyperrealistic photograph, NOT illustration, NOT digital art, NOT AI-generated looking
+- 8K resolution, ultra high detail
+- Natural lighting, photojournalistic style
+- Shot on professional camera (Canon EOS R5 or Sony A7R IV)
+- Shallow depth of field where appropriate
+- Real-world textures and materials
+- No artificial or cartoon-like elements
+- No text or watermarks in the image`;
+
+      const result = await imageModel.generateContent(enhancedPrompt);
       const response = await result.response;
 
       // Extract image from response
@@ -636,7 +811,7 @@ class AIChatService {
       const endTime = Date.now();
       const duration = endTime - startTime;
 
-      logger.info('Image generation successful', {
+      logger.info('Gemini image generation successful', {
         duration: `${duration}ms`,
         mimeType: imageData.mimeType,
         dataLength: imageData.base64.length
@@ -658,7 +833,7 @@ class AIChatService {
         code: error.code,
         status: error.status
       });
-      throw new Error(`Image generation failed: ${error.message}`);
+      throw new Error(`Gemini image generation failed: ${error.message}`);
     }
   }
 
@@ -668,6 +843,15 @@ class AIChatService {
    */
   isImageGenerationAvailable() {
     return !!this.gemini;
+  }
+
+  /**
+   * Get the current image generation provider
+   * @returns {string} The provider name ('gemini' or 'none')
+   */
+  getImageGenerationProvider() {
+    if (this.gemini) return 'gemini';
+    return 'none';
   }
 }
 
