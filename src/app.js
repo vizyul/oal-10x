@@ -84,6 +84,9 @@ app.engine('.hbs', engine({
         return options.fn && options.fn();
       }
       return options.inverse && options.inverse();
+    },
+    firstInitial: (name) => {
+      return name ? name.charAt(0).toUpperCase() : '?';
     }
   }
 }));

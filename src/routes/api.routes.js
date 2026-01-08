@@ -351,6 +351,9 @@ router.use('/subscription', require('./subscription.routes'));
 // Clips routes (handles both /videos/:id/clips and /clips/:id)
 router.use('/', require('./clips.routes'));
 
+// Thumbnail routes (AI thumbnail generation)
+router.use('/thumbnails', require('./thumbnail.routes'));
+
 // Handle 404 for API routes
 // User Preferences Routes
 const PreferencesService = require('../services/preferences.service');

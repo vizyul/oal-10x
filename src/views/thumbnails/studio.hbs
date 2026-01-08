@@ -1,0 +1,176 @@
+{{#> layouts/main}}
+
+<div class="thumbnail-studio-page">
+    <!-- Header Section -->
+    <div class="studio-header">
+        <div class="studio-header-content">
+            <h1>Thumbnail Studio</h1>
+            <p>Create AI-powered thumbnails for your videos</p>
+        </div>
+        {{#if videoTitle}}
+        <div class="studio-video-info">
+            <span class="video-badge">Editing:</span>
+            <span class="video-title">{{videoTitle}}</span>
+        </div>
+        {{/if}}
+    </div>
+
+    <!-- Main Studio Layout -->
+    <div class="studio-main-content">
+        <!-- Left Panel: Controls -->
+        <div class="studio-left-panel">
+            <!-- Video Selector (if no video selected) -->
+            {{#unless videoId}}
+            <div class="studio-section">
+                <h3>Select a Video</h3>
+                <p class="section-helper">Choose a video to create thumbnails for</p>
+                <div id="video-selector-container">
+                    <select id="video-selector" class="form-select">
+                        <option value="">Loading videos...</option>
+                    </select>
+                </div>
+            </div>
+            {{/unless}}
+
+            <!-- Reference Images -->
+            <div class="studio-section">
+                <h3>Reference Images</h3>
+                <p class="section-helper">Upload 1-5 photos for character consistency</p>
+                <div id="reference-images-grid" class="reference-grid"></div>
+                <input type="file" id="reference-image-input" accept="image/*" multiple style="display:none;">
+                <button id="upload-reference-btn" class="btn btn-secondary btn-block">
+                    + Add Reference Photo
+                </button>
+            </div>
+
+            <!-- Content Inputs -->
+            <div class="studio-section">
+                <h3>THUMBNAIL WORDING</h3>
+                <div class="form-group">
+                    <label for="thumbnail-topic">Main Topic *</label>
+                    <input type="text" id="thumbnail-topic" class="form-input" placeholder="e.g., The Truth About AI" value="{{videoTitle}}">
+                </div>
+                <div class="form-group">
+                    <label for="thumbnail-subtopic">Sub-Topic (Optional)</label>
+                    <input type="text" id="thumbnail-subtopic" class="form-input" placeholder="e.g., What They Don't Tell You">
+                </div>
+            </div>
+
+            <!-- Aspect Ratio -->
+            <div class="studio-section">
+                <h3>Aspect Ratio</h3>
+                <div class="ratio-selector">
+                    <label class="ratio-option selected" data-ratio="16:9">
+                        <input type="radio" name="aspect-ratio" value="16:9" checked>
+                        <div class="ratio-preview ratio-16-9"></div>
+                        <span>16:9 Standard</span>
+                    </label>
+                    <label class="ratio-option" data-ratio="9:16">
+                        <input type="radio" name="aspect-ratio" value="9:16">
+                        <div class="ratio-preview ratio-9-16"></div>
+                        <span>9:16 Shorts</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <div class="studio-section">
+                <button id="generate-btn" class="btn btn-primary btn-large btn-block">
+                    Generate Viral Thumbnails
+                </button>
+                <p class="section-helper text-center">Creates 4 style variations</p>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="studio-right-panel">
+            <!-- Expression Selector -->
+            <div class="studio-section studio-section-inline">
+                <h3>Select Expression</h3>
+                <div id="expression-selector" class="chip-selector chip-selector-flow"></div>
+            </div>
+
+            <!-- Category Selector -->
+            <div class="studio-section studio-section-inline">
+                <h3>Select Content Category</h3>
+                <div id="category-selector" class="chip-selector chip-selector-flow"></div>
+            </div>
+
+            <div class="results-header">
+                <h3>Generated Thumbnails</h3>
+                <span id="thumbnail-count" class="count-badge">0/4</span>
+            </div>
+
+            <!-- Progress Indicator -->
+            <div id="generation-progress" class="generation-progress">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <p id="progress-text" class="progress-text">Generating...</p>
+            </div>
+
+            <!-- Thumbnail Grid -->
+            <div id="thumbnails-grid" class="thumbnails-grid">
+                <div class="thumbnail-slot placeholder" data-slot="1">
+                    <span class="slot-label">Cinematic Drama</span>
+                </div>
+                <div class="thumbnail-slot placeholder" data-slot="2">
+                    <span class="slot-label">Hyper-Vibrant Pop</span>
+                </div>
+                <div class="thumbnail-slot placeholder" data-slot="3">
+                    <span class="slot-label">Clean & Studio</span>
+                </div>
+                <div class="thumbnail-slot placeholder" data-slot="4">
+                    <span class="slot-label">Gritty & Mystery</span>
+                </div>
+            </div>
+
+            <!-- Actions Panel (shows when thumbnail selected) -->
+            <div id="thumbnail-actions-panel" class="thumbnail-actions-panel">
+                <div class="actions-header">
+                    <div class="selected-preview">
+                        <img id="selected-preview-img" src="" alt="Selected thumbnail">
+                    </div>
+                    <div class="actions-info">
+                        <h4 id="selected-style-name">Selected Thumbnail</h4>
+                        <p id="selected-style-desc">Click a thumbnail to select it</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button id="use-thumbnail-btn" class="btn btn-primary">
+                        Use This Thumbnail
+                    </button>
+                    <button id="refine-toggle-btn" class="btn btn-secondary">
+                        Refine with Feedback
+                    </button>
+                    <button id="download-thumbnail-btn" class="btn btn-secondary">
+                        Download
+                    </button>
+                </div>
+
+                <!-- Refine Panel -->
+                <div id="refine-panel" class="refine-panel">
+                    <h4>Refine Thumbnail</h4>
+                    <textarea id="refine-instruction" class="form-textarea" placeholder="Describe what to change... e.g., 'Make the background more dramatic' or 'Change expression to more surprised'"></textarea>
+                    <div class="refine-actions">
+                        <button id="refine-cancel-btn" class="btn btn-secondary">Cancel</button>
+                        <button id="refine-apply-btn" class="btn btn-primary">Apply Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Pass data to JavaScript -->
+<script>
+    window.thumbnailStudioConfig = {
+        videoId: '{{videoId}}' || null,
+        videoTitle: '{{videoTitle}}' || ''
+    };
+</script>
+
+{{/layouts/main}}

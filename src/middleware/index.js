@@ -18,7 +18,7 @@ const securityMiddleware = [
         fontSrc: ['\'self\'', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
         scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', 'https://analytics.tiktok.com', 'https://connect.facebook.net'],
         imgSrc: ['\'self\'', 'data:', 'https:'],
-        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://analytics.tiktok.com', 'https://www.facebook.com'],
+        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://analytics.tiktok.com', 'https://www.facebook.com', 'https://res.cloudinary.com'],
         frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com']
       }
     },

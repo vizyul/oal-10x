@@ -12,6 +12,9 @@
     <!-- CSS -->
     <link href="/css/main.css" rel="stylesheet">
     <link href="/css/header.css" rel="stylesheet">
+    {{#if user}}
+    <link href="/css/sidebar.css" rel="stylesheet">
+    {{/if}}
     {{#if additionalCSS}}
         {{#each additionalCSS}}
             <link href="{{this}}" rel="stylesheet">
@@ -60,54 +63,60 @@
     <!-- Additional head content -->
     {{{head}}}
 </head>
-<body class="{{bodyClass}}">
+<body class="{{bodyClass}}{{#if user}} has-sidebar{{/if}}">
     <!-- Global Toolbar -->
     {{> header}}
-    
+
+    <!-- Sidebar (authenticated users only) -->
+    {{> sidebar}}
+
     <!-- Additional Header -->
     {{#if showHeader}}
         {{> nav}}
     {{/if}}
-    
+
     <!-- Navigation -->
     {{#if showNav}}
         {{> nav}}
     {{/if}}
-    
-    <!-- Flash Messages -->
-    {{#if flashMessages}}
-        <div class="flash-messages">
-            {{#each flashMessages.success}}
-                <div class="alert alert-success">
-                    <span class="alert-icon">✓</span>
-                    <span class="alert-message">{{this}}</span>
-                </div>
-            {{/each}}
-            {{#each flashMessages.error}}
-                <div class="alert alert-error">
-                    <span class="alert-icon">✗</span>
-                    <span class="alert-message">{{this}}</span>
-                </div>
-            {{/each}}
-            {{#each flashMessages.warning}}
-                <div class="alert alert-warning">
-                    <span class="alert-icon">⚠</span>
-                    <span class="alert-message">{{this}}</span>
-                </div>
-            {{/each}}
-            {{#each flashMessages.info}}
-                <div class="alert alert-info">
-                    <span class="alert-icon">ℹ</span>
-                    <span class="alert-message">{{this}}</span>
-                </div>
-            {{/each}}
-        </div>
-    {{/if}}
-    
-    <!-- Main Content -->
-    <main class="main-content">
-        {{{body}}}
-    </main>
+
+    <!-- App Layout Container -->
+    <div class="app-layout">
+        <!-- Flash Messages -->
+        {{#if flashMessages}}
+            <div class="flash-messages">
+                {{#each flashMessages.success}}
+                    <div class="alert alert-success">
+                        <span class="alert-icon">✓</span>
+                        <span class="alert-message">{{this}}</span>
+                    </div>
+                {{/each}}
+                {{#each flashMessages.error}}
+                    <div class="alert alert-error">
+                        <span class="alert-icon">✗</span>
+                        <span class="alert-message">{{this}}</span>
+                    </div>
+                {{/each}}
+                {{#each flashMessages.warning}}
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠</span>
+                        <span class="alert-message">{{this}}</span>
+                    </div>
+                {{/each}}
+                {{#each flashMessages.info}}
+                    <div class="alert alert-info">
+                        <span class="alert-icon">ℹ</span>
+                        <span class="alert-message">{{this}}</span>
+                    </div>
+                {{/each}}
+            </div>
+        {{/if}}
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {{{body}}}
+        </main>
+    </div>
     
     <!-- Footer -->
     {{> footer}}
@@ -121,6 +130,9 @@
     
     <!-- JavaScript -->
     <script src="/js/main.js"></script>
+    {{#if user}}
+    <script src="/js/sidebar.js"></script>
+    {{/if}}
     {{#if additionalJS}}
         {{#each additionalJS}}
             <script src="{{this}}"></script>

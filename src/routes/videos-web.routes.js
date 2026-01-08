@@ -22,8 +22,8 @@ router.get('/', (req, res) => {
     showHeader: true,
     showFooter: true,
     showNav: true,
-    additionalCSS: ['/css/videos.css'],
-    additionalJS: ['/js/videos.js']
+    additionalCSS: ['/css/videos.css', '/css/thumbnail-studio.css'],
+    additionalJS: ['/js/videos.js', '/js/thumbnail-studio.js']
   });
 });
 

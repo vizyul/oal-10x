@@ -114,6 +114,38 @@ body {
   color: var(--text-primary, #000000);
 }
 
+/* App Layout with Sidebar */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 60px);
+}
+
+.has-sidebar .app-layout {
+  margin-left: 220px;
+  transition: margin-left 0.3s ease;
+}
+
+.has-sidebar.sidebar-collapsed .app-layout {
+  margin-left: 60px;
+}
+
+.main-content {
+  flex: 1;
+  padding: 0;
+}
+
+/* Responsive sidebar adjustments */
+@media (max-width: 768px) {
+  .has-sidebar .app-layout {
+    margin-left: 0;
+  }
+
+  .has-sidebar.sidebar-collapsed .app-layout {
+    margin-left: 0;
+  }
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;

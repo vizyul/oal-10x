@@ -102,6 +102,7 @@ build/
 
 # Railway
 .railway/
+.viraltube/
 
 # Test and setup files
 setup-airtable.js

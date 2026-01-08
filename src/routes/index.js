@@ -95,6 +95,9 @@ router.use('/subscription', require('./subscription-web.routes'));
 // Videos routes
 router.use('/videos', require('./videos-web.routes'));
 
+// Thumbnails routes (web pages)
+router.use('/thumbnails', require('./thumbnails-web.routes'));
+
 // Account deletion routes
 router.use('/account', require('./account-deletion.routes'));
 

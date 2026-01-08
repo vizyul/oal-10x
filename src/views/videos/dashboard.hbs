@@ -126,13 +126,13 @@ class ProcessingStatusManager {
   async init() {
     // Load content types first
     await this.loadContentTypes();
-    
+
     // Initialize Socket.IO connection
     this.initSocket();
-    
+
     // Set up UI event listeners
     this.setupUIListeners();
-    
+
     // Check for processing videos on page load
     this.checkForProcessingVideos();
   }
@@ -174,17 +174,17 @@ class ProcessingStatusManager {
     if (typeof io === 'undefined') {
       return;
     }
-    
+
     // Get JWT token from secure endpoint
     const token = await this.getAuthToken();
-    
+
     if (!token) {
       return;
     }
 
     try {
       // Use same origin as the current page
-      
+
       this.socket = io({
         auth: { token: token },
         transports: ['websocket', 'polling'] // Try websocket first, fallback to polling
@@ -257,17 +257,21 @@ class ProcessingStatusManager {
     // Check URL parameters for recently imported videos
     const urlParams = new URLSearchParams(window.location.search);
     const importedVideos = urlParams.get('imported');
-    
-    if (importedVideos) {
+    const processingFlag = urlParams.get('processing');
+
+    if (importedVideos || processingFlag === 'true') {
       // Show the processing status dashboard
       this.showProcessingDashboard();
-      
-      // Clear the imported parameter but keep others
+
+      // Clear the parameters but keep others
       const newUrl = new URL(window.location);
       newUrl.searchParams.delete('imported');
+      newUrl.searchParams.delete('processing');
+      newUrl.searchParams.delete('count');
+      newUrl.searchParams.delete('contentTypes');
       window.history.replaceState({}, '', newUrl.toString());
     }
-    
+
     // Also try to connect and request status regardless of URL params
     // This helps show any ongoing processing from previous sessions
     setTimeout(() => {
@@ -384,6 +388,13 @@ class ProcessingStatusManager {
       expandedAccordions.add(videoId);
     });
 
+    // Track existing video IDs before update to detect new videos
+    const existingVideoIds = new Set();
+    accordionBody.querySelectorAll('.video-accordion').forEach(accordion => {
+      const videoId = accordion.getAttribute('data-video-id');
+      if (videoId) existingVideoIds.add(videoId);
+    });
+
     // Convert map to array and sort by start time
     const videos = Array.from(this.processingVideos.values())
       .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -395,13 +406,20 @@ class ProcessingStatusManager {
     }
     if (accordionBody) {
       accordionBody.innerHTML = videos.map(video => this.createVideoAccordion(video)).join('');
-      
+
       // Add event listeners for accordion toggles and cancel buttons
       this.setupAccordionEventListeners();
-      
+
       // Restore expanded state for accordions that were previously expanded
       expandedAccordions.forEach(videoId => {
         this.toggleVideoAccordion(videoId, true); // true = force expand
+      });
+
+      // Auto-expand NEW videos (ones that weren't in the previous render)
+      videos.forEach(video => {
+        if (!existingVideoIds.has(video.videoId) && !expandedAccordions.has(video.videoId)) {
+          this.toggleVideoAccordion(video.videoId, true); // Auto-expand new videos
+        }
       });
     }
 
@@ -1598,8 +1616,19 @@ async function loadCompletedVideos() {
                       `;
                     }).join('')}
                   </div>
+                  <button class="thumbnail-generate-btn" data-video-id="${video.id}" data-video-title="${(video.video_title || 'Untitled Video').replace(/"/g, '&quot;')}">
+                    <span class="btn-icon">🎨</span>
+                    Generate Viral Thumbnails
+                  </button>
                 </div>
-              ` : ''}
+              ` : `
+                <div class="video-actions">
+                  <button class="thumbnail-generate-btn" data-video-id="${video.id}" data-video-title="${(video.video_title || 'Untitled Video').replace(/"/g, '&quot;')}">
+                    <span class="btn-icon">🎨</span>
+                    AI Thumbnails
+                  </button>
+                </div>
+              `}
             </div>
           `;
         }).join('');
@@ -1751,25 +1780,41 @@ function setupFilteringEventListeners() {
 function setupVideoCardEventListeners() {
   // Content icon wrappers in video cards
   const contentIcons = document.querySelectorAll('.content-icon-wrapper');
-  
+
   contentIcons.forEach((iconWrapper, index) => {
     const videoId = iconWrapper.getAttribute('data-video-id');
     const contentType = iconWrapper.getAttribute('data-content-type');
     const contentLabel = iconWrapper.getAttribute('data-content-label');
-    
-    
+
+
     iconWrapper.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       const debugKey = iconWrapper.getAttribute('data-debug-key');
       const debugIcon = iconWrapper.getAttribute('data-debug-icon');
-      
-      
+
+
       if (statusManager) {
         statusManager.viewContent(videoId, contentType, contentLabel);
       } else {
         console.error('❌ statusManager not available');
+      }
+    });
+  });
+
+  // Thumbnail Studio buttons
+  const thumbnailButtons = document.querySelectorAll('.thumbnail-generate-btn');
+  thumbnailButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const videoId = btn.getAttribute('data-video-id');
+      const videoTitle = btn.getAttribute('data-video-title');
+      if (typeof openThumbnailStudio === 'function') {
+        openThumbnailStudio(videoId, videoTitle);
+      } else {
+        console.error('Thumbnail Studio not loaded');
       }
     });
   });
@@ -3539,6 +3584,11 @@ async function populateProcessingTable() {
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
+}
+
+.thumbnail-generate-btn {
+  margin-left: 10px;
+  margin-bottom: 10px;
 }
 
 /* Responsive Content Modal */

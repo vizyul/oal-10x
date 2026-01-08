@@ -207,9 +207,9 @@
   align-items: center;
   gap: var(--space-2);
   background: transparent;
-  border: 3px solid var(--text-primary);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--text-primary);
@@ -220,9 +220,7 @@
 .profile-trigger:hover {
   background: var(--background-secondary);
   color: var(--text-primary);
-  border-color: var(--accent-color);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-hover);
 }
 
 .profile-avatar {
@@ -239,6 +237,53 @@
 .profile-trigger:hover .profile-avatar {
   background: var(--accent-color);
   color: var(--brand-black);
+}
+
+/* User Initial Circle */
+.user-initial-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.user-initial-circle::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 10001;
+  pointer-events: none;
+  text-transform: none;
+}
+
+.user-initial-circle:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+.profile-trigger:hover .user-initial-circle {
+  background: var(--green-hover);
 }
 
 .profile-name {
