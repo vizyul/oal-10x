@@ -474,10 +474,14 @@ class ThumbnailGeneratorService {
 
                 const imageData = await generateSingleThumbnail(prompt, referenceImages, aspectRatio);
 
-                // Upload to Cloudinary
+                // Generate meaningful public ID: thumb_v{videoId}_{style}_{timestamp}
+                const timestamp = Date.now();
+                const publicId = `thumb_v${videoId}_${style.key}_${timestamp}`;
+
+                // Upload to Cloudinary (pass aspectRatio for per-ratio limit enforcement)
                 const uploadResult = await cloudinaryService.uploadThumbnail(
                     imageData,
-                    { userId, videoId },
+                    { userId, videoId, publicId, aspectRatio },
                     database
                 );
 
@@ -504,6 +508,26 @@ class ThumbnailGeneratorService {
                     styleName: style.name
                 });
 
+                // Update job with new thumbnail ID immediately (for incremental display)
+                if (jobId) {
+                    const thumbnailIds = results.map(r => r.id);
+                    const progress = Math.round(((i + 1) / styles.length) * 100);
+                    logger.info(`Updating job ${jobId} with ${thumbnailIds.length} thumbnails, progress: ${progress}%`);
+
+                    await database.query(
+                        `UPDATE thumbnail_generation_jobs
+                         SET generated_thumbnail_ids = $1::jsonb,
+                             progress = $2,
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = $3`,
+                        [
+                            JSON.stringify(thumbnailIds),
+                            progress,
+                            jobId
+                        ]
+                    );
+                }
+
                 logger.info(`Thumbnail ${i + 1}/4 generated and saved: ${uploadResult.publicId}`);
 
             } catch (error) {
@@ -515,10 +539,11 @@ class ThumbnailGeneratorService {
         // Update job status
         if (jobId) {
             const finalStatus = errors.length === styles.length ? 'failed' : 'completed';
+            logger.info(`Job ${jobId} ${finalStatus} with ${results.length} thumbnails`);
             await database.query(
                 `UPDATE thumbnail_generation_jobs
                  SET status = $1, progress = 100,
-                     generated_thumbnail_ids = $2,
+                     generated_thumbnail_ids = $2::jsonb,
                      completed_at = CURRENT_TIMESTAMP,
                      error_message = $3,
                      updated_at = CURRENT_TIMESTAMP
@@ -583,10 +608,15 @@ class ThumbnailGeneratorService {
         // Edit with Gemini
         const editedImageData = await editThumbnail(base64, instruction);
 
-        // Upload edited version
+        // Generate meaningful public ID: thumb_v{videoId}_{style}_refined_v{version}_{timestamp}
+        const newVersion = (original.version || 0) + 1;
+        const timestamp = Date.now();
+        const publicId = `thumb_v${original.video_id}_${original.style_name}_refined_v${newVersion}_${timestamp}`;
+
+        // Upload edited version (pass aspectRatio from original for per-ratio limit enforcement)
         const uploadResult = await cloudinaryService.uploadThumbnail(
             editedImageData,
-            { userId, videoId: original.video_id },
+            { userId, videoId: original.video_id, publicId, aspectRatio: original.aspect_ratio },
             database
         );
 
@@ -725,8 +755,16 @@ class ThumbnailGeneratorService {
     async uploadReferenceImage(userId, imageData, options = {}) {
         const { displayName, mimeType = 'image/png' } = options;
 
+        // Generate meaningful public ID: ref_{sanitizedName}_{timestamp}
+        const timestamp = Date.now();
+        const sanitizedName = (displayName || 'image')
+            .replace(/\.[^/.]+$/, '')  // Remove file extension
+            .replace(/[^a-zA-Z0-9]/g, '_')  // Replace special chars with underscore
+            .substring(0, 30);  // Limit length
+        const publicId = `ref_${sanitizedName}_${timestamp}`;
+
         // Upload to Cloudinary
-        const uploadResult = await cloudinaryService.uploadReferenceImage(imageData, { userId });
+        const uploadResult = await cloudinaryService.uploadReferenceImage(imageData, { userId, publicId });
 
         // Save to database
         const result = await database.query(

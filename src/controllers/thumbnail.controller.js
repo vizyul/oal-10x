@@ -307,9 +307,12 @@ class ThumbnailController {
 
             const job = result.rows[0];
 
-            // If completed, include the generated thumbnails
+            // Debug logging
+            logger.info(`Job ${job.id} status: ${job.status}, progress: ${job.progress}, thumbnail_ids: ${JSON.stringify(job.generated_thumbnail_ids)}`);
+
+            // Include generated thumbnails (even while processing for incremental display)
             let thumbnails = [];
-            if (job.status === 'completed' && job.generated_thumbnail_ids?.length) {
+            if (job.generated_thumbnail_ids?.length) {
                 const thumbResult = await database.query(
                     `SELECT t.*, s.name as style_display_name
                      FROM video_thumbnails t

@@ -415,12 +415,7 @@ class ProcessingStatusManager {
         this.toggleVideoAccordion(videoId, true); // true = force expand
       });
 
-      // Auto-expand NEW videos (ones that weren't in the previous render)
-      videos.forEach(video => {
-        if (!existingVideoIds.has(video.videoId) && !expandedAccordions.has(video.videoId)) {
-          this.toggleVideoAccordion(video.videoId, true); // Auto-expand new videos
-        }
-      });
+      // New videos start collapsed - user can expand manually if needed
     }
 
     // Keep the processing dashboard visible even when completed
@@ -701,8 +696,13 @@ class ProcessingStatusManager {
     const downloadDocxBtn = modalBackdrop.querySelector('.download-docx-btn');
     const downloadPdfBtn = modalBackdrop.querySelector('.download-pdf-btn');
 
-    // Close handlers
-    const closeModal = () => {
+    // Close handlers - prevent event propagation to avoid triggering elements behind modal
+    const closeModal = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
       modalBackdrop.remove();
       document.body.style.overflow = ''; // Restore scrolling
     };
@@ -1149,21 +1149,28 @@ class ProcessingStatusManager {
     const closeBtnFooter = modalBackdrop.querySelector('.content-modal-close-btn');
     const contentItems = modalBackdrop.querySelectorAll('.content-list-item');
     
-    // Close handlers
-    const closeModal = () => {
+    // Close handlers - prevent event propagation to avoid triggering elements behind modal
+    const closeModal = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
       modalBackdrop.remove();
       document.body.style.overflow = '';
     };
-    
+
     closeBtn.addEventListener('click', closeModal);
     closeBtnFooter.addEventListener('click', closeModal);
-    
+
     // Content item handlers
     contentItems.forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const contentType = item.getAttribute('data-content-type');
         const contentLabel = item.getAttribute('data-content-label');
-        closeModal();
+        closeModal(e);
         // Small delay to let the modal close first
         setTimeout(() => {
           this.viewContent(videoId, contentType, contentLabel);
@@ -1616,19 +1623,8 @@ async function loadCompletedVideos() {
                       `;
                     }).join('')}
                   </div>
-                  <button class="thumbnail-generate-btn" data-video-id="${video.id}" data-video-title="${(video.video_title || 'Untitled Video').replace(/"/g, '&quot;')}">
-                    <span class="btn-icon">🎨</span>
-                    Generate Viral Thumbnails
-                  </button>
                 </div>
-              ` : `
-                <div class="video-actions">
-                  <button class="thumbnail-generate-btn" data-video-id="${video.id}" data-video-title="${(video.video_title || 'Untitled Video').replace(/"/g, '&quot;')}">
-                    <span class="btn-icon">🎨</span>
-                    AI Thumbnails
-                  </button>
-                </div>
-              `}
+              ` : ``}
             </div>
           `;
         }).join('');
@@ -1803,21 +1799,6 @@ function setupVideoCardEventListeners() {
     });
   });
 
-  // Thumbnail Studio buttons
-  const thumbnailButtons = document.querySelectorAll('.thumbnail-generate-btn');
-  thumbnailButtons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const videoId = btn.getAttribute('data-video-id');
-      const videoTitle = btn.getAttribute('data-video-title');
-      if (typeof openThumbnailStudio === 'function') {
-        openThumbnailStudio(videoId, videoTitle);
-      } else {
-        console.error('Thumbnail Studio not loaded');
-      }
-    });
-  });
 }
 
 function setupSmartTooltips() {
@@ -3294,6 +3275,7 @@ async function populateProcessingTable() {
 .video-actions {
   margin-top: 12px;
   padding-top: 12px;
+  margin-bottom: 6px;
   border-top: 1px solid #f3f4f6;
 }
 
@@ -3584,11 +3566,6 @@ async function populateProcessingTable() {
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
-}
-
-.thumbnail-generate-btn {
-  margin-left: 10px;
-  margin-bottom: 10px;
 }
 
 /* Responsive Content Modal */

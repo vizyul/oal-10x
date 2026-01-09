@@ -115,11 +115,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle window resize
     window.addEventListener('resize', handleResize);
 
+    // Flag to prevent rapid multiple toggles (touch device issue)
+    let isTogglingSidebar = false;
+
     // Expose functions globally for mobile menu toggle in header
     window.sidebarFunctions = {
         open: openSidebar,
         close: closeSidebar,
         toggle: function() {
+            // Prevent rapid multiple toggles
+            if (isTogglingSidebar) return;
+            isTogglingSidebar = true;
+
+            // Reset flag after a short delay
+            setTimeout(function() {
+                isTogglingSidebar = false;
+            }, 300);
+
             if (window.innerWidth <= 768) {
                 if (sidebar.classList.contains('open')) {
                     closeSidebar();
@@ -140,29 +152,49 @@ document.addEventListener('DOMContentLoaded', function() {
     const profileDropdown = document.getElementById('sidebar-profile-dropdown');
 
     if (profileTrigger && profileDropdown) {
+        // Flag to prevent rapid multiple toggles (touch device issue)
+        let isToggling = false;
+
         /**
          * Toggle profile dropdown visibility
          */
         function toggleProfileDropdown(e) {
+            e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
+
+            // Prevent rapid multiple toggles
+            if (isToggling) return;
+            isToggling = true;
+
             profileDropdown.classList.toggle('active');
+
+            // Reset flag after a short delay
+            setTimeout(function() {
+                isToggling = false;
+            }, 300);
         }
 
         /**
          * Close profile dropdown
          */
         function closeProfileDropdown() {
-            profileDropdown.classList.remove('active');
+            if (!isToggling) {
+                profileDropdown.classList.remove('active');
+            }
         }
 
         // Click on profile circle toggles dropdown
         profileTrigger.addEventListener('click', toggleProfileDropdown);
 
-        // Close dropdown when clicking outside
+        // Close dropdown when clicking outside (with delay to prevent conflict)
         document.addEventListener('click', function(e) {
-            if (!profileDropdown.contains(e.target) && !profileTrigger.contains(e.target)) {
-                closeProfileDropdown();
-            }
+            // Small delay to let the toggle complete first
+            setTimeout(function() {
+                if (!profileDropdown.contains(e.target) && !profileTrigger.contains(e.target)) {
+                    closeProfileDropdown();
+                }
+            }, 10);
         });
 
         // Close dropdown on Escape key

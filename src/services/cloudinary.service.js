@@ -13,12 +13,15 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const FOLDERS = {
-    THUMBNAILS: 'thumbnails',
+// Root folder for all app assets
+const ROOT_FOLDER = 'thumbnails';
+
+// Subfolder names within user folders
+const SUBFOLDERS = {
     REFERENCE_IMAGES: 'reference_images'
 };
 
-const MAX_THUMBNAILS_PER_VIDEO = 4;
+const MAX_THUMBNAILS_PER_ASPECT_RATIO = 4;  // 4 per aspect ratio (8 total: 4 for 16:9 + 4 for 9:16)
 
 class CloudinaryService {
     constructor() {
@@ -27,6 +30,9 @@ class CloudinaryService {
             process.env.CLOUDINARY_API_KEY &&
             process.env.CLOUDINARY_API_SECRET
         );
+
+        // Cache of created folders to avoid redundant API calls
+        this.createdFolders = new Set();
 
         if (this.isConfigured) {
             logger.info('Cloudinary service initialized successfully');
@@ -45,6 +51,44 @@ class CloudinaryService {
     }
 
     /**
+     * Ensure a folder exists in Cloudinary (creates parent folders if needed)
+     * @param {string} folderPath - Full folder path (e.g., 'user_145/video_303')
+     */
+    async ensureFolderExists(folderPath) {
+        if (!folderPath || this.createdFolders.has(folderPath)) {
+            return; // Already created or no folder needed
+        }
+
+        // Create parent folders first (e.g., 'user_145' before 'user_145/video_303')
+        const parts = folderPath.split('/');
+        let currentPath = '';
+
+        for (const part of parts) {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+            if (this.createdFolders.has(currentPath)) {
+                continue; // Already created
+            }
+
+            try {
+                await cloudinary.api.create_folder(currentPath);
+                this.createdFolders.add(currentPath);
+                logger.info(`Created Cloudinary folder: ${currentPath}`);
+            } catch (error) {
+                // Folder might already exist - that's fine
+                if (error.error && error.error.message && error.error.message.includes('already exists')) {
+                    this.createdFolders.add(currentPath);
+                } else if (error.message && error.message.includes('already exists')) {
+                    this.createdFolders.add(currentPath);
+                } else {
+                    logger.warn(`Could not create Cloudinary folder ${currentPath}:`, error.message || error);
+                    // Don't throw - upload can still work with virtual folder path
+                }
+            }
+        }
+    }
+
+    /**
      * Upload a base64 image to Cloudinary
      * @param {string} base64Data - Base64 encoded image (with or without data URI prefix)
      * @param {Object} options - Upload options
@@ -54,7 +98,7 @@ class CloudinaryService {
         this.checkConfiguration();
 
         const {
-            folder = FOLDERS.THUMBNAILS,
+            folderPath,
             userId,
             videoId,
             publicId,
@@ -68,29 +112,52 @@ class CloudinaryService {
                 ? base64Data
                 : `data:image/png;base64,${base64Data}`;
 
-            // Build folder path: thumbnails/user_{id}/video_{id}/
-            const folderPath = videoId
-                ? `${folder}/user_${userId}/video_${videoId}`
-                : `${folder}/user_${userId}`;
+            // Use provided folderPath or build default path
+            // All assets go under ROOT_FOLDER (thumbnails/)
+            // Structure: thumbnails/user_{userId}/video_{videoId}/ for thumbnails
+            // Structure: thumbnails/user_{userId}/reference_images/ for reference images
+            const finalFolderPath = folderPath || (videoId
+                ? `${ROOT_FOLDER}/user_${userId}/video_${videoId}`
+                : `${ROOT_FOLDER}/user_${userId}`);
 
+            // Create actual folder in Cloudinary (not just virtual path)
+            await this.ensureFolderExists(finalFolderPath);
+
+            // Build the full public_id with folder path included
+            // This ensures the URL structure matches the folder structure
+            const fullPublicId = publicId
+                ? `${finalFolderPath}/${publicId}`
+                : null;  // Let Cloudinary auto-generate if no publicId provided
+
+            // Use multiple folder parameters for compatibility with both folder modes:
+            // - folder: Works in Fixed folder mode (legacy) - sets both storage and public_id prefix
+            // - asset_folder: Works in Dynamic folder mode (since June 2024) - sets Media Library placement
+            // - public_id with full path: Ensures URL structure in both modes
             const uploadOptions = {
-                folder: folderPath,
+                folder: finalFolderPath,        // For Fixed folder mode compatibility
+                asset_folder: finalFolderPath,  // For Dynamic folder mode - Media Library placement
                 resource_type: 'image',
                 tags: ['viraltube', `user_${userId}`, ...tags],
                 transformation
             };
 
-            // Add upload preset if configured
-            if (process.env.CLOUDINARY_UPLOAD_PRESET) {
-                uploadOptions.upload_preset = process.env.CLOUDINARY_UPLOAD_PRESET;
-            }
+            // NOTE: Upload presets can override folder settings, so we skip it when explicitly
+            // specifying folders to ensure our folder structure is respected
+            // If you need to use a preset, configure it to NOT set a folder
 
-            if (publicId) {
-                uploadOptions.public_id = publicId;
+            if (fullPublicId) {
+                // When we have a specific publicId, include full path and skip folder param
+                // to avoid double-prefixing (folder + publicId would create folder/folder/publicId)
+                delete uploadOptions.folder;
+                uploadOptions.public_id = fullPublicId;
                 uploadOptions.overwrite = true;
             }
 
+            logger.info(`Cloudinary upload options: folder=${uploadOptions.folder || 'N/A'}, asset_folder=${finalFolderPath}, public_id=${fullPublicId || 'auto-generated'}`);
+
             const result = await cloudinary.uploader.upload(dataUri, uploadOptions);
+
+            logger.info(`Cloudinary upload result: public_id=${result.public_id}, asset_folder=${result.asset_folder || 'N/A'}`);
 
             logger.info(`Image uploaded to Cloudinary: ${result.public_id}`);
 
@@ -111,38 +178,40 @@ class CloudinaryService {
     }
 
     /**
-     * Upload a thumbnail and enforce 4-thumbnail limit
+     * Upload a thumbnail and enforce 4-thumbnail limit PER ASPECT RATIO
+     * Each video can have up to 8 thumbnails total: 4 for 16:9 + 4 for 9:16
      * @param {string} base64Data - Base64 encoded thumbnail
-     * @param {Object} options - Upload options with userId, videoId
+     * @param {Object} options - Upload options with userId, videoId, aspectRatio
      * @param {Object} db - Database service for cleanup
      * @returns {Promise<Object>} Upload result
      */
     async uploadThumbnail(base64Data, options, db) {
         this.checkConfiguration();
 
-        const { userId, videoId } = options;
+        const { userId, videoId, aspectRatio = '16:9' } = options;
 
-        // Check current thumbnail count for this video
+        // Check current thumbnail count for this video AND aspect ratio
+        // Each aspect ratio (16:9 and 9:16) has its own limit of 4 thumbnails
         const existingThumbnails = await db.query(
             `SELECT id, cloudinary_public_id, created_at
              FROM video_thumbnails
-             WHERE video_id = $1
+             WHERE video_id = $1 AND aspect_ratio = $2
              ORDER BY created_at ASC`,
-            [videoId]
+            [videoId, aspectRatio]
         );
 
-        // If we have 4 or more, delete the oldest one(s) to make room
-        if (existingThumbnails.rows.length >= MAX_THUMBNAILS_PER_VIDEO) {
+        // If we have 4 or more for this aspect ratio, delete the oldest one(s) to make room
+        if (existingThumbnails.rows.length >= MAX_THUMBNAILS_PER_ASPECT_RATIO) {
             const toDelete = existingThumbnails.rows.slice(
                 0,
-                existingThumbnails.rows.length - MAX_THUMBNAILS_PER_VIDEO + 1
+                existingThumbnails.rows.length - MAX_THUMBNAILS_PER_ASPECT_RATIO + 1
             );
 
             for (const thumb of toDelete) {
                 try {
                     await this.deleteImage(thumb.cloudinary_public_id);
                     await db.query('DELETE FROM video_thumbnails WHERE id = $1', [thumb.id]);
-                    logger.info(`Deleted oldest thumbnail ${thumb.id} to maintain limit of ${MAX_THUMBNAILS_PER_VIDEO}`);
+                    logger.info(`Deleted oldest ${aspectRatio} thumbnail ${thumb.id} to maintain limit of ${MAX_THUMBNAILS_PER_ASPECT_RATIO} per aspect ratio`);
                 } catch (deleteError) {
                     logger.error(`Failed to delete old thumbnail ${thumb.id}:`, deleteError);
                     // Continue with upload even if cleanup fails
@@ -153,24 +222,27 @@ class CloudinaryService {
         // Upload the new thumbnail
         return this.uploadImage(base64Data, {
             ...options,
-            folder: FOLDERS.THUMBNAILS,
-            tags: ['thumbnail', `video_${videoId}`]
+            tags: ['thumbnail', `video_${videoId}`, `ratio_${aspectRatio.replace(':', 'x')}`]
         });
     }
 
     /**
      * Upload a reference image for the user
      * @param {string} base64Data - Base64 encoded image
-     * @param {Object} options - Upload options
+     * @param {Object} options - Upload options (userId, publicId)
      * @returns {Promise<Object>} Upload result
      */
     async uploadReferenceImage(base64Data, options) {
         this.checkConfiguration();
 
+        const { userId, publicId } = options;
+
+        // Folder structure: thumbnails/user_{userId}/reference_images/
         return this.uploadImage(base64Data, {
-            ...options,
-            folder: FOLDERS.REFERENCE_IMAGES,
-            tags: ['reference']
+            userId,
+            publicId,
+            folderPath: `${ROOT_FOLDER}/user_${userId}/${SUBFOLDERS.REFERENCE_IMAGES}`,
+            tags: ['reference', `user_${userId}`]
         });
     }
 
@@ -202,7 +274,8 @@ class CloudinaryService {
         this.checkConfiguration();
 
         try {
-            const prefix = `${FOLDERS.THUMBNAILS}/user_${userId}/video_${videoId}`;
+            // Folder structure: thumbnails/user_{userId}/video_{videoId}/
+            const prefix = `${ROOT_FOLDER}/user_${userId}/video_${videoId}`;
             const result = await cloudinary.api.delete_resources_by_prefix(prefix);
             logger.info(`Deleted all thumbnails for video ${videoId}`);
             return result;
@@ -221,12 +294,33 @@ class CloudinaryService {
         this.checkConfiguration();
 
         try {
-            const prefix = `${FOLDERS.REFERENCE_IMAGES}/user_${userId}`;
+            // Folder structure: thumbnails/user_{userId}/reference_images/
+            const prefix = `${ROOT_FOLDER}/user_${userId}/${SUBFOLDERS.REFERENCE_IMAGES}`;
             const result = await cloudinary.api.delete_resources_by_prefix(prefix);
             logger.info(`Deleted all reference images for user ${userId}`);
             return result;
         } catch (error) {
             logger.error(`Failed to delete reference images for user ${userId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete all assets for a user (reference images + all video thumbnails)
+     * @param {number} userId - User ID
+     * @returns {Promise<Object>} Deletion result
+     */
+    async deleteAllUserAssets(userId) {
+        this.checkConfiguration();
+
+        try {
+            // Delete entire user folder: thumbnails/user_{userId}/
+            const prefix = `${ROOT_FOLDER}/user_${userId}`;
+            const result = await cloudinary.api.delete_resources_by_prefix(prefix);
+            logger.info(`Deleted all assets for user ${userId}`);
+            return result;
+        } catch (error) {
+            logger.error(`Failed to delete all assets for user ${userId}:`, error);
             throw error;
         }
     }

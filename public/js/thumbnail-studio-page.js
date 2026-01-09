@@ -66,7 +66,7 @@ class ThumbnailStudioPage {
 
         const refineToggleBtn = document.getElementById('refine-toggle-btn');
         if (refineToggleBtn) {
-            refineToggleBtn.addEventListener('click', () => this.toggleRefinePanel());
+            refineToggleBtn.addEventListener('click', (e) => this.toggleRefinePanel(e));
         }
 
         const downloadBtn = document.getElementById('download-thumbnail-btn');
@@ -77,7 +77,7 @@ class ThumbnailStudioPage {
         // Refine panel buttons
         const refineCancelBtn = document.getElementById('refine-cancel-btn');
         if (refineCancelBtn) {
-            refineCancelBtn.addEventListener('click', () => this.toggleRefinePanel());
+            refineCancelBtn.addEventListener('click', (e) => this.toggleRefinePanel(e));
         }
 
         const refineApplyBtn = document.getElementById('refine-apply-btn');
@@ -534,7 +534,10 @@ class ThumbnailStudioPage {
      * Start polling for job status
      */
     startPolling() {
-        this.pollInterval = setInterval(() => this.checkJobStatus(), 2000);
+        // First poll immediately
+        this.checkJobStatus();
+        // Then poll every 1 second for faster incremental updates
+        this.pollInterval = setInterval(() => this.checkJobStatus(), 1000);
     }
 
     /**
@@ -560,8 +563,17 @@ class ThumbnailStudioPage {
             if (data.success) {
                 const job = data.data;
 
+                // Debug logging
+                console.log('Job status:', job.status, 'Progress:', job.progress, 'Thumbnails:', job.thumbnails?.length || 0);
+
                 // Update progress
                 this.updateProgress(job.progress, job.current_style);
+
+                // Render thumbnails incrementally as they complete
+                if (job.thumbnails && job.thumbnails.length > 0) {
+                    console.log('Rendering incremental thumbnails:', job.thumbnails.length);
+                    this.renderThumbnailsIncremental(job.thumbnails);
+                }
 
                 if (job.status === 'completed') {
                     this.stopPolling();
@@ -579,6 +591,104 @@ class ThumbnailStudioPage {
             }
         } catch (error) {
             console.error('Status check failed:', error);
+        }
+    }
+
+    /**
+     * Render thumbnails incrementally (for live updates during generation)
+     */
+    renderThumbnailsIncremental(thumbnails) {
+        const grid = document.getElementById('thumbnails-grid');
+        if (!grid) return;
+
+        // Get style display names
+        const styleMap = {};
+        if (this.options?.styles) {
+            this.options.styles.forEach(s => styleMap[s.key] = s.name);
+        }
+
+        // Get currently selected aspect ratio
+        const selectedRatio = this.getSelectedAspectRatio();
+
+        // Filter to only show thumbnails matching current aspect ratio
+        const filteredThumbnails = thumbnails.filter(t => t.aspect_ratio === selectedRatio);
+
+        // Update count badge
+        document.getElementById('thumbnail-count').textContent = `${filteredThumbnails.length}/4`;
+
+        // Check which thumbnails are already rendered
+        const existingIds = new Set(
+            Array.from(grid.querySelectorAll('.thumbnail-slot[data-id]'))
+                .map(el => parseInt(el.dataset.id))
+        );
+
+        // Add new thumbnails
+        for (const thumb of filteredThumbnails) {
+            if (existingIds.has(thumb.id)) continue; // Already rendered
+
+            // Find placeholder slot to replace
+            const placeholderSlot = grid.querySelector(`.thumbnail-slot.placeholder[data-slot="${thumb.generation_order}"]`);
+
+            const thumbHtml = `
+                <div class="thumbnail-slot" data-id="${thumb.id}">
+                    <img src="${thumb.cloudinary_secure_url}" alt="Thumbnail">
+                    <span class="style-badge">${styleMap[thumb.style_name] || thumb.style_display_name || thumb.style_name}</span>
+                    <div class="thumbnail-actions-btns">
+                        <button class="thumbnail-view-btn" data-url="${thumb.cloudinary_secure_url}" title="View Full Size">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                        <button class="thumbnail-download-btn" data-url="${thumb.cloudinary_secure_url}" data-style="${thumb.style_name || 'thumbnail'}" title="Download">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            if (placeholderSlot) {
+                // Replace placeholder with actual thumbnail
+                placeholderSlot.outerHTML = thumbHtml;
+            } else {
+                // Append if no placeholder found
+                grid.insertAdjacentHTML('beforeend', thumbHtml);
+            }
+
+            // Add event listeners to the new element
+            const newSlot = grid.querySelector(`.thumbnail-slot[data-id="${thumb.id}"]`);
+            if (newSlot) {
+                newSlot.addEventListener('click', (e) => {
+                    if (!e.target.closest('.thumbnail-actions-btns')) {
+                        this.selectThumbnail(thumb.id, newSlot);
+                    }
+                });
+
+                const viewBtn = newSlot.querySelector('.thumbnail-view-btn');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        window.open(viewBtn.dataset.url, '_blank');
+                    });
+                }
+
+                const downloadBtn = newSlot.querySelector('.thumbnail-download-btn');
+                if (downloadBtn) {
+                    downloadBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.downloadSingleThumbnail(downloadBtn.dataset.url, downloadBtn.dataset.style);
+                    });
+                }
+            }
+
+            // Store in thumbnailsData for selection
+            if (!this.thumbnailsData.find(t => t.id === thumb.id)) {
+                this.thumbnailsData.push(thumb);
+            }
         }
     }
 
@@ -817,15 +927,30 @@ class ThumbnailStudioPage {
     }
 
     /**
-     * Toggle refine panel
+     * Toggle refine panel (with protection against rapid clicks on touch devices)
      */
-    toggleRefinePanel() {
+    toggleRefinePanel(e) {
+        // Prevent event propagation issues on touch devices
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Prevent rapid multiple toggles (touch device issue)
+        if (this._isTogglingRefine) return;
+        this._isTogglingRefine = true;
+
         const panel = document.getElementById('refine-panel');
         panel.classList.toggle('active');
 
         if (panel.classList.contains('active')) {
             document.getElementById('refine-instruction').focus();
         }
+
+        // Reset flag after a short delay
+        setTimeout(() => {
+            this._isTogglingRefine = false;
+        }, 300);
     }
 
     /**

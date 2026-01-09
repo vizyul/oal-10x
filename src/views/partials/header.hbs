@@ -59,8 +59,23 @@ document.addEventListener('DOMContentLoaded', function() {
   // Check if user is authenticated (has sidebar)
   const isAuthenticated = !!sidebar;
 
+  // Flag to prevent rapid multiple toggles (touch device issue)
+  let isTogglingMenu = false;
+
   if (mobileMenuToggle) {
-    mobileMenuToggle.addEventListener('click', function() {
+    mobileMenuToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Prevent rapid multiple toggles
+      if (isTogglingMenu) return;
+      isTogglingMenu = true;
+
+      // Reset flag after a short delay
+      setTimeout(function() {
+        isTogglingMenu = false;
+      }, 300);
+
       // For authenticated users, open sidebar on mobile
       if (isAuthenticated && window.innerWidth <= 768 && window.sidebarFunctions) {
         window.sidebarFunctions.toggle();
@@ -72,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
         navLinks.classList.toggle('active');
 
         // Animate hamburger lines
-        const lines = this.querySelectorAll('.hamburger-line');
+        const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
         if (navLinks.classList.contains('active')) {
           lines[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
           lines[1].style.opacity = '0';
@@ -88,15 +103,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Close mobile menu when clicking outside (non-authenticated only)
   document.addEventListener('click', function(event) {
-    if (mobileMenuToggle && navLinks && !sidebar &&
-        !mobileMenuToggle.contains(event.target) &&
-        !navLinks.contains(event.target)) {
-      navLinks.classList.remove('active');
-      const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
-      lines[0].style.transform = 'rotate(0) translate(0, 0)';
-      lines[1].style.opacity = '1';
-      lines[2].style.transform = 'rotate(0) translate(0, 0)';
-    }
+    if (isTogglingMenu) return; // Don't close while toggling
+
+    setTimeout(function() {
+      if (mobileMenuToggle && navLinks && !sidebar &&
+          !mobileMenuToggle.contains(event.target) &&
+          !navLinks.contains(event.target)) {
+        navLinks.classList.remove('active');
+        const lines = mobileMenuToggle.querySelectorAll('.hamburger-line');
+        lines[0].style.transform = 'rotate(0) translate(0, 0)';
+        lines[1].style.opacity = '1';
+        lines[2].style.transform = 'rotate(0) translate(0, 0)';
+      }
+    }, 10);
   });
 });
 </script>
