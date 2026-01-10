@@ -42,28 +42,27 @@ io.use((socket, next) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   const userId = socket.userId;
-  logger.info(`User ${userId} connected via Socket.IO`);
+  logger.debug(`Socket.IO connected: userId=${userId}`);
 
   // Register user session for status updates
   processingStatusService.registerUserSession(userId, socket);
 
   // Handle disconnect
   socket.on('disconnect', () => {
-    logger.info(`User ${userId} disconnected from Socket.IO`);
+    logger.debug(`Socket.IO disconnected: userId=${userId}`);
     processingStatusService.unregisterUserSession(userId, socket);
   });
 
   // Handle status request
   socket.on('request-status', () => {
-    logger.info(`Socket.IO: User ${userId} requested processing status`);
     const processingVideos = processingStatusService.getUserProcessingVideos(userId);
-    logger.info(`Socket.IO: Sending ${processingVideos.length} processing videos to user ${userId}`);
+    logger.debug(`Socket.IO status: userId=${userId} videos=${processingVideos.length}`);
     socket.emit('processing-status-batch', processingVideos);
   });
 
   // Handle clear processing videos request (when user leaves videos page)
   socket.on('clear-processing-videos', () => {
-    logger.info(`Socket.IO: User ${userId} requested to clear processing videos`);
+    logger.debug(`Socket.IO clear-processing: userId=${userId}`);
     processingStatusService.clearUserProcessingVideos(userId);
   });
 });
@@ -82,15 +81,15 @@ const startServer = () => {
 
 // Handle graceful shutdown
 const gracefulShutdown = (signal) => {
-  logger.info(`📴 ${signal} received. Starting graceful shutdown...`);
+  logger.info(`${signal} received - starting graceful shutdown`);
 
   server.close((err) => {
     if (err) {
-      logger.error('❌ Error during server shutdown:', err);
+      logger.error('Error during server shutdown', { error: err.message });
       process.exit(1);
     }
 
-    logger.info('✅ Server closed successfully');
+    logger.info('Server closed successfully');
     process.exit(0);
   });
 };
@@ -100,18 +99,19 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (error) => {
-  logger.error('💥 Uncaught Exception:', error);
+  logger.error('Uncaught Exception', { error: error.message, stack: error.stack?.split('\n')[0] });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-  logger.error('💥 Unhandled Rejection stack:', reason.stack);
-  // Temporarily don't exit during debugging
+  const errorMsg = reason instanceof Error ? reason.message : String(reason);
+  const errorStack = reason instanceof Error ? reason.stack?.split('\n')[0] : '';
+  logger.error('Unhandled Rejection', { error: errorMsg, stack: errorStack });
+
   if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   } else {
-    logger.warn('🚧 Development mode: Server continuing despite unhandled rejection');
+    logger.warn('Development mode: Server continuing despite unhandled rejection');
   }
 });
 

@@ -4,7 +4,7 @@ const { authMiddleware, subscriptionMiddleware } = require('../middleware');
 const stripeConfig = require('../config/stripe.config');
 const { logger } = require('../utils');
 
-logger.info('=== SUBSCRIPTION-WEB ROUTES MODULE LOADED ===');
+logger.debug('Subscription web routes loaded');
 
 // Apply authentication middleware to all subscription web routes
 router.use(authMiddleware);

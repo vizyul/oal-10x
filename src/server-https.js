@@ -29,24 +29,20 @@ const io = new Server(server, {
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  logger.info(`🔐 Socket.IO auth attempt: token = ${token ? 'present' : 'missing'}`);
 
   if (!token) {
-    logger.warn('🔐 Socket.IO auth failed: no token provided');
+    logger.warn('Socket.IO auth failed: no token');
     return next(new Error('Authentication required'));
   }
 
   try {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    logger.info(`🔐 JWT decoded: ${JSON.stringify(decoded)}`);
-
-    // Try both userId and id fields
     socket.userId = decoded.userId || decoded.id;
-    logger.info(`🔐 Socket.IO auth success: userId = ${socket.userId}`);
+    logger.debug(`Socket.IO auth success: userId=${socket.userId}`);
     next();
   } catch (error) {
-    logger.error(`🔐 Socket.IO auth failed: ${error.message}`);
+    logger.warn('Socket.IO auth failed: invalid token');
     next(new Error('Invalid token'));
   }
 });
@@ -54,23 +50,21 @@ io.use((socket, next) => {
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   const userId = socket.userId;
-  logger.info(`🔌 Socket.IO connection established: userId = ${userId}`);
+  logger.debug(`Socket.IO connected: userId=${userId}`);
 
   // Register user session for status updates
   processingStatusService.registerUserSession(userId, socket);
-  logger.info(`📡 Registered user session: ${userId}`);
 
   // Handle disconnect
   socket.on('disconnect', () => {
-    logger.info(`User ${userId} disconnected from Socket.IO`);
+    logger.debug(`Socket.IO disconnected: userId=${userId}`);
     processingStatusService.unregisterUserSession(userId, socket);
   });
 
   // Handle status request
   socket.on('request-status', () => {
-    logger.info(`Socket.IO: User ${userId} requested processing status`);
     const processingVideos = processingStatusService.getUserProcessingVideos(userId);
-    logger.info(`Socket.IO: Sending ${processingVideos.length} processing videos to user ${userId}`);
+    logger.debug(`Socket.IO status: userId=${userId} videos=${processingVideos.length}`);
     socket.emit('processing-status-batch', processingVideos);
   });
 });
@@ -91,15 +85,15 @@ const startServer = () => {
 
 // Handle graceful shutdown
 const gracefulShutdown = (signal) => {
-  logger.info(`📴 ${signal} received. Starting graceful shutdown...`);
+  logger.info(`${signal} received - starting graceful shutdown`);
 
   server.close((err) => {
     if (err) {
-      logger.error('❌ Error during server shutdown:', err);
+      logger.error('Error during server shutdown', { error: err.message });
       process.exit(1);
     }
 
-    logger.info('✅ Server closed successfully');
+    logger.info('Server closed successfully');
     process.exit(0);
   });
 };
@@ -109,18 +103,19 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (error) => {
-  logger.error('💥 Uncaught Exception:', error);
+  logger.error('Uncaught Exception', { error: error.message, stack: error.stack?.split('\n')[0] });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-  logger.error('💥 Unhandled Rejection stack:', reason.stack);
-  // Temporarily don't exit during debugging
+  const errorMsg = reason instanceof Error ? reason.message : String(reason);
+  const errorStack = reason instanceof Error ? reason.stack?.split('\n')[0] : '';
+  logger.error('Unhandled Rejection', { error: errorMsg, stack: errorStack });
+
   if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   } else {
-    logger.warn('🚧 Development mode: Server continuing despite unhandled rejection');
+    logger.warn('Development mode: Server continuing despite unhandled rejection');
   }
 });
 

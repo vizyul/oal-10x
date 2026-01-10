@@ -23,9 +23,9 @@ class DatabaseService {
         connectionTimeoutMillis: 2000,
       });
 
-      // Test connection
+      // Pool connection events - debug level only
       this.pool.on('connect', () => {
-        logger.info('Connected to PostgreSQL database');
+        logger.debug('Pool connection acquired');
       });
 
       this.pool.on('error', (err) => {
@@ -136,7 +136,7 @@ class DatabaseService {
     try {
       const { maxRecords = 100, sort = [], filterByFormula = null } = options;
 
-      logger.info(`Finding all records in ${tableName}`, options);
+      logger.debug(`Finding all records in ${tableName}`);
 
       let query = `SELECT * FROM ${tableName.toLowerCase()}`;
       const params = [];
@@ -160,7 +160,7 @@ class DatabaseService {
 
       const result = await this.query(query, params);
 
-      logger.info(`Found ${result.rows.length} records in ${tableName}`);
+      logger.debug(`Found ${result.rows.length} records in ${tableName}`);
       return this.formatRecords(result.rows);
     } catch (error) {
       logger.error(`Error finding all records in ${tableName}:`, error);

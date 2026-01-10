@@ -23,28 +23,72 @@ class Logger {
 
     this.logFile = path.join(logsDir, 'app.log');
     this.errorLogFile = path.join(logsDir, 'error.log');
+
+    // Patterns to sanitize from logs
+    this.sensitivePatterns = [
+      { pattern: /("password"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /("token"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /("apiKey"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /("api_key"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /("secret"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /("authorization"\s*:\s*)"[^"]*"/gi, replacement: '$1"[REDACTED]"' },
+      { pattern: /Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+/gi, replacement: 'Bearer [REDACTED]' }
+    ];
   }
 
   shouldLog(level) {
     return this.logLevels[level] <= this.logLevels[this.logLevel];
   }
 
-  formatMessage(level, message, data = null) {
+  /**
+   * Sanitize sensitive data from log messages
+   */
+  sanitize(str) {
+    if (typeof str !== 'string') return str;
+
+    let sanitized = str;
+    for (const { pattern, replacement } of this.sensitivePatterns) {
+      sanitized = sanitized.replace(pattern, replacement);
+    }
+    return sanitized;
+  }
+
+  /**
+   * Mask email for privacy (shows first 2 chars + domain)
+   */
+  maskEmail(email) {
+    if (!email || typeof email !== 'string') return email;
+    const [local, domain] = email.split('@');
+    if (!domain) return email;
+    const masked = local.length > 2 ? local.slice(0, 2) + '***' : '***';
+    return `${masked}@${domain}`;
+  }
+
+  formatMessage(level, message, data = null, requestId = null) {
     const timestamp = new Date().toISOString();
     const pid = process.pid;
+    const reqIdPart = requestId ? ` [${requestId}]` : '';
 
-    let formattedMessage = `[${timestamp}] [${pid}] ${level.toUpperCase()}: ${message}`;
+    let formattedMessage = `[${timestamp}] [${pid}]${reqIdPart} ${level.toUpperCase()}: ${message}`;
 
     if (data) {
       if (typeof data === 'object') {
         try {
-          formattedMessage += ` | Data: ${JSON.stringify(data, null, 2)}`;
+          const jsonStr = JSON.stringify(data);
+          // Only include data if it's reasonably sized (avoid huge dumps)
+          if (jsonStr.length <= 500) {
+            formattedMessage += ` | ${this.sanitize(jsonStr)}`;
+          } else {
+            // For large objects, just indicate the type/size
+            const keys = Object.keys(data);
+            formattedMessage += ` | {${keys.length} keys: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? '...' : ''}}`;
+          }
         // eslint-disable-next-line no-unused-vars
         } catch (_error) {
-          formattedMessage += ' | Data: [Circular or non-serializable object]';
+          formattedMessage += ' | [Circular or non-serializable object]';
         }
       } else {
-        formattedMessage += ` | Data: ${data}`;
+        formattedMessage += ` | ${this.sanitize(String(data))}`;
       }
     }
 
@@ -63,12 +107,12 @@ class Logger {
     }
   }
 
-  log(level, message, data = null) {
+  log(level, message, data = null, requestId = null) {
     if (!this.shouldLog(level)) {
       return;
     }
 
-    const formattedMessage = this.formatMessage(level, message, data);
+    const formattedMessage = this.formatMessage(level, message, data, requestId);
     const isError = level === 'error';
 
     // Console output with colors (development)
@@ -99,90 +143,76 @@ class Logger {
     }
   }
 
-  error(message, data = null) {
-    this.log('error', message, data);
+  error(message, data = null, requestId = null) {
+    this.log('error', message, data, requestId);
   }
 
-  warn(message, data = null) {
-    this.log('warn', message, data);
+  warn(message, data = null, requestId = null) {
+    this.log('warn', message, data, requestId);
   }
 
-  info(message, data = null) {
-    this.log('info', message, data);
+  info(message, data = null, requestId = null) {
+    this.log('info', message, data, requestId);
   }
 
-  debug(message, data = null) {
-    this.log('debug', message, data);
+  debug(message, data = null, requestId = null) {
+    this.log('debug', message, data, requestId);
   }
 
-  // HTTP request logging
+  // HTTP request logging (single consolidated log per request)
   request(req, res, responseTime) {
-    const { method, url, ip, headers } = req;
+    const { method, url } = req;
     const { statusCode } = res;
-    const userAgent = headers['user-agent'] || 'Unknown';
+    const requestId = req.requestId || '-';
+    const userId = req.user?.userId || 'anon';
 
-    const logData = {
-      method,
-      url,
-      ip,
-      statusCode,
-      responseTime: `${responseTime}ms`,
-      userAgent
-    };
+    // Skip logging for static assets at INFO level
+    if (url.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?.*)?$/i)) {
+      // Only log static assets at DEBUG level
+      this.debug(`${method} ${url} ${statusCode} ${responseTime}ms`, null, requestId);
+      return;
+    }
 
-    const level = statusCode >= 400 ? 'warn' : 'info';
-    this.log(level, `HTTP ${method} ${url} - ${statusCode} (${responseTime}ms)`, logData);
+    const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
+    this.log(level, `${method} ${url} ${statusCode} ${responseTime}ms userId=${userId}`, null, requestId);
   }
 
-  // Authentication logging
-  auth(action, email, success, reason = null) {
+  // Authentication logging (sanitized)
+  auth(action, email, success, reason = null, requestId = null) {
     const level = success ? 'info' : 'warn';
-    const message = `Auth ${action}: ${email} - ${success ? 'Success' : 'Failed'}`;
+    const maskedEmail = this.maskEmail(email);
+    const message = `Auth ${action}: ${maskedEmail} - ${success ? 'success' : 'failed'}`;
 
-    const data = {
-      action,
-      email,
-      success,
-      ...(reason && { reason })
-    };
-
-    this.log(level, message, data);
+    const data = reason ? { reason } : null;
+    this.log(level, message, data, requestId);
   }
 
   // Database operation logging
-  database(operation, table, recordId = null, success = true, error = null) {
+  database(operation, table, recordId = null, success = true, error = null, requestId = null) {
     const level = success ? 'debug' : 'error';
-    const message = `DB ${operation} on ${table}${recordId ? ` (ID: ${recordId})` : ''} - ${success ? 'Success' : 'Failed'}`;
+    const message = `DB ${operation} ${table}${recordId ? ` id=${recordId}` : ''} - ${success ? 'ok' : 'failed'}`;
 
-    const data = {
-      operation,
-      table,
-      ...(recordId && { recordId }),
-      success,
-      ...(error && { error: error.message })
-    };
-
-    this.log(level, message, data);
+    const data = error ? { error: error.message } : null;
+    this.log(level, message, data, requestId);
   }
 
   // Security event logging
-  security(event, details, severity = 'warn') {
-    const message = `Security Event: ${event}`;
-
-    this.log(severity, message, details);
+  security(event, details, severity = 'warn', requestId = null) {
+    const message = `Security: ${event}`;
+    this.log(severity, message, details, requestId);
   }
 
   // Performance logging
-  performance(operation, duration, metadata = null) {
-    const message = `Performance: ${operation} completed in ${duration}ms`;
+  performance(operation, duration, metadata = null, requestId = null) {
+    // Only log slow operations at INFO level, others at DEBUG
+    const level = duration > 1000 ? 'warn' : 'debug';
+    const message = `Perf: ${operation} ${duration}ms`;
+    this.log(level, message, metadata, requestId);
+  }
 
-    const data = {
-      operation,
-      duration,
-      ...(metadata && { metadata })
-    };
-
-    this.log('debug', message, data);
+  // Business event logging (for important user actions)
+  event(eventName, details = null, requestId = null) {
+    this.info(`Event: ${eventName}`, details, requestId);
   }
 
   // Log rotation (simple implementation)

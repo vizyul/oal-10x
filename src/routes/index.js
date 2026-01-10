@@ -60,7 +60,7 @@ router.get('/profile', require('../middleware').authMiddleware, async (req, res)
     // eslint-disable-next-line no-unused-vars
     } catch (_prefError) {
       // If preferences don't exist, create default ones
-      logger.info(`Creating default preferences for user ${req.user.email}`);
+      logger.debug(`Creating default preferences for user`, null, req.requestId);
       userPreferences = await preferencesService.createDefaultPreferences(req.user.email);
     }
 
@@ -75,7 +75,7 @@ router.get('/profile', require('../middleware').authMiddleware, async (req, res)
       showNav: true
     });
   } catch (error) {
-    logger.error('Profile route error:', error);
+    logger.error('Profile route error', { error: error.message, stack: error.stack?.split('\n')[0] }, req.requestId);
     res.render('profile', {
       title: 'Profile',
       description: 'Manage your profile and preferences',

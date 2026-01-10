@@ -555,6 +555,11 @@ class ThumbnailGeneratorService {
                     jobId
                 ]
             );
+
+            // Track usage for successful generations (at least one thumbnail created)
+            if (finalStatus === 'completed' && results.length > 0) {
+                await this.trackThumbnailUsage(userId, aspectRatio, results.length);
+            }
         }
 
         return { thumbnails: results, errors };
@@ -1037,6 +1042,327 @@ class ThumbnailGeneratorService {
         }
 
         return options;
+    }
+
+    // ==========================================
+    // Thumbnail Usage Tracking Methods
+    // ==========================================
+
+    /**
+     * Check if user can generate thumbnails based on subscription tier limits
+     * @param {number} userId - User ID
+     * @param {string} aspectRatio - '16:9' or '9:16'
+     * @returns {Promise<{canGenerate: boolean, reason?: string, usage?: object, limit?: object}>}
+     */
+    async checkThumbnailLimit(userId, aspectRatio = '16:9') {
+        try {
+            // Get user's subscription tier
+            const userResult = await database.query(
+                'SELECT subscription_tier FROM users WHERE id = $1',
+                [userId]
+            );
+
+            if (userResult.rows.length === 0) {
+                return { canGenerate: false, reason: 'User not found' };
+            }
+
+            let subscriptionTier = userResult.rows[0].subscription_tier || 'free';
+
+            // Check for active admin grants that might override the tier
+            const grantResult = await database.query(`
+                SELECT grant_type, tier_override, video_limit_override
+                FROM admin_subscription_grants
+                WHERE user_id = $1
+                  AND is_active = TRUE
+                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                ORDER BY created_at DESC
+                LIMIT 1
+            `, [userId]);
+
+            if (grantResult.rows.length > 0) {
+                const grant = grantResult.rows[0];
+
+                // Any active grant gives 10 iterations per aspect ratio
+                const GRANT_ITERATIONS_LIMIT = 10;
+
+                // Get current usage for this user/aspect ratio (monthly reset for grants)
+                const usage = await this.getThumbnailUsage(userId, aspectRatio, true);
+
+                if (usage.iterations_used >= GRANT_ITERATIONS_LIMIT) {
+                    return {
+                        canGenerate: false,
+                        reason: `You've reached your grant limit of ${GRANT_ITERATIONS_LIMIT} ${aspectRatio} thumbnail generations this month. Contact support for more.`,
+                        requiresUpgrade: false,
+                        hasGrant: true,
+                        grantType: grant.grant_type,
+                        usage,
+                        limit: { iterations: GRANT_ITERATIONS_LIMIT, reset_monthly: true }
+                    };
+                }
+
+                return {
+                    canGenerate: true,
+                    reason: `Admin grant: ${usage.iterations_used}/${GRANT_ITERATIONS_LIMIT} iterations used`,
+                    hasGrant: true,
+                    grantType: grant.grant_type,
+                    usage,
+                    limit: { iterations: GRANT_ITERATIONS_LIMIT, reset_monthly: true },
+                    remaining: GRANT_ITERATIONS_LIMIT - usage.iterations_used
+                };
+            }
+
+            // Get tier limits
+            const limitsResult = await database.query(
+                'SELECT * FROM thumbnail_tier_limits WHERE subscription_tier = $1',
+                [subscriptionTier]
+            );
+
+            if (limitsResult.rows.length === 0) {
+                // Default to free tier limits if not found
+                logger.warn(`No thumbnail limits found for tier ${subscriptionTier}, using free defaults`);
+                return { canGenerate: false, reason: 'Subscription tier limits not configured' };
+            }
+
+            const limits = limitsResult.rows[0];
+
+            // If unlimited, always allow
+            if (limits.is_unlimited) {
+                return {
+                    canGenerate: true,
+                    reason: 'Unlimited thumbnail generation',
+                    limit: limits
+                };
+            }
+
+            // Get max iterations for this aspect ratio
+            const maxIterations = aspectRatio === '9:16'
+                ? limits.iterations_9_16
+                : limits.iterations_16_9;
+
+            // Get current usage for this user/aspect ratio
+            const usage = await this.getThumbnailUsage(userId, aspectRatio, limits.reset_monthly);
+
+            if (usage.iterations_used >= maxIterations) {
+                const tierName = subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1);
+                return {
+                    canGenerate: false,
+                    reason: `You've reached your ${tierName} plan limit of ${maxIterations} ${aspectRatio} thumbnail generation${maxIterations === 1 ? '' : 's'}. Upgrade your subscription for more.`,
+                    requiresUpgrade: true,
+                    usage,
+                    limit: limits
+                };
+            }
+
+            return {
+                canGenerate: true,
+                reason: `${usage.iterations_used}/${maxIterations} iterations used`,
+                usage,
+                limit: limits,
+                remaining: maxIterations - usage.iterations_used
+            };
+
+        } catch (error) {
+            logger.error('Error checking thumbnail limit:', { error: error.message });
+            // Fail open - allow generation if check fails
+            return { canGenerate: true, reason: 'Limit check error - allowing generation' };
+        }
+    }
+
+    /**
+     * Get thumbnail usage for a user and aspect ratio
+     * @param {number} userId - User ID
+     * @param {string} aspectRatio - '16:9' or '9:16'
+     * @param {boolean} resetMonthly - Whether to filter by current month
+     * @returns {Promise<{iterations_used: number, thumbnails_generated: number}>}
+     */
+    async getThumbnailUsage(userId, aspectRatio, resetMonthly = false) {
+        try {
+            let query, params;
+
+            if (resetMonthly) {
+                // Get usage for current billing period (current month)
+                const startOfMonth = new Date();
+                startOfMonth.setDate(1);
+                startOfMonth.setHours(0, 0, 0, 0);
+
+                query = `
+                    SELECT COALESCE(SUM(iterations_used), 0) as iterations_used,
+                           COALESCE(SUM(thumbnails_generated), 0) as thumbnails_generated
+                    FROM thumbnail_usage
+                    WHERE users_id = $1
+                      AND aspect_ratio = $2
+                      AND period_start >= $3
+                `;
+                params = [userId, aspectRatio, startOfMonth.toISOString()];
+            } else {
+                // Get lifetime usage (for free tier)
+                query = `
+                    SELECT COALESCE(SUM(iterations_used), 0) as iterations_used,
+                           COALESCE(SUM(thumbnails_generated), 0) as thumbnails_generated
+                    FROM thumbnail_usage
+                    WHERE users_id = $1 AND aspect_ratio = $2
+                `;
+                params = [userId, aspectRatio];
+            }
+
+            const result = await database.query(query, params);
+
+            return {
+                iterations_used: parseInt(result.rows[0].iterations_used) || 0,
+                thumbnails_generated: parseInt(result.rows[0].thumbnails_generated) || 0
+            };
+
+        } catch (error) {
+            logger.error('Error getting thumbnail usage:', { error: error.message });
+            return { iterations_used: 0, thumbnails_generated: 0 };
+        }
+    }
+
+    /**
+     * Track thumbnail generation usage after successful generation
+     * @param {number} userId - User ID
+     * @param {string} aspectRatio - '16:9' or '9:16'
+     * @param {number} thumbnailCount - Number of thumbnails generated (usually 4)
+     */
+    async trackThumbnailUsage(userId, aspectRatio, thumbnailCount = 4) {
+        try {
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            const endOfMonth = new Date(startOfMonth);
+            endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+
+            // Upsert usage record
+            await database.query(`
+                INSERT INTO thumbnail_usage (users_id, aspect_ratio, iterations_used, thumbnails_generated, period_start, period_end)
+                VALUES ($1, $2, 1, $3, $4, $5)
+                ON CONFLICT (users_id, aspect_ratio, period_start)
+                DO UPDATE SET
+                    iterations_used = thumbnail_usage.iterations_used + 1,
+                    thumbnails_generated = thumbnail_usage.thumbnails_generated + $3,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [userId, aspectRatio, thumbnailCount, startOfMonth.toISOString(), endOfMonth.toISOString()]);
+
+            logger.info(`Tracked thumbnail usage for user ${userId}: +1 ${aspectRatio} iteration, +${thumbnailCount} thumbnails`);
+
+        } catch (error) {
+            logger.error('Error tracking thumbnail usage:', { error: error.message });
+            // Don't throw - usage tracking failure shouldn't block generation
+        }
+    }
+
+    /**
+     * Get thumbnail usage summary for a user (both aspect ratios)
+     * @param {number} userId - User ID
+     * @returns {Promise<object>} Usage summary with limits
+     */
+    async getThumbnailUsageSummary(userId) {
+        try {
+            // Get user's subscription tier
+            const userResult = await database.query(
+                'SELECT subscription_tier FROM users WHERE id = $1',
+                [userId]
+            );
+
+            if (userResult.rows.length === 0) {
+                return null;
+            }
+
+            let subscriptionTier = userResult.rows[0].subscription_tier || 'free';
+            let hasGrant = false;
+            let grantType = null;
+
+            // Check for active admin grants that might override the tier
+            const grantResult = await database.query(`
+                SELECT grant_type, tier_override, video_limit_override
+                FROM admin_subscription_grants
+                WHERE user_id = $1
+                  AND is_active = TRUE
+                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                ORDER BY created_at DESC
+                LIMIT 1
+            `, [userId]);
+
+            if (grantResult.rows.length > 0) {
+                const grant = grantResult.rows[0];
+                hasGrant = true;
+                grantType = grant.grant_type;
+
+                // Any active grant gives 10 iterations per aspect ratio (monthly reset)
+                const GRANT_ITERATIONS_LIMIT = 10;
+
+                const [usage16_9, usage9_16] = await Promise.all([
+                    this.getThumbnailUsage(userId, '16:9', true),  // Monthly reset for grants
+                    this.getThumbnailUsage(userId, '9:16', true)
+                ]);
+
+                return {
+                    subscriptionTier: userResult.rows[0].subscription_tier || 'free',
+                    effectiveTier: 'grant',
+                    hasGrant: true,
+                    grantType: grant.grant_type,
+                    isUnlimited: false,
+                    resetMonthly: true,
+                    '16:9': {
+                        used: usage16_9.iterations_used,
+                        limit: GRANT_ITERATIONS_LIMIT,
+                        remaining: Math.max(0, GRANT_ITERATIONS_LIMIT - usage16_9.iterations_used),
+                        thumbnailsGenerated: usage16_9.thumbnails_generated
+                    },
+                    '9:16': {
+                        used: usage9_16.iterations_used,
+                        limit: GRANT_ITERATIONS_LIMIT,
+                        remaining: Math.max(0, GRANT_ITERATIONS_LIMIT - usage9_16.iterations_used),
+                        thumbnailsGenerated: usage9_16.thumbnails_generated
+                    }
+                };
+            }
+
+            // Get tier limits
+            const limitsResult = await database.query(
+                'SELECT * FROM thumbnail_tier_limits WHERE subscription_tier = $1',
+                [subscriptionTier]
+            );
+
+            const limits = limitsResult.rows[0] || {
+                iterations_16_9: 1,
+                iterations_9_16: 1,
+                is_unlimited: false,
+                reset_monthly: false
+            };
+
+            // Get usage for both aspect ratios
+            const [usage16_9, usage9_16] = await Promise.all([
+                this.getThumbnailUsage(userId, '16:9', limits.reset_monthly),
+                this.getThumbnailUsage(userId, '9:16', limits.reset_monthly)
+            ]);
+
+            return {
+                subscriptionTier,
+                effectiveTier: subscriptionTier,
+                hasGrant,
+                grantType,
+                isUnlimited: limits.is_unlimited,
+                resetMonthly: limits.reset_monthly,
+                '16:9': {
+                    used: usage16_9.iterations_used,
+                    limit: limits.is_unlimited ? 'Unlimited' : limits.iterations_16_9,
+                    remaining: limits.is_unlimited ? 'Unlimited' : Math.max(0, limits.iterations_16_9 - usage16_9.iterations_used),
+                    thumbnailsGenerated: usage16_9.thumbnails_generated
+                },
+                '9:16': {
+                    used: usage9_16.iterations_used,
+                    limit: limits.is_unlimited ? 'Unlimited' : limits.iterations_9_16,
+                    remaining: limits.is_unlimited ? 'Unlimited' : Math.max(0, limits.iterations_9_16 - usage9_16.iterations_used),
+                    thumbnailsGenerated: usage9_16.thumbnails_generated
+                }
+            };
+
+        } catch (error) {
+            logger.error('Error getting thumbnail usage summary:', { error: error.message });
+            return null;
+        }
     }
 }
 

@@ -24,6 +24,23 @@ class ThumbnailController {
     }
 
     /**
+     * GET /api/thumbnails/usage
+     * Get thumbnail usage summary (limits and current usage for both aspect ratios)
+     */
+    async getUsageSummary(req, res) {
+        try {
+            const summary = await thumbnailService.getThumbnailUsageSummary(req.user.id);
+            if (!summary) {
+                return res.status(404).json({ success: false, error: 'Usage data not found' });
+            }
+            res.json({ success: true, data: summary });
+        } catch (error) {
+            logger.error('Failed to get thumbnail usage summary:', error);
+            res.status(500).json({ success: false, error: 'Failed to load usage summary' });
+        }
+    }
+
+    /**
      * GET /api/thumbnails/reference-images
      * Get user's reference images
      */
@@ -131,6 +148,21 @@ class ThumbnailController {
                 });
             }
 
+            // Check thumbnail generation limits based on subscription tier
+            const selectedAspectRatio = aspectRatio || '16:9';
+            const limitCheck = await thumbnailService.checkThumbnailLimit(req.user.id, selectedAspectRatio);
+
+            if (!limitCheck.canGenerate) {
+                logger.info(`Thumbnail generation blocked for user ${req.user.id}: ${limitCheck.reason}`);
+                return res.status(403).json({
+                    success: false,
+                    error: limitCheck.reason,
+                    requiresUpgrade: limitCheck.requiresUpgrade || false,
+                    usage: limitCheck.usage,
+                    limit: limitCheck.limit
+                });
+            }
+
             // Create a job for tracking
             const jobResult = await database.query(
                 `INSERT INTO thumbnail_generation_jobs (
@@ -193,6 +225,20 @@ class ThumbnailController {
             const videoId = parseInt(req.params.videoId);
             const userId = req.user.id;
             const aspectRatio = req.body.aspectRatio || '16:9';
+
+            // Check thumbnail generation limits BEFORE deleting existing thumbnails
+            const limitCheck = await thumbnailService.checkThumbnailLimit(userId, aspectRatio);
+
+            if (!limitCheck.canGenerate) {
+                logger.info(`Thumbnail regeneration blocked for user ${userId}: ${limitCheck.reason}`);
+                return res.status(403).json({
+                    success: false,
+                    error: limitCheck.reason,
+                    requiresUpgrade: limitCheck.requiresUpgrade || false,
+                    usage: limitCheck.usage,
+                    limit: limitCheck.limit
+                });
+            }
 
             // Only delete existing thumbnails with the same aspect ratio
             const existingThumbnails = await database.query(

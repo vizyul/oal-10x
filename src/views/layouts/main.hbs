@@ -165,11 +165,8 @@
             }
 
             {{#if user}}
-            // User is logged in - track for RefGrow analytics
-            console.log('User authenticated:', {
-                id: '{{user.id}}',
-                email: '{{user.email}}'
-            });
+            // User is logged in - available for analytics if needed
+            window.__userId = '{{user.id}}';
             {{/if}}
         })();
     </script>

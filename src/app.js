@@ -30,6 +30,10 @@ if (process.env.NODE_ENV === 'production' || isRailway) {
   logger.info('Trust proxy enabled for Railway deployment');
 }
 
+// Request ID middleware - must be first for request correlation
+const requestIdMiddleware = require('./middleware/request-id.middleware');
+app.use(requestIdMiddleware);
+
 // Cloudflare real IP middleware - extracts visitor IP from CF-Connecting-IP header
 app.use((req, res, next) => {
   // Cloudflare provides the real visitor IP in CF-Connecting-IP header
@@ -103,11 +107,18 @@ app.use(addRateLimitHeaders);
 app.use(logRateLimitEvents);
 app.use(autoRateLimit);
 
-// Request logging
-if (process.env.NODE_ENV === 'development') {
-  const morgan = require('morgan');
-  app.use(morgan('dev'));
-}
+// Request logging with request ID correlation
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  // Log response when finished
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.request(req, res, duration);
+  });
+
+  next();
+});
 
 // Stripe webhook endpoint (needs raw body for signature verification)
 app.use('/webhook/stripe', express.raw({ type: 'application/json' }), require('./routes/webhook.routes'));
@@ -172,7 +183,7 @@ app.get('/health', (req, res) => {
 
 // 404 handler
 app.use((req, res, _next) => {
-  logger.warn(`404 - ${req.method} ${req.url} - ${req.ip}`);
+  logger.warn(`404 ${req.method} ${req.url}`, null, req.requestId);
 
   if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
     // API request

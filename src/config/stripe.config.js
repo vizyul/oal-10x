@@ -77,7 +77,7 @@ const stripeConfig = {
     free: {
       name: 'Free',
       priceId: null,
-      features: ['1 free video', 'Basic AI summaries', 'Community support'],
+      features: ['1 free video', '8 Viral Thumbnails', 'Basic AI summaries', 'Community support'],
       videoLimit: 1,
       analyticsAccess: false,
       apiAccess: false
@@ -97,7 +97,7 @@ const stripeConfig = {
         savings: 78,
         period: 'year'
       },
-      features: ['4 videos/month', 'Video Transcript', 'SEO Optimized Summary', 'Video Chapters', '20 Social Media Posts', 'Email Support'],
+      features: ['4 videos/month', '24 Viral Thumbnails/month', 'Video Transcript', 'SEO Optimized Summary', 'Video Chapters', '20 Social Media Posts', 'Email Support'],
       videoLimit: 4,
       analyticsAccess: false,
       apiAccess: false
@@ -117,7 +117,7 @@ const stripeConfig = {
         savings: 138,
         period: 'year'
       },
-      features: ['8 videos/month', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
+      features: ['8 videos/month', '80 Viral Thumbnails/month', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
       videoLimit: 8,
       analyticsAccess: true,
       apiAccess: false
@@ -137,7 +137,7 @@ const stripeConfig = {
         savings: 258,
         period: 'year'
       },
-      features: ['16 videos/month', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
+      features: ['16 videos/month', '200 Viral Thumbnails/month', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
       videoLimit: 16,
       analyticsAccess: true,
       apiAccess: true
@@ -157,7 +157,7 @@ const stripeConfig = {
         savings: 798,
         period: 'year'
       },
-      features: ['50 videos/month', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
+      features: ['50 videos/month', 'Unlimited Viral Thumbnails', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
       videoLimit: 50,
       analyticsAccess: true,
       apiAccess: true

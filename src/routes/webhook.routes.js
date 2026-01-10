@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const subscriptionController = require('../controllers/subscription.controller');
-
-console.log('📦 Webhook routes module loading...');
+const { logger } = require('../utils');
 
 /**
  * @route   GET /webhook/test
@@ -10,7 +9,7 @@ console.log('📦 Webhook routes module loading...');
  * @access  Public
  */
 router.get('/test', (req, res) => {
-  console.log('🧪 Test webhook endpoint hit!');
+  logger.debug('Webhook test endpoint hit', null, req.requestId);
   res.json({
     success: true,
     message: 'Webhook endpoint is accessible!',
@@ -25,17 +24,9 @@ router.get('/test', (req, res) => {
  */
 router.post('/',
   (req, res, next) => {
-    console.log('🔗 Stripe webhook received!', {
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-      bodyLength: req.body ? req.body.length : 0,
-      bodyType: typeof req.body
-    });
+    logger.debug('Stripe webhook received', { bodyLength: req.body ? req.body.length : 0 }, req.requestId);
     next();
   },
   subscriptionController.handleWebhook
 );
-
-console.log('✅ Webhook routes defined');
 module.exports = router;

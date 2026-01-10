@@ -29,7 +29,7 @@ class ProcessingStatusService extends EventEmitter {
       this.contentTypesCache = result.rows.map(row => row.content_type);
       this.contentTypesCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
 
-      logger.info(`Loaded ${this.contentTypesCache.length} content types from database`);
+      logger.debug(`Loaded ${this.contentTypesCache.length} content types from database`);
       return this.contentTypesCache;
     } catch (error) {
       logger.error('Error loading content types from database:', error);
@@ -67,10 +67,7 @@ class ProcessingStatusService extends EventEmitter {
 
     this.processingVideos.set(videoId, status);
 
-    logger.info(`Initialized processing status for video ${videoId}`, {
-      contentTypes: contentTypes.length,
-      allAvailableTypes: allContentTypes.length
-    });
+    logger.debug(`Processing status initialized for video ${videoId}`, { contentTypes: contentTypes.length });
 
     return status;
   }
@@ -112,14 +109,10 @@ class ProcessingStatusService extends EventEmitter {
     const verifyInMap = this.processingVideos.has(videoId);
     const mapSize = this.processingVideos.size;
 
-    logger.info(`Initialized processing status for video ${videoId}`, {
+    logger.debug(`Processing status initialized for video ${videoId}`, {
       userId,
       contentTypes: contentTypes.length,
-      recordId: videoRecordId,
-      allAvailableTypes: allContentTypes.length,
-      videoIdType: typeof videoId,
-      verifiedInMap: verifyInMap,
-      totalVideosInMap: mapSize
+      recordId: videoRecordId
     });
 
     // Emit status update to connected clients
@@ -228,7 +221,7 @@ class ProcessingStatusService extends EventEmitter {
     );
 
     if (transcriptComplete && contentComplete) {
-      logger.info(`All processing completed for video ${videoId}`);
+      logger.debug(`All processing completed for video ${videoId}`);
       this.completeVideoProcessing(videoId);
 
       // Update video status in PostgreSQL database and deduct from subscription
@@ -250,7 +243,7 @@ class ProcessingStatusService extends EventEmitter {
 
     this.processingVideos.set(videoId, videoStatus);
 
-    logger.info(`Completed processing for video ${videoId}`);
+    logger.info(`Processing completed: videoId=${videoId}`);
     this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
 
     // Auto-cleanup after 30 minutes
@@ -358,7 +351,7 @@ class ProcessingStatusService extends EventEmitter {
     });
 
     if (clearedCount > 0) {
-      logger.info(`Cleared ${clearedCount} completed videos for user ${userId} (no active sessions)`);
+      logger.debug(`Cleared ${clearedCount} completed videos for user ${userId}`);
     }
 
     // Count videos still processing for this user
@@ -370,7 +363,7 @@ class ProcessingStatusService extends EventEmitter {
     });
 
     if (stillProcessingCount > 0) {
-      logger.info(`User ${userId} has ${stillProcessingCount} videos still processing - kept in memory`);
+      logger.debug(`User ${userId} has ${stillProcessingCount} videos still processing`);
     }
 
     return clearedCount;
@@ -384,11 +377,7 @@ class ProcessingStatusService extends EventEmitter {
    * @param {string} userId - User ID
    */
   clearUserProcessingVideos(userId) {
-    // Log call stack to identify who triggered this clear
-    const stack = new Error().stack;
-    logger.info(`clearUserProcessingVideos called for user ${userId}`, {
-      calledFrom: stack.split('\n').slice(2, 5).join(' <- ')
-    });
+    logger.debug(`clearUserProcessingVideos called for user ${userId}`);
 
     let clearedCount = 0;
     const clearedVideoIds = [];
@@ -494,7 +483,7 @@ class ProcessingStatusService extends EventEmitter {
     });
 
     if (cleanedCount > 0) {
-      logger.info(`Cleaned up ${cleanedCount} old processing records`);
+      logger.debug(`Cleaned up ${cleanedCount} old processing records`);
     }
 
     return cleanedCount;
@@ -519,7 +508,7 @@ class ProcessingStatusService extends EventEmitter {
       // Update PostgreSQL
       try {
         await databaseService.update('videos', videoRecordId, updates);
-        logger.info(`Video ${videoId} marked as completed in PostgreSQL`);
+        logger.debug(`Video ${videoId} status updated to completed in DB`);
       } catch (error) {
         logger.error(`Failed to update video status in PostgreSQL: ${error.message}`);
       }
@@ -542,7 +531,7 @@ class ProcessingStatusService extends EventEmitter {
       return false;
     }
 
-    logger.info(`Canceling processing for video ${videoId}`);
+    logger.debug(`Canceling processing for video ${videoId}`);
 
     // Cancel transcript if pending
     if (videoStatus.transcript.status === 'pending') {
@@ -570,7 +559,7 @@ class ProcessingStatusService extends EventEmitter {
     // Clean up after delay
     setTimeout(() => {
       this.processingVideos.delete(videoId);
-      logger.info(`Removed cancelled video ${videoId} from processing status`);
+      logger.debug(`Removed cancelled video ${videoId} from processing status`);
     }, 5000); // Keep visible for 5 seconds so user can see cancellation
 
     return true;

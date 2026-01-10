@@ -59,7 +59,7 @@ const validationMiddleware = (req, res, next) => {
       value: error.value
     }));
 
-    logger.warn('Validation failed:', formattedErrors);
+    logger.debug('Validation failed', { errorCount: formattedErrors.length }, req.requestId);
 
     // For API requests
     if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
@@ -111,7 +111,7 @@ const setCachedUser = (userId, user) => {
 
 const clearCachedUser = (userId) => {
   userCache.delete(userId);
-  logger.debug('Cleared cached user data:', { userId });
+  logger.debug(`Cleared cached user data for userId=${userId}`);
 };
 
 // Set to track users who need token refresh
@@ -122,7 +122,7 @@ const forceTokenRefresh = (userId) => {
   clearCachedUser(userId);
   // Mark user as needing token refresh
   usersNeedingTokenRefresh.add(userId.toString());
-  logger.info('Forced token refresh for user:', { userId });
+  logger.debug(`Forced token refresh for userId=${userId}`);
 };
 
 // Authentication middleware
@@ -159,7 +159,7 @@ const authMiddleware = async (req, res, next) => {
     if (usersNeedingTokenRefresh.has(userId)) {
       needsTokenRefresh = true;
       usersNeedingTokenRefresh.delete(userId); // Remove from set after processing
-      logger.info('Processing forced token refresh for user:', { userId });
+      logger.debug(`Processing forced token refresh for userId=${userId}`, null, req.requestId);
     }
 
 
@@ -218,10 +218,10 @@ const authMiddleware = async (req, res, next) => {
           user = freshUser;
           setCachedUser(user.id, user);
 
-          logger.info('Auto-refreshed JWT token for user:', user.email);
+          logger.debug(`Auto-refreshed JWT token for userId=${user.id}`, null, req.requestId);
         }
       } catch (error) {
-        logger.error('Auto token refresh failed:', error);
+        logger.error('Auto token refresh failed', { error: error.message }, req.requestId);
         // Continue with existing user data - don't fail the request
       }
     }
@@ -242,13 +242,8 @@ const authMiddleware = async (req, res, next) => {
     req.user = user;
     req.userId = user.id;
 
-    // Debug logging
-    logger.info('Auth middleware completed - req.user set:', {
-      userId: req.user.id,
-      email: req.user.email,
-      firstName: req.user.firstName,
-      hasFirstName: !!req.user.firstName
-    });
+    // Debug level - only visible when LOG_LEVEL=debug
+    logger.debug(`Auth: userId=${req.user.id}`, null, req.requestId);
 
     next();
   } catch (error) {
@@ -258,7 +253,7 @@ const authMiddleware = async (req, res, next) => {
       return handleAuthError(req, res, 'Token expired');
     }
 
-    logger.error('Authentication middleware error:', error);
+    logger.error('Auth middleware error', { error: error.message }, req.requestId);
     return handleAuthError(req, res, 'Authentication failed');
   }
 };
@@ -344,10 +339,10 @@ const optionalAuthMiddleware = async (req, res, next) => {
           user = freshUser;
           setCachedUser(user.id, user);
 
-          logger.info('Auto-refreshed JWT token for user:', user.email);
+          logger.debug(`Auto-refreshed JWT token for userId=${user.id}`, null, req.requestId);
         }
       } catch (error) {
-        logger.error('Auto token refresh failed:', error);
+        logger.error('Auto token refresh failed', { error: error.message }, req.requestId);
         // Continue with existing user data - don't fail the request
       }
     }
@@ -360,7 +355,7 @@ const optionalAuthMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     // Silently continue without authentication
-    logger.info('Optional auth failed (continuing):', error.message);
+    logger.debug('Optional auth skipped', { reason: error.message }, req.requestId);
     next();
   }
 };
@@ -387,7 +382,7 @@ const guestOnlyMiddleware = (req, res, next) => {
 
 // Error handling middleware
 const errorMiddleware = (error, req, res, _next) => {
-  logger.error('Global error handler:', error);
+  logger.error('Unhandled error', { error: error.message, stack: error.stack?.split('\n')[0] }, req.requestId);
 
   // Default error
   let statusCode = 500;
@@ -435,7 +430,7 @@ const errorMiddleware = (error, req, res, _next) => {
 
 // Helper function for authentication errors
 const handleAuthError = (req, res, message) => {
-  logger.warn(`Authentication failed: ${message} - ${req.ip}`);
+  logger.warn(`Auth failed: ${message}`, null, req.requestId);
 
   // Clear invalid token
   res.clearCookie('auth_token');

@@ -55,7 +55,7 @@ class PreferencesService {
         updatedAt: fields.updated_at
       };
     } catch (error) {
-      logger.error('Error getting user preferences:', error);
+      logger.error('Error getting user preferences', { error: error.message });
       throw error;
     }
   }
@@ -71,25 +71,20 @@ class PreferencesService {
         throw new Error('PostgreSQL not configured');
       }
 
-      // Add stack trace to see WHERE this is being called from
-      const stack = new Error().stack;
-      logger.warn(`🚨 CREATING DEFAULT PREFERENCES for user: ${userEmail}`);
-      logger.warn('🚨 Call stack:', stack);
-
       // First find the user to get their ID
       const authService = require('./auth.service');
       const user = await authService.findUserByEmail(userEmail);
 
       if (!user) {
-        logger.error(`User not found when creating preferences: ${userEmail}`);
+        logger.warn(`User not found for preferences: ${userEmail}`);
         throw new Error(`User not found: ${userEmail}`);
       }
 
-      logger.info(`Found user for preferences: ${user.id}`);
+      logger.debug(`Found user for preferences: userId=${user.id}`);
 
       const now = new Date().toISOString();
 
-      logger.info(`Creating default preferences for user: ${userEmail}`);
+      logger.debug(`Creating default preferences for user: ${userEmail}`);
 
       const fields = {
         users_id: user.id, // Foreign key to users table
@@ -102,11 +97,11 @@ class PreferencesService {
         updated_at: now
       };
 
-      logger.info('Attempting to create preferences record with fields:', fields);
+      logger.debug('Creating preferences record');
 
       const record = await database.create(this.tableName, fields);
 
-      logger.info('Successfully created preferences record:', record.id);
+      logger.debug(`Preferences record created: id=${record.id}`);
 
       if (!record) {
         throw new Error('Failed to create user preferences');
@@ -115,7 +110,7 @@ class PreferencesService {
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
 
-      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
+      logger.info(`Created user preferences: id=${record.id || recordFields.id}`);
 
       return {
         id: record.id || recordFields.id,
@@ -131,7 +126,7 @@ class PreferencesService {
         updatedAt: recordFields.updated_at
       };
     } catch (error) {
-      logger.error('Error creating default preferences:', error);
+      logger.error('Error creating default preferences', { error: error.message });
       throw error;
     }
   }
@@ -201,7 +196,7 @@ class PreferencesService {
       // Handle both database service formatted records and direct PostgreSQL rows
       const recordFields = record.fields || record;
 
-      logger.info(`Created preferences for user ${userEmail} with id: ${record.id || recordFields.id}`);
+      logger.info(`Created user preferences: id=${record.id || recordFields.id}`);
 
       return {
         id: record.id || recordFields.id,

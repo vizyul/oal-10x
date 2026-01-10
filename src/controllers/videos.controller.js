@@ -38,11 +38,10 @@ class VideosController {
    */
   async getVideos(req, res) {
     try {
-      logger.info('=== Starting getVideos method ===');
       const { page = 1, limit = 10, status, search, category } = req.query;
       const userId = req.user.id;
 
-      logger.info(`Fetching videos for user ${userId}`, { page, limit, status, search, category });
+      logger.debug(`GET /api/videos userId=${userId} page=${page}`, null, req.requestId);
 
       const actualUserId = await this.resolveUserId(userId);
 
@@ -56,7 +55,7 @@ class VideosController {
         includeContent: true  // Include content from video_content table
       });
 
-      logger.info(`Found ${result.videos.length} videos for user ${actualUserId}`);
+      logger.debug(`Found ${result.videos.length} videos`, null, req.requestId);
 
       // Format videos for API response
       const formattedVideos = result.videos.map((videoRecord) => {
@@ -77,7 +76,7 @@ class VideosController {
         }
       });
 
-      logger.info(`Successfully formatted ${formattedVideos.length} videos for response`);
+      logger.debug(`Formatted ${formattedVideos.length} videos`, null, req.requestId);
 
       res.json({
         success: true,
@@ -88,9 +87,7 @@ class VideosController {
       });
 
     } catch (error) {
-      logger.error('=== ERROR in getVideos method ===');
-      logger.error('Error fetching videos:', error);
-      logger.error('Error stack:', error.stack);
+      logger.error('Error fetching videos', { error: error.message }, req.requestId);
 
       // More detailed error information
       const errorResponse = {
@@ -266,12 +263,12 @@ class VideosController {
       let postgresRecord = null;
 
       try {
-        logger.info('Creating video using Video model...');
+        logger.debug('Creating video via Video model', null, req.requestId);
         postgresRecord = await video.createVideo(videoData);
-        logger.info(`✅ Video created in PostgreSQL: ID ${postgresRecord.id}`);
+        logger.info(`Video created: id=${postgresRecord.id}`, null, req.requestId);
 
       } catch (postgresError) {
-        logger.error('❌ Failed to create video in PostgreSQL:', postgresError);
+        logger.error('Failed to create video', { error: postgresError.message }, req.requestId);
         return res.status(500).json({
           success: false,
           message: 'Failed to create video',
@@ -965,7 +962,7 @@ class VideosController {
           if (userResult && userResult.length > 0) {
             const user = userResult[0];
             actualUserId = user.id;
-            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+            logger.debug(`Resolved Airtable user to PostgreSQL ID ${actualUserId}`);
           } else {
             logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
           }
@@ -1060,7 +1057,7 @@ class VideosController {
           if (userResult && userResult.length > 0) {
             const user = userResult[0];
             actualUserId = user.id;
-            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+            logger.debug(`Resolved Airtable user to PostgreSQL ID ${actualUserId}`);
           } else {
             logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
           }
@@ -1209,10 +1206,7 @@ class VideosController {
    */
   async debugUser(req, res) {
     try {
-      logger.info('=== DEBUG USER ENDPOINT ===');
-      logger.info('req.user:', req.user);
-      logger.info('req.user.id:', req.user?.id);
-      logger.info('req.user type:', typeof req.user?.id);
+      logger.debug(`Debug user endpoint called userId=${req.user?.id}`, null, req.requestId);
 
       return res.json({
         success: true,
@@ -1247,7 +1241,7 @@ class VideosController {
       const userId = req.user.id;
       const { urls, contentTypes = [] } = req.body;
 
-      logger.info(`Batch processing ${urls?.length || 0} videos for user ${userId} with content types:`, contentTypes);
+      logger.info(`Batch import: ${urls?.length || 0} videos for userId=${userId}`, null, req.requestId);
 
       if (!urls || !Array.isArray(urls) || urls.length === 0) {
         return res.status(400).json({
@@ -1258,7 +1252,6 @@ class VideosController {
 
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
-      logger.info(`Processing URL videos for user ID: ${userId} (type: ${typeof userId})`);
 
       if (typeof userId === 'string' && userId.startsWith('rec')) {
         try {
@@ -1266,7 +1259,7 @@ class VideosController {
           if (userResult && userResult.length > 0) {
             const user = userResult[0];
             actualUserId = user.id;
-            logger.info(`Found PostgreSQL user ID ${actualUserId} for Airtable user ${userId}`);
+            logger.debug(`Resolved Airtable user to PostgreSQL ID ${actualUserId}`);
           } else {
             logger.warn(`No PostgreSQL user found for Airtable user ${userId}`);
             return res.status(400).json({
@@ -1285,7 +1278,7 @@ class VideosController {
         actualUserId = parseInt(userId);
       }
 
-      logger.info(`Final actualUserId for video creation: ${actualUserId}`);
+      logger.debug(`Using userId=${actualUserId}`, null, req.requestId);
 
       // Verify the user exists in the database
       try {
@@ -1297,7 +1290,7 @@ class VideosController {
             message: `User ID ${actualUserId} not found in database`
           });
         }
-        logger.info(`✅ Verified user ID ${actualUserId} exists in database`);
+        logger.debug(`User ${actualUserId} verified`, null, req.requestId);
       } catch (userCheckError) {
         logger.error('Error checking user existence:', userCheckError);
         return res.status(500).json({
@@ -1371,7 +1364,7 @@ class VideosController {
           // Create video record using Video model
           logger.info(`Writing video ${videoId} to PostgreSQL...`);
           const postgresRecord = await video.createVideo(videoData);
-          logger.info(`✅ Video ${videoId} created in PostgreSQL: ID ${postgresRecord.id}`);
+          logger.info(`Video created: id=${postgresRecord.id} videoId=${videoId}`);
 
           // Database write succeeded - handle usage tracking for both free and paid users
           try {
@@ -1384,14 +1377,14 @@ class VideosController {
             if (userTier === 'free') {
               // Mark free video as used
               await subscriptionService.markFreeVideoAsUsed(actualUserId);
-              logger.info(`✅ Marked free video as used for user ${actualUserId}`);
+              logger.debug(`Marked free video as used for userId=${actualUserId}`);
             } else {
               // Regular subscription usage tracking for paid users
               await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
-              logger.info(`✅ Incremented video usage for user ${actualUserId}`);
+              logger.debug(`Incremented video usage for userId=${actualUserId}`);
             }
           } catch (usageError) {
-            logger.warn(`⚠️  Failed to update usage for user ${actualUserId}:`, usageError.message);
+            logger.warn(`Failed to update usage for userId=${actualUserId}`, { error: usageError.message });
           }
 
           // Trigger processing with selected content types
@@ -1486,7 +1479,7 @@ class VideosController {
           userId,
           contentTypes
         );
-        logger.info(`Initialized processing status for video ${youtubeVideoId} with content types:`, contentTypes);
+        logger.debug(`Initialized processing status for video ${youtubeVideoId}`, { contentTypeCount: contentTypes.length });
       }
 
       // Update video status to pending using Video model
@@ -1497,19 +1490,19 @@ class VideosController {
       const youtubeUrl = metadata?.url;
 
       if (youtubeVideoId && youtubeUrl) {
-        logger.info(`Starting transcript extraction for video ${youtubeVideoId}`);
+        logger.debug(`Starting transcript extraction for video ${youtubeVideoId}`);
 
         // Process transcript asynchronously using the same method as YouTube OAuth videos
         transcriptService.processVideoTranscript(youtubeVideoId, youtubeUrl, videoId, userId, contentTypes)
           .then(result => {
             if (result.success) {
-              logger.info(`✅ Transcript successfully processed for video ${youtubeVideoId}`);
+              logger.info(`Transcript processed for video ${youtubeVideoId}`);
             } else {
-              logger.info(`ℹ️  Transcript not available for video ${youtubeVideoId}: ${result.reason}`);
+              logger.debug(`Transcript not available for video ${youtubeVideoId}: ${result.reason}`);
             }
           })
           .catch(error => {
-            logger.warn(`⚠️  Transcript processing failed for video ${youtubeVideoId}:`, error.message);
+            logger.warn(`Transcript processing failed for video ${youtubeVideoId}`, { error: error.message });
           });
       }
 

@@ -32,6 +32,9 @@ router.use(authMiddleware);
 // Get options (styles, expressions, categories)
 router.get('/options', thumbnailController.getOptions.bind(thumbnailController));
 
+// Get thumbnail usage summary (limits and current usage)
+router.get('/usage', thumbnailController.getUsageSummary.bind(thumbnailController));
+
 // Reference images
 router.get('/reference-images', thumbnailController.getReferenceImages.bind(thumbnailController));
 router.post('/reference-images', upload.single('image'), thumbnailController.uploadReferenceImage.bind(thumbnailController));

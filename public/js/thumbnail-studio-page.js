@@ -632,7 +632,6 @@ class ThumbnailStudioPage {
             const thumbHtml = `
                 <div class="thumbnail-slot" data-id="${thumb.id}">
                     <img src="${thumb.cloudinary_secure_url}" alt="Thumbnail">
-                    <span class="style-badge">${styleMap[thumb.style_name] || thumb.style_display_name || thumb.style_name}</span>
                     <div class="thumbnail-actions-btns">
                         <button class="thumbnail-view-btn" data-url="${thumb.cloudinary_secure_url}" title="View Full Size">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -761,7 +760,6 @@ class ThumbnailStudioPage {
             <div class="thumbnail-slot ${thumb.is_selected ? 'selected' : ''}"
                  data-id="${thumb.id}">
                 <img src="${thumb.cloudinary_secure_url}" alt="Thumbnail">
-                <span class="style-badge">${styleMap[thumb.style_name] || thumb.style_display_name || thumb.style_name}</span>
                 ${thumb.is_selected ? '<span class="selected-badge">Active</span>' : ''}
                 <div class="thumbnail-actions-btns">
                     <button class="thumbnail-view-btn" data-url="${thumb.cloudinary_secure_url}" title="View Full Size">

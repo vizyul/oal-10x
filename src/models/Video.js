@@ -23,7 +23,7 @@ class Video extends BaseModel {
       description: { required: false, type: 'string' },
       duration: { required: false, type: 'integer' },
       upload_date: { required: false, type: 'date' },
-      thumbnail_url: { required: false, type: 'string' },
+      thumbnail: { required: false, type: 'string' },
       status: { required: false, type: 'string', default: 'pending' },
       category: { required: false, type: 'string', default: 'general' },
       privacy_setting: { required: false, type: 'string', default: 'public' }
@@ -116,18 +116,22 @@ class Video extends BaseModel {
         // Calculate offset and add pagination
         const offset = (page - 1) * limit;
 
-        // Query to get videos with aggregated content (includes transcript from videos table)
+        // Query to get videos with content availability flags (NOT full content text)
+        // Full content should be fetched on demand when viewing a specific video
         const videosQuery = `
-          SELECT v.*,
+          SELECT v.id, v.videoid, v.video_title, v.channel_name, v.channel_handle,
+                 v.description, v.duration, v.upload_date, v.thumbnail, v.youtube_url,
+                 v.status, v.category, v.privacy_setting,
+                 v.created_at, v.updated_at, v.users_id, v.transcript_text,
             COALESCE(
               json_object_agg(
-                ct.key, 
-                CASE WHEN vc.content_text IS NOT NULL AND vc.content_text != '' 
-                     THEN vc.content_text 
-                     ELSE NULL END
+                ct.key,
+                CASE WHEN vc.content_text IS NOT NULL AND vc.content_text != ''
+                     THEN true
+                     ELSE false END
               ) FILTER (WHERE ct.key IS NOT NULL),
               '{}'::json
-            ) as content_data
+            ) as content_available
           FROM videos v
           LEFT JOIN video_content vc ON v.id = vc.video_id
           LEFT JOIN content_types ct ON vc.content_type_id = ct.id
@@ -153,24 +157,23 @@ class Video extends BaseModel {
         ]);
 
         const videos = videosResult.rows.map(row => {
-          const { content_data, ...videoData } = row;
+          const { content_available, ...videoData } = row;
 
-          // Create a copy of content_data to modify
-          const enhancedContentData = { ...content_data };
+          // Build content_available map with transcript status
+          const contentStatus = { ...content_available };
 
-          // Add transcript from videos table if it exists and not already in content_data
-          if (videoData.transcript_text && videoData.transcript_text.trim() && !enhancedContentData.transcript_text) {
-            enhancedContentData.transcript_text = videoData.transcript_text;
+          // Add transcript availability from videos table
+          if (videoData.transcript_text && videoData.transcript_text.trim()) {
+            contentStatus.transcript_text = true;
           }
 
-          // Merge content data into the video object for compatibility AND preserve content_data for dashboard
-          const mergedData = {
+          // Return video with content availability flags (not full content)
+          return {
             ...videoData,
-            ...enhancedContentData,
-            content_data: enhancedContentData // Preserve the enhanced content_data structure for dashboard
+            content_available: contentStatus,
+            // For backward compatibility, provide empty content_data
+            content_data: {}
           };
-
-          return mergedData;
         });
 
         const totalRecords = parseInt(countResult.rows[0].total);
@@ -461,7 +464,7 @@ class Video extends BaseModel {
       title: formatted.video_title,
       channelName: formatted.channel_name,
       youtubeUrl: formatted.youtube_url,
-      thumbnailUrl: formatted.thumbnail_url,
+      thumbnailUrl: formatted.thumbnail,
       uploadDate: formatted.upload_date,
       createdAt: formatted.created_at,
       updatedAt: formatted.updated_at

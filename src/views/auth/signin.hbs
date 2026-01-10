@@ -170,21 +170,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             timezoneField.value = timezone;
         } catch (error) {
-            console.log('Unable to detect timezone:', error);
             // Keep empty value, server will use fallback
         }
     }
-    
+
     if (typeof initSigninForm === 'function') {
         initSigninForm();
     }
-    
+
     // Handle resend verification
     const resendBtn = document.getElementById('resendVerification');
     if (resendBtn) {
         resendBtn.addEventListener('click', function() {
-            // Implementation for resending verification email
-            console.log('Resend verification email');
+            // TODO: Implement resend verification email functionality
         });
     }
 });

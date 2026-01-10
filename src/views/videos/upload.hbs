@@ -268,43 +268,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // URL Processing Functions
   function processURLInput() {
     const text = youtubeUrlsTextarea.value.trim();
-    console.log('processURLInput called with text:', text);
 
     // Clear existing URLs from selection
     selectedUrls.clear();
 
     if (!text) {
-      console.log('No text, calling updateSelectionUI');
       updateSelectionUI();
       return;
     }
 
     const { urls, errors, invalidUrls, duplicates } = parseURLs(text);
-    console.log('parseURLs result:', {
-      urls: urls.length,
-      urlsArray: urls,
-      errors: errors.length,
-      invalidUrls: invalidUrls.length,
-      duplicates: duplicates.length,
-      duplicatesArray: duplicates
-    });
 
     // Check subscription limits before processing
     const currentSelected = selectedVideos.size;
     const maxAllowed = subscriptionLimits ? subscriptionLimits.remainingVideos : Infinity;
     const availableSlots = maxAllowed - currentSelected;
 
-    console.log('Subscription check:', {
-      currentSelected,
-      maxAllowed,
-      availableSlots,
-      urlsLength: urls.length,
-      subscriptionLimits
-    });
-
     // Check if user has no available slots (exhausted subscription)
     if (subscriptionLimits && availableSlots <= 0) {
-      console.log('No available slots - subscription exhausted');
       const tierMessage = subscriptionLimits.tier === 'free'
         ? `You've used your free video (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`
         : `Your video import limit has been reached (${subscriptionLimits.usage.videos}/${subscriptionLimits.limits.videos}).`;
@@ -316,7 +297,6 @@ Entered URLs cannot be processed due to subscription limits.`);
       // Don't add any URLs
       selectedUrls.clear();
     } else if (subscriptionLimits && urls.length > availableSlots) {
-      console.log('Subscription limit hit - adding only', availableSlots, 'URLs');
       const droppedCount = urls.length - availableSlots;
       const droppedUrls = urls.slice(availableSlots);
 
@@ -336,12 +316,9 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       // Only add what we can
       urls.slice(0, availableSlots).forEach(url => selectedUrls.add(url));
     } else {
-      console.log('Adding all', urls.length, 'valid URLs');
       // Add all valid URLs
       urls.forEach(url => selectedUrls.add(url));
     }
-
-    console.log('selectedUrls after processing:', selectedUrls.size, 'URLs:', Array.from(selectedUrls));
 
     // Show detailed messages for errors and duplicates
     let hasIssues = errors.length > 0 || duplicates.length > 0;
@@ -398,8 +375,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
     usage: {{{json subscription.usage}}},
     tier: '{{subscription.tier}}'
   };
-
-  console.log('Subscription limits loaded:', subscriptionLimits);
 
   // Initialize core functionality first (independent of OAuth)
   loadContentTypes();
@@ -735,7 +710,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       selectedVideos.delete(videoId);
     }
 
-    console.log('About to call updateSelectionUI');
     updateSelectionUI();
   }
 
@@ -745,14 +719,10 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
     const floatingAmplifyBtn = document.getElementById('floating-amplify-btn');
     const floatingBtnCount = document.getElementById('floating-btn-count');
 
-    console.log('updateSelectionUI called - selectedVideos.size:', selectedVideos.size, 'selectedUrls.size:', selectedUrls.size, 'totalSelected:', totalSelected);
-
     // Show video grid only when there are YouTube OAuth videos selected
     if (selectedVideos.size > 0) {
-      console.log('Showing video grid for YouTube videos');
       videoGrid?.classList.remove('hidden');
     } else {
-      console.log('Hiding video grid - no YouTube videos selected');
       videoGrid?.classList.add('hidden');
     }
 
@@ -773,7 +743,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
 
     // Update floating action button
     if (totalSelected > 0) {
-      console.log('Showing floating amplify button');
       floatingAmplifyBtn?.classList.remove('hidden');
 
       // Update count text in floating button
@@ -798,7 +767,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
         attentionArrow.classList.add('visible');
       }
     } else {
-      console.log('Hiding floating amplify button');
       floatingAmplifyBtn?.classList.add('hidden');
 
       // Remove attention-grabbing animations
@@ -910,7 +878,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       // Process YouTube OAuth selected videos
       if (selectedVideos.size > 0) {
         const videoIds = Array.from(selectedVideos);
-        console.log('Importing YouTube videos:', { videoIds, contentTypes });
 
         const importPromise = fetch('/api/youtube/videos/import', {
           method: 'POST',
@@ -922,7 +889,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
             contentTypes
           })
         }).then(response => {
-          console.log('YouTube import response status:', response.status);
           if (!response.ok) {
             return response.json().then(err => {
               console.error('YouTube import failed:', err);
@@ -965,7 +931,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
         responses.forEach(async (response) => {
           if (response.ok) {
             const result = await response.json();
-            console.log('Import result:', result);
             if (result.success) {
               if (result.data?.imported !== undefined) {
                 createdCount += result.data.imported;
@@ -981,8 +946,6 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
             hasErrors = true;
           }
         });
-
-        console.log(`Processing complete: ${createdCount} videos created successfully, hasErrors: ${hasErrors}`);
 
         // Only redirect if no errors
         if (!hasErrors) {

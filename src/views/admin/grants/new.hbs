@@ -129,19 +129,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Function to select a user
   async function selectUser(user) {
-    console.log('selectUser called with:', user);
-
     userSearch.value = user.email;
     userIdInput.value = user.id;
     searchResults.classList.add('hidden');
-
-    console.log('userId input set to:', userIdInput.value);
 
     // Fetch full user details including grant history
     try {
       const response = await fetch(`/admin/api/grants/user/${user.id}`);
       const data = await response.json();
-      console.log('User details fetched:', data);
 
       userDetails.innerHTML = `
         <p><strong>Email:</strong> ${data.user.email}</p>
@@ -181,7 +176,6 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         const response = await fetch(`/admin/api/grants/search-users?q=${encodeURIComponent(query)}`);
         const data = await response.json();
-        console.log('Search results:', data);
 
         if (data.users && data.users.length > 0) {
           searchResults.innerHTML = '';
@@ -201,7 +195,6 @@ document.addEventListener('DOMContentLoaded', function() {
             div.addEventListener('click', function(e) {
               e.preventDefault();
               e.stopPropagation();
-              console.log('Click on user:', user.id, user.email);
               selectUser(user);
             });
 
@@ -261,11 +254,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Form validation
   document.getElementById('grantForm').addEventListener('submit', function(e) {
-    console.log('Form submit triggered');
-    console.log('userId:', userIdInput.value);
-    console.log('grantType:', grantType.value);
-    console.log('reason:', document.getElementById('reason').value);
-
     // Clear previous error states
     userSearch.classList.remove('border-red-500');
     document.getElementById('reason').classList.remove('border-red-500');
@@ -309,7 +297,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (!hasError) {
-      console.log('Form validation passed, submitting...');
       document.getElementById('submitBtn').disabled = true;
       document.getElementById('submitBtn').textContent = 'Creating Grant...';
     }

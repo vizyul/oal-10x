@@ -1573,10 +1573,16 @@ async function loadCompletedVideos() {
           }
 
           // Content is now stored in the normalized video_content table
-          // No need for field mapping - use content_data JSON directly
+          // Use content_available flags for icon display (performance optimization)
+          // Actual content is fetched on-demand when user clicks an icon
 
-          // Find available content - use new normalized content_data structure
+          // Find available content using boolean flags from content_available
           const availableContent = contentTypes.filter(type => {
+            // Check content_available flags (from optimized query)
+            if (video.content_available && video.content_available[type.key]) {
+              return true;
+            }
+            // Fallback: check content_data if content_available not present
             if (video.content_data && video.content_data[type.key]) {
               const content = video.content_data[type.key];
               return content && content.trim() !== '';

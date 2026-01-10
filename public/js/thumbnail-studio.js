@@ -657,7 +657,6 @@ class ThumbnailStudio {
                  data-id="${thumb.id}"
                  onclick="thumbnailStudio.selectThumbnail(${thumb.id}, this)">
                 <img src="${thumb.cloudinary_secure_url}" alt="Thumbnail">
-                <span class="style-badge">${styleMap[thumb.style_name] || thumb.style_display_name || thumb.style_name}</span>
                 ${thumb.is_selected ? '<span class="selected-badge">Active</span>' : ''}
                 <button class="thumbnail-download-btn" onclick="event.stopPropagation(); thumbnailStudio.downloadSingleThumbnail('${thumb.cloudinary_secure_url}', '${thumb.style_name || 'thumbnail'}')" title="Download">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
