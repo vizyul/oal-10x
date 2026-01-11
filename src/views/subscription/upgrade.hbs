@@ -126,6 +126,7 @@
 <script>
   const stripePublishableKey = '{{{stripePublishableKey}}}';
   const stripe = Stripe(stripePublishableKey);
+  const isLoggedIn = {{#if user}}true{{else}}false{{/if}};
   
   // Notification system
   function showNotification(message, type = 'error') {
@@ -185,17 +186,24 @@
   
   document.querySelectorAll('.subscribe-btn').forEach(button => {
     button.addEventListener('click', async (e) => {
+      // Check if user is logged in first
+      if (!isLoggedIn) {
+        // Redirect to sign-in with return URL
+        window.location.href = '/auth/sign-in?redirect=' + encodeURIComponent('/subscription/upgrade');
+        return;
+      }
+
       const isYearly = document.getElementById('billing-toggle').checked;
       const monthlyPriceId = e.target.dataset.monthlyPriceId;
       const yearlyPriceId = e.target.dataset.yearlyPriceId;
       const priceId = isYearly ? yearlyPriceId : monthlyPriceId;
       const tier = e.target.dataset.tier;
-      
+
       if (!priceId) {
         showNotification('Price ID not configured for this tier. Please contact support.', 'error');
         return;
       }
-      
+
       // Show loading state
       e.target.disabled = true;
       e.target.textContent = 'Processing...';
