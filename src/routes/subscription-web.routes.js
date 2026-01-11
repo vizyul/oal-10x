@@ -1,45 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, subscriptionMiddleware } = require('../middleware');
+const { authMiddleware, optionalAuthMiddleware, subscriptionMiddleware } = require('../middleware');
 const stripeConfig = require('../config/stripe.config');
 const { logger } = require('../utils');
 
 logger.debug('Subscription web routes loaded');
 
-// Apply authentication middleware to all subscription web routes
-router.use(authMiddleware);
-
-// Add subscription info to all routes
-router.use(subscriptionMiddleware.addSubscriptionInfo);
-
-/**
- * @route   GET /subscription
- * @desc    Subscription dashboard/overview page
- * @access  Private
- */
-router.get('/', (req, res) => {
-  res.render('subscription/dashboard', {
-    title: 'Subscription - Our AI Legacy',
-    description: 'Manage your subscription and billing',
-    user: req.user,
-    subscription: req.subscriptionInfo,
-    tiers: stripeConfig.getAllTiers(),
-    showHeader: true,
-    showFooter: true,
-    showNav: true,
-    additionalCSS: ['/css/subscription.css'],
-    additionalJS: ['/js/subscription.js']
-  });
-});
+// ============================================
+// PUBLIC ROUTES (no authentication required)
+// ============================================
 
 /**
  * @route   GET /subscription/upgrade
  * @desc    Subscription upgrade/pricing page
- * @access  Private
+ * @access  Public
  */
-router.get('/upgrade', (req, res) => {
+router.get('/upgrade', optionalAuthMiddleware, (req, res) => {
   try {
-    const currentTier = req.user.subscription_tier || 'free';
+    const currentTier = req.user?.subscription_tier || 'free';
 
     // Handle case where Stripe isn't fully configured yet
     let tiers = [];
@@ -61,8 +39,8 @@ router.get('/upgrade', (req, res) => {
     res.render('subscription/upgrade', {
       title: 'Upgrade Subscription - Our AI Legacy',
       description: 'Choose the perfect plan for your needs',
-      user: req.user,
-      subscription: req.subscriptionInfo,
+      user: req.user || null,
+      subscription: req.subscriptionInfo || null,
       currentTier: currentTier,
       tiers: tiers,
       stripePublishableKey: publishableKey,
@@ -83,6 +61,36 @@ router.get('/upgrade', (req, res) => {
       showFooter: true
     });
   }
+});
+
+// ============================================
+// PROTECTED ROUTES (authentication required)
+// ============================================
+
+// Apply authentication middleware to remaining subscription routes
+router.use(authMiddleware);
+
+// Add subscription info to all authenticated routes
+router.use(subscriptionMiddleware.addSubscriptionInfo);
+
+/**
+ * @route   GET /subscription
+ * @desc    Subscription dashboard/overview page
+ * @access  Private
+ */
+router.get('/', (req, res) => {
+  res.render('subscription/dashboard', {
+    title: 'Subscription - Our AI Legacy',
+    description: 'Manage your subscription and billing',
+    user: req.user,
+    subscription: req.subscriptionInfo,
+    tiers: stripeConfig.getAllTiers(),
+    showHeader: true,
+    showFooter: true,
+    showNav: true,
+    additionalCSS: ['/css/subscription.css'],
+    additionalJS: ['/js/subscription.js']
+  });
 });
 
 /**
