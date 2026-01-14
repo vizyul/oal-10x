@@ -124,6 +124,23 @@ class StripeService {
       if (userStripeCustomerId) {
         // Retrieve existing customer
         const customer = await stripe.customers.retrieve(userStripeCustomerId);
+
+        // Ensure customer has user_id in metadata (backfill for older customers)
+        if (!customer.metadata?.user_id && actualUserId) {
+          await stripe.customers.update(userStripeCustomerId, {
+            metadata: {
+              ...customer.metadata,
+              user_id: String(actualUserId)
+            }
+          });
+          logger.info('Updated Stripe customer with user_id metadata', {
+            customerId: userStripeCustomerId,
+            userId: actualUserId
+          });
+          customer.metadata = customer.metadata || {};
+          customer.metadata.user_id = String(actualUserId);
+        }
+
         return customer;
       }
 
@@ -417,7 +434,7 @@ class StripeService {
       }
     }
 
-    // Strategy 2: Look up by Stripe customer ID
+    // Strategy 2: Look up by Stripe customer ID in our database
     if (!pgUserId && subscription.customer) {
       const userByCustomerId = await UserModel.findByStripeCustomerId(subscription.customer);
       if (userByCustomerId) {
@@ -430,7 +447,24 @@ class StripeService {
       }
     }
 
-    // Strategy 3: Look up by customer email from Stripe
+    // Strategy 3: Get user_id from Stripe customer metadata
+    if (!pgUserId && subscription.customer) {
+      try {
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        if (customer.metadata?.user_id) {
+          pgUserId = await this.resolveUserId(customer.metadata.user_id);
+          userId = customer.metadata.user_id;
+          logger.info('Found user from Stripe customer metadata:', {
+            customerId: subscription.customer,
+            resolvedUserId: pgUserId
+          });
+        }
+      } catch (customerMetaError) {
+        logger.warn('Error getting customer metadata from Stripe:', customerMetaError.message);
+      }
+    }
+
+    // Strategy 4: Look up by customer email from Stripe
     if (!pgUserId && subscription.customer) {
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
