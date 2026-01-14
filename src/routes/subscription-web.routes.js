@@ -95,26 +95,11 @@ router.get('/', (req, res) => {
 
 /**
  * @route   GET /subscription/manage
- * @desc    Subscription management page (billing portal link)
+ * @desc    Redirect to subscription dashboard
  * @access  Private
  */
 router.get('/manage', (req, res) => {
-  if (!req.user.stripe_customer_id) {
-    req.flash && req.flash('error', 'No billing information found. Please contact support.');
-    return res.redirect('/subscription');
-  }
-
-  res.render('subscription/manage', {
-    title: 'Manage Subscription - Our AI Legacy',
-    description: 'Update your billing information and subscription',
-    user: req.user,
-    subscription: req.subscriptionInfo,
-    showHeader: true,
-    showFooter: true,
-    showNav: true,
-    additionalCSS: ['/css/subscription.css'],
-    additionalJS: ['/js/subscription.js']
-  });
+  res.redirect('/subscription');
 });
 
 /**

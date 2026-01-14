@@ -168,9 +168,19 @@
   color: var(--text-secondary);
 }
 
-.step-number {
+.step-indicator .step-number {
+  /* Reset main.css circle styles */
+  width: auto;
+  height: auto;
+  background: transparent;
+  border-radius: 0;
+  display: inline;
+  margin: 0;
+  position: static;
+  /* Apply auth page styles */
   color: var(--accent-color);
   font-weight: 600;
+  font-size: var(--font-size-sm);
 }
 
 .progress-bar {

@@ -108,7 +108,7 @@ const subscriptionController = {
         });
       }
 
-      const returnUrl = `${req.protocol}://${req.get('host')}/subscription/manage`;
+      const returnUrl = `${req.protocol}://${req.get('host')}/subscription`;
       const session = await stripeService.createPortalSession(
         user.stripe_customer_id,
         returnUrl

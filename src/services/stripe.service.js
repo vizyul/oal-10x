@@ -6,6 +6,29 @@ const { logger } = require('../utils');
 const { clearCachedUser, forceTokenRefresh } = require('../middleware');
 const emailService = require('./email.service');
 
+/**
+ * Extract period dates from subscription object
+ * Handles both top-level fields and nested items.data[0] structure
+ */
+function getSubscriptionPeriod(subscription) {
+  const rawStart = subscription.current_period_start
+    || (subscription.items?.data?.[0]?.current_period_start)
+    || subscription.start_date
+    || Math.floor(Date.now() / 1000);
+  const rawEnd = subscription.current_period_end
+    || (subscription.items?.data?.[0]?.current_period_end)
+    || (rawStart + 30 * 24 * 60 * 60); // Default to 30 days from start
+
+  return {
+    rawStart,
+    rawEnd,
+    startDate: new Date(rawStart * 1000).toISOString().split('T')[0],
+    endDate: new Date(rawEnd * 1000).toISOString().split('T')[0],
+    startTimestamp: new Date(rawStart * 1000),
+    endTimestamp: new Date(rawEnd * 1000)
+  };
+}
+
 class StripeService {
   constructor() {
     // Validate configuration on initialization
@@ -310,10 +333,60 @@ class StripeService {
   }
 
   /**
+   * Resolve user ID with fallback to Stripe customer ID or subscription record
+   * Used when metadata.user_id may be missing (e.g., Customer Portal actions)
+   * @param {string|number|undefined} userId - User ID from metadata
+   * @param {string} customerId - Stripe customer ID
+   * @param {object|null} subscriptionRecord - Existing subscription record from database
+   * @returns {Promise<number|null>} PostgreSQL user ID or null if not found
+   */
+  async resolveUserIdWithFallback(userId, customerId, subscriptionRecord = null) {
+    // Try metadata user_id first
+    if (userId) {
+      try {
+        return await this.resolveUserId(userId);
+      } catch (error) {
+        logger.warn('Failed to resolve user_id from metadata, trying fallbacks', {
+          userId,
+          error: error.message
+        });
+      }
+    }
+
+    // Try Stripe customer ID lookup
+    if (customerId) {
+      const user = await UserModel.findByStripeCustomerId(customerId);
+      if (user) {
+        logger.info('Resolved user via Stripe customer ID', {
+          customerId,
+          userId: user.id
+        });
+        return user.id;
+      }
+    }
+
+    // Try subscription record
+    if (subscriptionRecord && subscriptionRecord.users_id) {
+      logger.info('Resolved user via subscription record', {
+        subscriptionRecordId: subscriptionRecord.id,
+        userId: subscriptionRecord.users_id
+      });
+      return subscriptionRecord.users_id;
+    }
+
+    logger.error('Could not resolve user ID with any fallback method', {
+      userId,
+      customerId,
+      hasSubscriptionRecord: !!subscriptionRecord
+    });
+    return null;
+  }
+
+  /**
    * Handle subscription created
    */
   async handleSubscriptionCreated(subscription) {
-    const userId = subscription.metadata.user_id;
+    let userId = subscription.metadata?.user_id;
     const tier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     logger.info('Processing subscription created webhook:', {
@@ -325,69 +398,86 @@ class StripeService {
       metadata: subscription.metadata
     });
 
-    // Check if user exists before processing
-    if (!userId) {
-      logger.error('No user_id found in subscription metadata:', {
-        subscriptionId: subscription.id,
-        customerId: subscription.customer,
-        metadata: subscription.metadata
-      });
-      throw new Error('No user_id in subscription metadata');
+    // Try to resolve user ID with multiple fallback strategies
+    let pgUserId;
+
+    // Strategy 1: Use metadata user_id if present
+    if (userId) {
+      try {
+        pgUserId = await this.resolveUserId(userId);
+        logger.info('Successfully resolved user ID from metadata:', {
+          originalUserId: userId,
+          resolvedUserId: pgUserId
+        });
+      } catch (userError) {
+        logger.warn('Failed to resolve user_id from metadata, trying fallbacks:', {
+          originalUserId: userId,
+          error: userError.message
+        });
+      }
     }
 
-    // Try to resolve user ID and check if user exists
-    let pgUserId;
-    try {
-      pgUserId = await this.resolveUserId(userId);
-      logger.info('Successfully resolved user ID:', {
-        originalUserId: userId,
-        resolvedUserId: pgUserId
-      });
-    } catch (userError) {
-      logger.error('Failed to resolve user ID:', {
-        originalUserId: userId,
-        error: userError.message,
-        subscriptionId: subscription.id,
-        customerId: subscription.customer
-      });
+    // Strategy 2: Look up by Stripe customer ID
+    if (!pgUserId && subscription.customer) {
+      const userByCustomerId = await UserModel.findByStripeCustomerId(subscription.customer);
+      if (userByCustomerId) {
+        pgUserId = userByCustomerId.id;
+        userId = userByCustomerId.id;
+        logger.info('Found user by Stripe customer ID:', {
+          customerId: subscription.customer,
+          resolvedUserId: pgUserId
+        });
+      }
+    }
 
-      // Try to get customer information from Stripe to help debug
+    // Strategy 3: Look up by customer email from Stripe
+    if (!pgUserId && subscription.customer) {
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
-        logger.error('Customer information from Stripe:', {
-          customerId: customer.id,
-          customerEmail: customer.email,
-          customerMetadata: customer.metadata
-        });
-
-        // If we can find user by email, log that information
         if (customer.email) {
-          try {
-            const userByEmail = await UserModel.findByEmail(customer.email);
-            logger.info('User found by customer email:', {
+          const userByEmail = await UserModel.findByEmail(customer.email);
+          if (userByEmail) {
+            pgUserId = userByEmail.id;
+            userId = userByEmail.id;
+            logger.info('Found user by customer email:', {
               email: customer.email,
-              foundUser: !!userByEmail,
-              user: userByEmail ? { id: userByEmail.id, email: userByEmail.email, airtable_id: userByEmail.airtable_id } : null
+              resolvedUserId: pgUserId
             });
-          } catch (emailSearchError) {
-            logger.error('Error searching users by email:', emailSearchError.message);
+
+            // Also update user's stripe_customer_id if not set
+            if (!userByEmail.stripe_customer_id) {
+              await UserModel.updateUser(pgUserId, {
+                stripe_customer_id: subscription.customer
+              });
+              logger.info('Updated user with Stripe customer ID');
+            }
           }
         }
       } catch (customerError) {
         logger.error('Error retrieving customer from Stripe:', customerError.message);
       }
-
-      throw userError; // Re-throw the original error
     }
 
-    // Debug: Log date formatting
-    const startDate = new Date(subscription.current_period_start * 1000).toISOString().split('T')[0];
-    const endDate = new Date(subscription.current_period_end * 1000).toISOString().split('T')[0];
+    // If still no user found, throw error
+    if (!pgUserId) {
+      logger.error('Cannot find user for subscription creation:', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer,
+        metadata: subscription.metadata
+      });
+      throw new Error('Cannot find user for subscription - no user_id in metadata and customer lookup failed');
+    }
+
+    // Extract period dates using helper function
+    const period = getSubscriptionPeriod(subscription);
+    const startDate = period.startDate;
+    const endDate = period.endDate;
     logger.info('Subscription dates:', {
-      rawStart: subscription.current_period_start,
-      rawEnd: subscription.current_period_end,
+      rawStart: period.rawStart,
+      rawEnd: period.rawEnd,
       formattedStart: startDate,
-      formattedEnd: endDate
+      formattedEnd: endDate,
+      source: subscription.current_period_start ? 'top-level' : 'items.data[0]'
     });
 
     // Check for existing subscription record by Stripe subscription ID first
@@ -504,7 +594,7 @@ class StripeService {
    * Handle subscription updated
    */
   async handleSubscriptionUpdated(subscription) {
-    const userId = subscription.metadata.user_id;
+    let userId = subscription.metadata?.user_id;
     const newTier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Find existing subscription record
@@ -518,8 +608,36 @@ class StripeService {
       return { processed: false, reason: 'Subscription record not found' };
     }
 
-    // Resolve user ID
-    const pgUserId = await this.resolveUserId(userId);
+    // Resolve user ID - fall back to looking up by Stripe customer ID if metadata is missing
+    let pgUserId;
+    if (userId) {
+      pgUserId = await this.resolveUserId(userId);
+    } else {
+      // Look up user by Stripe customer ID (common when updates come from Customer Portal)
+      logger.info('No user_id in subscription metadata, looking up by customer ID', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer
+      });
+
+      const user = await UserModel.findByStripeCustomerId(subscription.customer);
+      if (!user) {
+        // Also try from the subscription record
+        if (subscriptionRecord.users_id) {
+          pgUserId = subscriptionRecord.users_id;
+          logger.info('Found user from subscription record', { pgUserId });
+        } else {
+          logger.error('Cannot find user for subscription update', {
+            subscriptionId: subscription.id,
+            customerId: subscription.customer
+          });
+          return { processed: false, reason: 'User not found' };
+        }
+      } else {
+        pgUserId = user.id;
+        userId = user.id; // Set for later use
+        logger.info('Found user by Stripe customer ID', { pgUserId, customerId: subscription.customer });
+      }
+    }
 
     // Get user's current tier
     const user = await UserModel.findById(pgUserId);
@@ -577,10 +695,11 @@ class StripeService {
     }
 
     // Update subscription record
+    const updatedPeriod = getSubscriptionPeriod(subscription);
     await userSubscription.updateSubscription(subscriptionRecord.id, {
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0],
+      current_period_start: updatedPeriod.startDate,
+      current_period_end: updatedPeriod.endDate,
       cancel_at_period_end: subscription.cancel_at_period_end,
       stripe_price_id: newPriceId
     });
@@ -594,6 +713,44 @@ class StripeService {
     // Clear cached user data
     clearCachedUser(userId);
     forceTokenRefresh(pgUserId);
+
+    // SEND UPGRADE EMAIL if tier changed to a higher tier
+    if (tierChanged) {
+      const changeType = this.getChangeType(oldTier, newTier);
+
+      if (changeType === 'upgrade') {
+        try {
+          const userForEmail = await UserModel.findById(pgUserId);
+          if (userForEmail && userForEmail.email) {
+            const subscriptionPlansService = require('./subscription-plans.service');
+            const newPlanData = await subscriptionPlansService.getPlanByKey(newTier);
+            const newFeatures = newPlanData ? newPlanData.features : [];
+
+            await emailService.sendSubscriptionUpgraded(userForEmail.email, {
+              firstName: userForEmail.first_name || 'User',
+              oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
+              newPlanName: newTier.charAt(0).toUpperCase() + newTier.slice(1),
+              newFeatures: newFeatures
+            });
+
+            logger.info('Upgrade email sent successfully', {
+              userId: pgUserId,
+              email: userForEmail.email,
+              oldTier,
+              newTier
+            });
+          }
+        } catch (emailError) {
+          logger.error('Failed to send subscription upgraded email', {
+            error: emailError.message,
+            userId: pgUserId,
+            oldTier,
+            newTier
+          });
+          // Don't fail webhook if email fails
+        }
+      }
+    }
 
     logger.info('Subscription updated:', {
       subscriptionId: subscription.id,
@@ -611,7 +768,7 @@ class StripeService {
    * Handle subscription deleted/canceled
    */
   async handleSubscriptionDeleted(subscription) {
-    const userId = subscription.metadata.user_id;
+    const userId = subscription.metadata?.user_id;
 
     // Update subscription record
     const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
@@ -622,8 +779,15 @@ class StripeService {
       });
     }
 
-    // Update user record with proper ID resolution
-    const pgUserId = await this.resolveUserId(userId);
+    // Resolve user ID with fallback to Stripe customer ID or subscription record
+    const pgUserId = await this.resolveUserIdWithFallback(userId, subscription.customer, subscriptionRecord);
+    if (!pgUserId) {
+      logger.error('Cannot find user for subscription delete', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer
+      });
+      return { processed: false, reason: 'User not found' };
+    }
     await UserModel.updateUser(pgUserId, {
       subscription_tier: 'free',
       subscription_status: 'canceled'
@@ -638,11 +802,10 @@ class StripeService {
       if (user && user.email) {
         const tier = await this.getTierFromPrice(subscription.items.data[0]?.price?.id);
         const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'subscription';
-        const endDate = subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', {
-            year: 'numeric', month: 'long', day: 'numeric'
-          })
-          : null;
+        const cancelPeriod = getSubscriptionPeriod(subscription);
+        const endDate = cancelPeriod.endTimestamp.toLocaleDateString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        });
 
         await emailService.sendSubscriptionCanceled(user.email, {
           firstName: user.first_name || 'User',
@@ -666,7 +829,7 @@ class StripeService {
    * Handle subscription paused
    */
   async handleSubscriptionPaused(subscription) {
-    const userId = subscription.metadata.user_id;
+    const userId = subscription.metadata?.user_id;
 
     // Update subscription record
     const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
@@ -677,8 +840,15 @@ class StripeService {
       });
     }
 
-    // Update user record - keep tier but mark as paused with proper ID resolution
-    const pgUserId = await this.resolveUserId(userId);
+    // Resolve user ID with fallback to Stripe customer ID or subscription record
+    const pgUserId = await this.resolveUserIdWithFallback(userId, subscription.customer, subscriptionRecord);
+    if (!pgUserId) {
+      logger.error('Cannot find user for subscription pause', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer
+      });
+      return { processed: false, reason: 'User not found' };
+    }
     await UserModel.updateUser(pgUserId, {
       subscription_status: 'paused'
     });
@@ -714,22 +884,30 @@ class StripeService {
    * Handle subscription resumed
    */
   async handleSubscriptionResumed(subscription) {
-    const userId = subscription.metadata.user_id;
+    const userId = subscription.metadata?.user_id;
     const tier = await this.getTierFromPrice(subscription.items.data[0].price.id);
 
     // Update subscription record
     const subscriptionRecord = await userSubscription.getByStripeId(subscription.id);
 
     if (subscriptionRecord) {
+      const renewPeriod = getSubscriptionPeriod(subscription);
       await userSubscription.updateSubscription(subscriptionRecord.id, {
         status: 'active',
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString().split('T')[0],
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString().split('T')[0]
+        current_period_start: renewPeriod.startDate,
+        current_period_end: renewPeriod.endDate
       });
     }
 
-    // Update user record with proper ID resolution
-    const pgUserId = await this.resolveUserId(userId);
+    // Resolve user ID with fallback to Stripe customer ID or subscription record
+    const pgUserId = await this.resolveUserIdWithFallback(userId, subscription.customer, subscriptionRecord);
+    if (!pgUserId) {
+      logger.error('Cannot find user for subscription resume', {
+        subscriptionId: subscription.id,
+        customerId: subscription.customer
+      });
+      return { processed: false, reason: 'User not found' };
+    }
     await UserModel.updateUser(pgUserId, {
       subscription_tier: tier,
       subscription_status: 'active'
@@ -903,6 +1081,18 @@ class StripeService {
     // Retrieve subscription from session
     if (session.subscription) {
       const subscription = await stripe.subscriptions.retrieve(session.subscription);
+
+      // Ensure subscription has user_id in metadata (may be missing on retrieve)
+      // The checkout session metadata is reliable, so inject it into subscription
+      if (!subscription.metadata?.user_id && userId) {
+        logger.info('Injecting user_id from checkout session into subscription metadata', {
+          sessionId: session.id,
+          subscriptionId: subscription.id,
+          userId
+        });
+        subscription.metadata = subscription.metadata || {};
+        subscription.metadata.user_id = userId;
+      }
 
       // Process subscription (will be idempotent with customer.subscription.created)
       await this.handleSubscriptionCreated(subscription);
@@ -1228,8 +1418,9 @@ class StripeService {
       }
 
       // Calculate prorated usage allowance for period change
-      const oldPeriodStart = new Date(subscription.current_period_start * 1000);
-      const newPeriodEnd = new Date(subscription.current_period_end * 1000);
+      const transitionPeriod = getSubscriptionPeriod(subscription);
+      const oldPeriodStart = transitionPeriod.startTimestamp;
+      const newPeriodEnd = transitionPeriod.endTimestamp;
       const now = new Date();
 
       const daysRemaining = Math.ceil((newPeriodEnd - now) / (1000 * 60 * 60 * 24));
@@ -1282,8 +1473,9 @@ class StripeService {
       }
 
       // Check for existing usage record using the unique constraint: users_id and subscription_id
-      const periodStart = new Date(subscription.current_period_start * 1000).toISOString().split('T')[0];
-      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString().split('T')[0];
+      const usagePeriod = getSubscriptionPeriod(subscription);
+      const periodStart = usagePeriod.startDate;
+      const periodEnd = usagePeriod.endDate;
 
       // Handle both database service formatted records (with .fields property) and direct PostgreSQL rows
       const subscriptionRecordId = subscriptionRecord.id || (subscriptionRecord.fields && subscriptionRecord.fields.id) || subscriptionRecord.id;
@@ -1428,7 +1620,8 @@ class StripeService {
         event_type: event.type,
         stripe_subscription_id: event.data.object.id,
         event_data: JSON.stringify(event.data.object, null, 2),
-        processed_successfully: true
+        status: 'pending',
+        processed_successfully: false
       });
 
       logger.info('Subscription event logged successfully:', {

@@ -102,6 +102,24 @@ class User extends BaseModel {
   }
 
   /**
+   * Find user by Stripe customer ID
+   * @param {string} stripeCustomerId - Stripe customer ID (starts with 'cus_')
+   * @returns {Promise<object|null>} User object or null
+   */
+  async findByStripeCustomerId(stripeCustomerId) {
+    try {
+      if (!stripeCustomerId) {
+        return null;
+      }
+      const users = await this.findByField('stripe_customer_id', stripeCustomerId);
+      return users.length > 0 ? users[0] : null;
+    } catch (error) {
+      logger.error(`Error finding user by Stripe customer ID ${stripeCustomerId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Find user by OAuth provider and ID
    * @param {string} provider - OAuth provider (google, apple, microsoft)
    * @param {string} oauthId - OAuth provider user ID

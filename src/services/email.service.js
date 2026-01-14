@@ -1098,6 +1098,93 @@ Thank you for being part of the AmplifyContent.ai community!
 © ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
     `;
   }
+
+  async sendSubscriptionUpgraded(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Your Subscription Has Been Upgraded!';
+      const html = this.generateSubscriptionUpgradedEmailHTML(data);
+      const text = this.generateSubscriptionUpgradedEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending subscription upgraded email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateSubscriptionUpgradedEmailHTML(data) {
+    const featuresList = data.newFeatures && data.newFeatures.length > 0
+      ? `<ul style="margin: 15px 0; padding-left: 20px;">${data.newFeatures.map(f => `<li style="margin: 8px 0;">${f}</li>`).join('')}</ul>`
+      : '';
+
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Upgraded</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10b981; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .upgrade-badge { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; display: inline-block; padding: 8px 20px; border-radius: 20px; font-weight: bold; margin: 10px 0; }
+            .button { background-color: #000000; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Congratulations!</h1>
+        </div>
+        <div class="content">
+            <h2>Hello ${data.firstName || 'there'},</h2>
+            <p>Your subscription has been successfully upgraded!</p>
+            <p style="text-align: center;">
+                <span style="color: #64748b;">${data.oldPlanName || 'Previous Plan'}</span>
+                <span style="margin: 0 10px;">→</span>
+                <span class="upgrade-badge">${data.newPlanName || 'New Plan'}</span>
+            </p>
+            ${featuresList ? `<p>Your new plan includes:</p>${featuresList}` : ''}
+            <p>Your upgraded features are now active and ready to use!</p>
+            <div style="text-align: center;">
+                <a href="${process.env.BASE_URL}/videos" class="button">Start Creating</a>
+            </div>
+            <p>Thank you for your continued trust in AmplifyContent.ai!</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateSubscriptionUpgradedEmailText(data) {
+    const featuresList = data.newFeatures && data.newFeatures.length > 0
+      ? `\nYour new plan includes:\n${data.newFeatures.map(f => `- ${f}`).join('\n')}\n`
+      : '';
+
+    return `
+Congratulations! Your Subscription Has Been Upgraded!
+
+Hello ${data.firstName || 'there'},
+
+Your subscription has been successfully upgraded!
+
+${data.oldPlanName || 'Previous Plan'} → ${data.newPlanName || 'New Plan'}
+${featuresList}
+Your upgraded features are now active and ready to use!
+
+Start creating:
+${process.env.BASE_URL}/videos
+
+Thank you for your continued trust in AmplifyContent.ai!
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
 }
 
 module.exports = new EmailService();
