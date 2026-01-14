@@ -358,7 +358,7 @@ IMPORTANT: Keep the person looking photorealistic, not AI-generated.`;
  * Fetch image from URL and convert to base64
  */
 async function fetchImageAsBase64(url) {
-    const response = await fetch(url);
+    const response = await globalThis.fetch(url);
     if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.statusText}`);
     }

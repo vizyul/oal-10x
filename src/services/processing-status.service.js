@@ -105,10 +105,6 @@ class ProcessingStatusService extends EventEmitter {
 
     this.processingVideos.set(videoId, status);
 
-    // Verify video was added to Map
-    const verifyInMap = this.processingVideos.has(videoId);
-    const mapSize = this.processingVideos.size;
-
     logger.debug(`Processing status initialized for video ${videoId}`, {
       userId,
       contentTypes: contentTypes.length,

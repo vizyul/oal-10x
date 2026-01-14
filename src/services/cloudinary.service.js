@@ -188,7 +188,8 @@ class CloudinaryService {
     async uploadThumbnail(base64Data, options, db) {
         this.checkConfiguration();
 
-        const { userId, videoId, aspectRatio = '16:9' } = options;
+        // eslint-disable-next-line no-unused-vars
+        const { userId: _userId, videoId, aspectRatio = '16:9' } = options;
 
         // Check current thumbnail count for this video AND aspect ratio
         // Each aspect ratio (16:9 and 9:16) has its own limit of 4 thumbnails

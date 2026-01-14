@@ -231,7 +231,7 @@ class ContentType extends BaseModel {
       const query = 'SELECT COUNT(*) as count FROM video_content WHERE content_type_id = $1';
       const result = await this.query(query, [id]);
       return parseInt(result.rows[0].count) > 0;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

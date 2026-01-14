@@ -4,6 +4,7 @@ const database = require('./database.service');
 const { user: UserModel, userSubscription, subscriptionUsage, subscriptionEvents } = require('../models');
 const { logger } = require('../utils');
 const { clearCachedUser, forceTokenRefresh } = require('../middleware');
+const emailService = require('./email.service');
 
 class StripeService {
   constructor() {
@@ -631,6 +632,28 @@ class StripeService {
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
 
+    // SEND EMAIL
+    try {
+      const user = await UserModel.findById(pgUserId);
+      if (user && user.email) {
+        const tier = await this.getTierFromPrice(subscription.items.data[0]?.price?.id);
+        const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'subscription';
+        const endDate = subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          })
+          : null;
+
+        await emailService.sendSubscriptionCanceled(user.email, {
+          firstName: user.first_name || 'User',
+          planName: planName,
+          endDate: endDate
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to send subscription canceled email', err);
+    }
+
     logger.info('Subscription canceled:', {
       subscriptionId: subscription.id,
       userId
@@ -662,6 +685,22 @@ class StripeService {
 
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
+
+    // SEND EMAIL
+    try {
+      const user = await UserModel.findById(pgUserId);
+      if (user && user.email) {
+        const tier = await this.getTierFromPrice(subscription.items.data[0]?.price?.id);
+        const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'subscription';
+
+        await emailService.sendSubscriptionPaused(user.email, {
+          firstName: user.first_name || 'User',
+          planName: planName
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to send subscription paused email', err);
+    }
 
     logger.info('Subscription paused:', {
       subscriptionId: subscription.id,
@@ -698,6 +737,21 @@ class StripeService {
 
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
+
+    // SEND EMAIL
+    try {
+      const user = await UserModel.findById(pgUserId);
+      if (user && user.email) {
+        const planName = tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : 'subscription';
+
+        await emailService.sendSubscriptionResumed(user.email, {
+          firstName: user.first_name || 'User',
+          planName: planName
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to send subscription resumed email', err);
+    }
 
     logger.info('Subscription resumed:', {
       subscriptionId: subscription.id,
@@ -752,6 +806,19 @@ class StripeService {
       // Clear cached user data to force reload with new subscription info
       clearCachedUser(userId);
 
+      // SEND EMAIL
+      try {
+        const user = await UserModel.findById(pgUserId);
+        if (user && user.email) {
+          await emailService.sendPaymentFailed(user.email, {
+            amount: (invoice.amount_due / 100).toFixed(2),
+            invoiceUrl: invoice.hosted_invoice_url
+          });
+        }
+      } catch (err) {
+        logger.error('Failed to send payment failed email', err);
+      }
+
       logger.warn('Payment failed:', {
         invoiceId: invoice.id,
         subscriptionId,
@@ -794,6 +861,19 @@ class StripeService {
       await UserModel.updateUser(pgUserId, {
         subscription_status: 'incomplete'
       });
+
+      // SEND EMAIL
+      try {
+        const user = await UserModel.findById(pgUserId);
+        if (user && user.email) {
+          await emailService.sendPaymentActionRequired(user.email, {
+            amount: (invoice.amount_due / 100).toFixed(2),
+            invoiceUrl: invoice.hosted_invoice_url
+          });
+        }
+      } catch (err) {
+        logger.error('Failed to send payment action required email', err);
+      }
 
       logger.warn('Payment action required:', {
         invoiceId: invoice.id,
@@ -861,6 +941,19 @@ class StripeService {
 
     // Force token refresh
     forceTokenRefresh(pgUserId);
+
+    // SEND EMAIL
+    try {
+      const user = await UserModel.findById(pgUserId);
+      if (user && user.email) {
+        await emailService.sendTrialEnded(user.email, {
+          isActive: subscription.status === 'active',
+          firstName: user.first_name || 'User'
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to send trial ended email', err);
+    }
 
     logger.info('Trial ended:', {
       subscriptionId: subscription.id,

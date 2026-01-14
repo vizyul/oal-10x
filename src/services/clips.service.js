@@ -1,7 +1,7 @@
 const aiChatService = require('./ai-chat.service');
 const promptSanitizer = require('../utils/prompt-sanitizer');
 const database = require('./database.service');
-const { aiPrompts, video: videoModel } = require('../models');
+const { video: videoModel } = require('../models');
 const { logger } = require('../utils');
 const path = require('path');
 const { exec } = require('child_process');
@@ -295,9 +295,6 @@ class ClipsService {
       const safeTitle = clip.clip_title.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
       const filename = `${clip.videoid}_${Math.floor(clip.start_time_seconds)}_${safeTitle}.mp4`;
       const outputPath = path.join(this.clipsStoragePath, filename);
-
-      // Calculate duration
-      const duration = clip.end_time_seconds - clip.start_time_seconds;
 
       // Download clip using yt-dlp
       logger.info(`Downloading clip ${clipId} from ${clip.start_time_seconds}s to ${clip.end_time_seconds}s...`);

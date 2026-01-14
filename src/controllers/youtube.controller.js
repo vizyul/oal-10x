@@ -1,7 +1,6 @@
 const { logger } = require('../utils');
 const youtubeOAuth = require('../services/youtube-oauth.service');
 const { validationResult } = require('express-validator');
-const database = require('../services/database.service');
 const subscriptionService = require('../services/subscription.service');
 
 class YouTubeController {

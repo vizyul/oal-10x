@@ -87,7 +87,7 @@ class SubscriptionPlansService {
       }
 
       // Extract number from patterns like "4 videos/month" or "10 videos per month"
-      const match = feature.match(/(\d+)\s*videos?\s*[\/per]*\s*month/i);
+      const match = feature.match(/(\d+)\s*videos?\s*[/per]*\s*month/i);
       if (match) {
         return parseInt(match[1], 10);
       }

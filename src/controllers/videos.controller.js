@@ -118,7 +118,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -191,7 +191,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -332,7 +332,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -422,7 +422,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -460,7 +460,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -678,7 +678,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -738,7 +738,7 @@ class VideosController {
       // Handle user ID conversion if needed (Airtable record IDs start with 'rec')
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('rec')) {
-        const actualUserId = await this.resolveUserId(userId);
+        actualUserId = await this.resolveUserId(userId);
       } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
         // This is already a PostgreSQL integer ID
         actualUserId = parseInt(userId);
@@ -1456,7 +1456,6 @@ class VideosController {
       // If no content types selected, get all available from database
       if (!contentTypes) {
         try {
-          const database = require('../services/database.service');
           const contentTypesList = await aiPrompts.getAvailableContentTypes();
           contentTypes = contentTypesList.map(ct => ct.type);
           logger.info(`Using all available content types from database: ${contentTypes.length} types`);

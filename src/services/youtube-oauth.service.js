@@ -851,7 +851,7 @@ class YouTubeOAuthService {
       }
 
       // Update the video
-      const updateResponse = await this.youtube.videos.update({
+      await this.youtube.videos.update({
         part: ['snippet'],
         requestBody: {
           id: videoId,

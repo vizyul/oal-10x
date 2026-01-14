@@ -7,7 +7,7 @@
  * @param {Object} user - User object
  * @returns {string} - Redirect URL
  */
-function getPostAuthRedirectUrl(user) {
+function getPostAuthRedirectUrl(_user) {
   // All users go to video upload page after authentication
   return '/videos/upload';
 }

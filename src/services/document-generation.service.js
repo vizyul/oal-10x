@@ -4,10 +4,9 @@
  * Uses Puppeteer for PDF generation to support emojis natively
  */
 
+// eslint-disable-next-line no-unused-vars
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, PageBreak, Table, TableRow, TableCell, WidthType, TableBorders, VerticalAlign } = require('docx');
 const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
 const { logger } = require('../utils');
 
 // Browser instance for PDF generation (reused for performance)
@@ -52,7 +51,7 @@ class DocumentGenerationService {
       '😂': 'LOL',
       '🤣': 'ROFL',
       '😢': ':(',
-      '😭': ":'(",
+      '😭': ':\'(',
       '😱': ':O',
       '😮': ':O',
       '🤔': '(?)',
@@ -521,9 +520,9 @@ class DocumentGenerationService {
     if (!text) return '';
 
     return text
-      .replace(/&#39;/g, "'")
-      .replace(/&#x27;/g, "'")
-      .replace(/&apos;/g, "'")
+      .replace(/&#39;/g, '\'')
+      .replace(/&#x27;/g, '\'')
+      .replace(/&apos;/g, '\'')
       .replace(/&quot;/g, '"')
       .replace(/&#34;/g, '"')
       .replace(/&amp;/g, '&')
@@ -1269,12 +1268,11 @@ class DocumentGenerationService {
 
       // Calculate row height based on content
       let maxCellHeight = 0;
-      const cellHeights = row.map((cell, colIndex) => {
+      row.forEach((cell) => {
         const cellText = this.stripMarkdownForPdf(cell);
         const textWidth = colWidth - (cellPadding * 2);
         const height = doc.heightOfString(cellText, { width: textWidth }) + (cellPadding * 2);
         maxCellHeight = Math.max(maxCellHeight, height);
-        return height;
       });
 
       const rowHeight = Math.max(maxCellHeight, 25);

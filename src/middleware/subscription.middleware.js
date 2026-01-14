@@ -1,5 +1,4 @@
 const database = require('../services/database.service');
-const stripeConfig = require('../config/stripe.config');
 const { logger } = require('../utils');
 
 // Tier hierarchy for comparison
@@ -374,8 +373,10 @@ function handleSubscriptionError(req, res, message, statusCode = 403, details = 
 
 /**
  * Get resource limit for a tier configuration
+ * @private Reserved for future use
  */
-function getResourceLimit(tierConfig, resource) {
+// eslint-disable-next-line no-unused-vars
+function _getResourceLimit(tierConfig, resource) {
   if (!tierConfig) return 0;
 
   switch (resource) {

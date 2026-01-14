@@ -221,7 +221,7 @@ class AffiliateController {
       // Get UTM parameters from landing page URL
       let utmParams = {};
       try {
-        const url = new URL(landingPage);
+        const url = new globalThis.URL(landingPage);
         utmParams = {
           utmSource: url.searchParams.get('utm_source'),
           utmMedium: url.searchParams.get('utm_medium'),
@@ -229,7 +229,7 @@ class AffiliateController {
           utmTerm: url.searchParams.get('utm_term'),
           utmContent: url.searchParams.get('utm_content')
         };
-      } catch (e) {
+      } catch {
         // Invalid URL, continue without UTM params
       }
 

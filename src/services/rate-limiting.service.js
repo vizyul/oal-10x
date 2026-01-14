@@ -210,7 +210,7 @@ class RateLimitingService {
 
       // Parameter match (e.g., '/auth/reset-password/:token')
       if (configPath.includes(':')) {
-        const pattern = configPath.replace(/:[^\/]+/g, '[^/]+');
+        const pattern = configPath.replace(/:[^/]+/g, '[^/]+');
         const regex = new RegExp(`^${pattern}$`);
         return regex.test(routeKey);
       }

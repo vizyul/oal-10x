@@ -166,7 +166,7 @@ class UserSubscription extends BaseModel {
     } catch (error) {
       logger.error(`Error updating subscription ${id}:`, {
         message: error.message,
-        updateData: safeUpdateData
+        updateData: updateData
       });
       throw error;
     }

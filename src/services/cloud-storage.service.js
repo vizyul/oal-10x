@@ -326,7 +326,7 @@ class CloudStorageService {
       timestamp: Date.now()
     })).toString('base64');
 
-    const params = new URLSearchParams({
+    const params = new globalThis.URLSearchParams({
       client_id: process.env.ONEDRIVE_CLIENT_ID,
       response_type: 'code',
       redirect_uri: process.env.ONEDRIVE_REDIRECT_URI,
@@ -347,10 +347,10 @@ class CloudStorageService {
   async handleOneDriveCallback(code, userId) {
     try {
       // Exchange code for tokens
-      const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      const tokenResponse = await globalThis.fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        body: new globalThis.URLSearchParams({
           client_id: process.env.ONEDRIVE_CLIENT_ID,
           client_secret: process.env.ONEDRIVE_CLIENT_SECRET,
           code,
@@ -366,7 +366,7 @@ class CloudStorageService {
       }
 
       // Get user info
-      const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const userResponse = await globalThis.fetch('https://graph.microsoft.com/v1.0/me', {
         headers: { Authorization: `Bearer ${tokens.access_token}` }
       });
       const userInfo = await userResponse.json();
@@ -438,10 +438,10 @@ class CloudStorageService {
    */
   async refreshOneDriveToken(credentialId, refreshToken) {
     try {
-      const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      const tokenResponse = await globalThis.fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        body: new globalThis.URLSearchParams({
           client_id: process.env.ONEDRIVE_CLIENT_ID,
           client_secret: process.env.ONEDRIVE_CLIENT_SECRET,
           refresh_token: refreshToken,
@@ -573,7 +573,7 @@ class CloudStorageService {
       timestamp: Date.now()
     })).toString('base64');
 
-    const params = new URLSearchParams({
+    const params = new globalThis.URLSearchParams({
       client_id: process.env.DROPBOX_APP_KEY,
       response_type: 'code',
       redirect_uri: process.env.DROPBOX_REDIRECT_URI,
@@ -593,10 +593,10 @@ class CloudStorageService {
   async handleDropboxCallback(code, userId) {
     try {
       // Exchange code for tokens
-      const tokenResponse = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      const tokenResponse = await globalThis.fetch('https://api.dropboxapi.com/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        body: new globalThis.URLSearchParams({
           code,
           grant_type: 'authorization_code',
           redirect_uri: process.env.DROPBOX_REDIRECT_URI,
@@ -677,10 +677,10 @@ class CloudStorageService {
    */
   async refreshDropboxToken(credentialId, refreshToken) {
     try {
-      const tokenResponse = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      const tokenResponse = await globalThis.fetch('https://api.dropboxapi.com/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        body: new globalThis.URLSearchParams({
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
           client_id: process.env.DROPBOX_APP_KEY,
@@ -865,7 +865,7 @@ class CloudStorageService {
         return this.uploadToGoogleDrive(userId, fileName, content, mimeType, folderIdOrPath);
       case 'onedrive':
         return this.uploadToOneDrive(userId, fileName, content, folderIdOrPath);
-      case 'dropbox':
+      case 'dropbox': {
         // Dropbox only supports path-based references (must start with /)
         // If a folder ID is passed, we can't use it - upload to root instead
         const dropboxPath = (folderIdOrPath && folderIdOrPath.startsWith('/')) ? folderIdOrPath : '';
@@ -873,6 +873,7 @@ class CloudStorageService {
           logger.warn(`Dropbox received folder ID instead of path, uploading to root: ${folderIdOrPath}`);
         }
         return this.uploadToDropbox(userId, fileName, content, dropboxPath);
+      }
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }
@@ -892,9 +893,10 @@ class CloudStorageService {
         return this.createGoogleDriveFolder(userId, folderName, parentPath);
       case 'onedrive':
         return this.createOneDriveFolder(userId, folderName, parentPath);
-      case 'dropbox':
+      case 'dropbox': {
         const fullPath = parentPath ? `${parentPath}/${folderName}` : `/${folderName}`;
         return this.createDropboxFolder(userId, fullPath);
+      }
       default:
         throw new Error(`Unknown provider: ${provider}`);
     }

@@ -303,7 +303,7 @@ class ContentGenerationService {
             // Parse the JSON content (strip markdown code blocks if present)
             let jsonContent = generatedContent.trim();
             // Match both array [] and object {} formats
-            const jsonMatch = jsonContent.match(/```(?:json)?\s*([\[{][\s\S]*?[\]}])\s*```/);
+            const jsonMatch = jsonContent.match(/```(?:json)?\s*([[{][\s\S]*?[\]}])\s*```/);
             if (jsonMatch) {
               jsonContent = jsonMatch[1];
             }
@@ -334,16 +334,16 @@ class ContentGenerationService {
               // Now trigger downloads for all clips (runs in background, doesn't block)
               if (clipIds.length > 0) {
                 // Download and convert clips in background (don't await to avoid blocking)
-                setImmediate(async () => {
+                globalThis.setImmediate(async () => {
                   for (const clipId of clipIds) {
                     try {
                       logger.info(`Downloading clip ${clipId} for video ${videoId}`);
-                      const downloadResult = await clipsService.downloadClip(clipId);
+                      await clipsService.downloadClip(clipId);
 
                       logger.info(`Converting clip ${clipId} to vertical format`);
                       await clipsService.convertToVerticalFormat(clipId);
 
-                      logger.info(`✅ Clip ${clipId} downloaded and converted successfully`);
+                      logger.info(`Clip ${clipId} downloaded and converted successfully`);
                     } catch (clipError) {
                       logger.error(`Failed to process clip ${clipId}:`, clipError.message);
                       // Continue with next clip even if one fails
@@ -637,7 +637,7 @@ class ContentGenerationService {
       try {
         video = await videoModel.findById(videoRecordId);
         actualVideoId = video.id;
-      } catch (directFindError) {
+      } catch {
         // If not found by direct ID, try by airtable_id (backward compatibility)
         try {
           video = await videoModel.findByAirtableId(videoRecordId);
@@ -717,7 +717,7 @@ class ContentGenerationService {
               WHERE id = $8
             `;
 
-            const updateResult = await database.query(updateQuery, [
+            await database.query(updateQuery, [
               data.content,
               data.provider || 'unknown',
               startTime,
@@ -751,7 +751,7 @@ class ContentGenerationService {
               ) VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8, $9, true, 1, $6, $6)
             `;
 
-            const insertResult = await database.query(insertQuery, [
+            await database.query(insertQuery, [
               actualVideoId,
               contentTypeRecord.id,
               data.content,
@@ -1124,21 +1124,6 @@ class ContentGenerationService {
         }
       }
 
-      // Log comprehensive batch processing summary
-      const successfulVideos = results.filter(r => r.summary?.successful > 0);
-      const totalContentGenerated = results.reduce((sum, r) => sum + (r.summary?.successful || 0), 0);
-      const totalContentFailed = results.reduce((sum, r) => sum + (r.summary?.failed || 0), 0);
-
-      // Create detailed status breakdown
-      const videoSummaries = results.map(result => ({
-        videoId: result.videoId,
-        totalTypes: result.summary?.total || 0,
-        completed: result.summary?.successful || 0,
-        failed: result.summary?.failed || 0,
-        status: result.summary?.failed === 0 ? 'all_completed' :
-                result.summary?.successful > 0 ? 'partial_completion' : 'all_failed'
-      }));
-
       return results;
 
     } catch (error) {
@@ -1220,7 +1205,6 @@ class ContentGenerationService {
     try {
       const { video: videoModel } = require('../models');
       const database = require('./database.service');
-      const { logger } = require('../utils');
 
       // Check if video has transcript
       const video = await videoModel.findById(videoRecordId);
@@ -1243,9 +1227,8 @@ class ContentGenerationService {
         await videoModel.updateStatus(videoRecordId, 'completed', {
           processed_at: new Date().toISOString()
         });
-
-      } else {
       }
+      // No else needed - if no content, video status remains unchanged
 
     } catch (error) {
       const { logger } = require('../utils');

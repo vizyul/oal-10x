@@ -566,7 +566,7 @@ class RefGrowService {
    * Handle commission paid webhook
    */
   async handleCommissionPaid(data) {
-    const { referral_id, amount, transaction_id } = data;
+    const { referral_id, amount } = data;
 
     await database.query(
       `UPDATE affiliate_referrals

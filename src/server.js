@@ -103,7 +103,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   const errorMsg = reason instanceof Error ? reason.message : String(reason);
   const errorStack = reason instanceof Error ? reason.stack?.split('\n')[0] : '';
   logger.error('Unhandled Rejection', { error: errorMsg, stack: errorStack });

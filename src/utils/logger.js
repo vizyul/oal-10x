@@ -164,7 +164,7 @@ class Logger {
     const { method, url } = req;
     const { statusCode } = res;
     const requestId = req.requestId || '-';
-    const userId = req.user?.userId || 'anon';
+    const userId = req.user?.id || 'anon';
 
     // Skip logging for static assets at INFO level
     if (url.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?.*)?$/i)) {

@@ -284,7 +284,7 @@ class BaseModel {
 
     const filtered = {};
     this.fillable.forEach(field => {
-      if (data.hasOwnProperty(field)) {
+      if (Object.hasOwn(data, field)) {
         filtered[field] = data[field];
       }
     });
@@ -301,7 +301,7 @@ class BaseModel {
     const casted = { ...data };
 
     Object.entries(this.casts).forEach(([field, type]) => {
-      if (casted.hasOwnProperty(field) && casted[field] !== null) {
+      if (Object.hasOwn(casted, field) && casted[field] !== null) {
         switch (type) {
           case 'integer':
             casted[field] = parseInt(casted[field]);
@@ -355,7 +355,7 @@ class BaseModel {
     // For now, just check required fields on create
     if (!isUpdate && this.validationRules.required) {
       this.validationRules.required.forEach(field => {
-        if (!data.hasOwnProperty(field) || data[field] === null || data[field] === undefined) {
+        if (!Object.hasOwn(data, field) || data[field] === null || data[field] === undefined) {
           throw new Error(`Field '${field}' is required`);
         }
       });
@@ -376,7 +376,7 @@ class BaseModel {
       `;
       const result = await database.query(query, [this.tableName, fieldName]);
       return result.rows.length > 0;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

@@ -41,7 +41,7 @@ io.use((socket, next) => {
     socket.userId = decoded.userId || decoded.id;
     logger.debug(`Socket.IO auth success: userId=${socket.userId}`);
     next();
-  } catch (error) {
+  } catch {
     logger.warn('Socket.IO auth failed: invalid token');
     next(new Error('Invalid token'));
   }
@@ -107,7 +107,7 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   const errorMsg = reason instanceof Error ? reason.message : String(reason);
   const errorStack = reason instanceof Error ? reason.stack?.split('\n')[0] : '';
   logger.error('Unhandled Rejection', { error: errorMsg, stack: errorStack });

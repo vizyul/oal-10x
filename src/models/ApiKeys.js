@@ -138,7 +138,8 @@ class ApiKeys extends BaseModel {
       await this.recordUsage(keyRecord.id);
 
       // Return key data without the actual API key
-      const { api_key: _, ...safeKeyData } = keyRecord;
+      // eslint-disable-next-line no-unused-vars
+      const { api_key: _excluded, ...safeKeyData } = keyRecord;
       return safeKeyData;
     } catch (error) {
       logger.error('Error validating API key:', error);
@@ -199,12 +200,7 @@ class ApiKeys extends BaseModel {
    */
   async getActiveUserApiKeys(userId) {
     try {
-      const conditions = {
-        users_id: userId,
-        is_active: true
-      };
-
-      // Also check for non-expired keys
+      // Check for active, non-expired keys
       const query = `
         SELECT * FROM ${this.tableName}
         WHERE users_id = $1 

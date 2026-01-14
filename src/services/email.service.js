@@ -408,6 +408,51 @@ This is an automated email, please do not reply.
     }
   }
 
+  async sendPaymentFailed(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Action Required: Payment Failed';
+      const html = this.generatePaymentFailedEmailHTML(data);
+      const text = this.generatePaymentFailedEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending payment failed email:', error);
+      // Don't throw, just log error so webhook doesn't fail
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendTrialEnded(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = data.isActive
+        ? 'Your Free Trial Has Ended'
+        : 'Your Free Trial Has Expired';
+      const html = this.generateTrialEndedEmailHTML(data);
+      const text = this.generateTrialEndedEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending trial ended email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendPaymentActionRequired(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Action Required: Verify Your Payment';
+      const html = this.generatePaymentActionRequiredEmailHTML(data);
+      const text = this.generatePaymentActionRequiredEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending payment action required email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   async sendWelcomeEmailViaGraph(email, firstName) {
     try {
       const accessToken = await this.getAccessToken();
@@ -666,6 +711,392 @@ The AmplifyContent.ai Team
       logger.error('Error sending email via SMTP:', error);
       throw error;
     }
+  }
+  generatePaymentFailedEmailHTML(data) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Failed</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #ef4444; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Payment Method Failed</h1>
+        </div>
+        <div class="content">
+            <h2>Action Required</h2>
+            <p>We were unable to process your subscription payment of <strong>${data.amount}</strong>.</p>
+            <p>This normally happens if your card has expired or was declined by your bank.</p>
+            <p>To avoid any interruption to your service, please update your payment method:</p>
+            <div style="text-align: center;">
+                <a href="${process.env.STRIPE_CUSTOMER_PORTAL_URL}" class="button">Update Payment Method</a>
+            </div>
+            <p>If you have already updated your payment information, please ignore this email.</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generatePaymentFailedEmailText(data) {
+    return `
+Action Required: Payment Failed
+
+We were unable to process your subscription payment of ${data.amount}.
+
+This normally happens if your card has expired or was declined by your bank.
+
+To avoid any interruption to your service, please update your payment method here:
+${process.env.STRIPE_CUSTOMER_PORTAL_URL}
+
+If you have already updated your payment information, please ignore this email.
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
+
+  generateTrialEndedEmailHTML(data) {
+    const title = data.isActive ? 'Your Trial Has Ended' : 'Your Trial Expired';
+    const message = data.isActive
+      ? 'Your free trial has ended and your subscription is now active! We hope you are enjoying AmplifyContent.ai.'
+      : 'Your free trial has ended. To continue using our premium features, please upgrade your subscription.';
+    const buttonText = data.isActive ? 'View Account' : 'Upgrade Now';
+    const buttonUrl = process.env.BASE_URL + (data.isActive ? '/dashboard' : '/subscription/upgrade');
+
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${title}</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #000000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>${title}</h1>
+        </div>
+        <div class="content">
+            <p>${message}</p>
+            <div style="text-align: center;">
+                <a href="${buttonUrl}" class="button">${buttonText}</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateTrialEndedEmailText(data) {
+    const title = data.isActive ? 'Your Free Trial Has Ended' : 'Your Free Trial Has Expired';
+    const message = data.isActive
+      ? 'Your free trial has ended and your subscription is now active! We hope you are enjoying AmplifyContent.ai.'
+      : 'Your free trial has ended. To continue using our premium features, please upgrade your subscription.';
+    const url = process.env.BASE_URL + (data.isActive ? '/dashboard' : '/subscription/upgrade');
+
+    return `
+${title}
+
+${message}
+
+Manage your account here:
+${url}
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
+
+  generatePaymentActionRequiredEmailHTML(data) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Payment Verification Needed</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #f59e0b; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #f59e0b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Verify Your Payment</h1>
+        </div>
+        <div class="content">
+            <h2>Authentication Required</h2>
+            <p>Your bank requires you to verify your payment of <strong>${data.amount}</strong>.</p>
+            <p>Please click the button below to manage your payment method:</p>
+            <div style="text-align: center;">
+                <a href="${process.env.STRIPE_CUSTOMER_PORTAL_URL}" class="button">Manage Payment</a>
+            </div>
+            <p>This link is safe and secure.</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generatePaymentActionRequiredEmailText(data) {
+    return `
+Action Required: Verify Your Payment
+
+Your bank requires you to verify your payment of ${data.amount}.
+
+Please use the link below to manage your payment method:
+${process.env.STRIPE_CUSTOMER_PORTAL_URL}
+
+This link is safe and secure.
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
+
+  async sendSubscriptionCanceled(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Your Subscription Has Been Canceled';
+      const html = this.generateSubscriptionCanceledEmailHTML(data);
+      const text = this.generateSubscriptionCanceledEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending subscription canceled email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateSubscriptionCanceledEmailHTML(data) {
+    const endDateMessage = data.endDate
+      ? `Your access will continue until <strong>${data.endDate}</strong>.`
+      : 'Your access has ended.';
+
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Canceled</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #64748b; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Subscription Canceled</h1>
+        </div>
+        <div class="content">
+            <h2>Hello ${data.firstName || 'there'},</h2>
+            <p>Your <strong>${data.planName || 'subscription'}</strong> has been canceled as requested.</p>
+            <p>${endDateMessage}</p>
+            <p>We're sorry to see you go! If you change your mind, you can resubscribe at any time:</p>
+            <div style="text-align: center;">
+                <a href="${process.env.BASE_URL}/subscription/upgrade" class="button">Resubscribe</a>
+            </div>
+            <p>If you have any feedback about your experience, we'd love to hear from you at <a href="mailto:support@amplifycontent.ai" style="color: #10b981;">support@amplifycontent.ai</a>.</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateSubscriptionCanceledEmailText(data) {
+    const endDateMessage = data.endDate
+      ? `Your access will continue until ${data.endDate}.`
+      : 'Your access has ended.';
+
+    return `
+Subscription Canceled
+
+Hello ${data.firstName || 'there'},
+
+Your ${data.planName || 'subscription'} has been canceled as requested.
+
+${endDateMessage}
+
+We're sorry to see you go! If you change your mind, you can resubscribe at any time:
+${process.env.BASE_URL}/subscription/upgrade
+
+If you have any feedback about your experience, we'd love to hear from you at support@amplifycontent.ai.
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
+
+  async sendSubscriptionPaused(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Your Subscription Has Been Paused';
+      const html = this.generateSubscriptionPausedEmailHTML(data);
+      const text = this.generateSubscriptionPausedEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending subscription paused email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateSubscriptionPausedEmailHTML(data) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Paused</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #f59e0b; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Subscription Paused</h1>
+        </div>
+        <div class="content">
+            <h2>Hello ${data.firstName || 'there'},</h2>
+            <p>Your <strong>${data.planName || 'subscription'}</strong> has been paused.</p>
+            <p>While paused, you won't be charged, but your premium features will be limited.</p>
+            <p>When you're ready to resume, simply click the button below:</p>
+            <div style="text-align: center;">
+                <a href="${process.env.STRIPE_CUSTOMER_PORTAL_URL}" class="button">Resume Subscription</a>
+            </div>
+            <p>Your data and settings are safely preserved and will be waiting for you when you return.</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateSubscriptionPausedEmailText(data) {
+    return `
+Subscription Paused
+
+Hello ${data.firstName || 'there'},
+
+Your ${data.planName || 'subscription'} has been paused.
+
+While paused, you won't be charged, but your premium features will be limited.
+
+When you're ready to resume, visit:
+${process.env.STRIPE_CUSTOMER_PORTAL_URL}
+
+Your data and settings are safely preserved and will be waiting for you when you return.
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
+
+  async sendSubscriptionResumed(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Your Subscription Has Been Resumed';
+      const html = this.generateSubscriptionResumedEmailHTML(data);
+      const text = this.generateSubscriptionResumedEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending subscription resumed email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateSubscriptionResumedEmailHTML(data) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Resumed</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10b981; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #000000; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Welcome Back!</h1>
+        </div>
+        <div class="content">
+            <h2>Hello ${data.firstName || 'there'},</h2>
+            <p>Great news! Your <strong>${data.planName || 'subscription'}</strong> has been resumed.</p>
+            <p>All your premium features are now active again, and you're ready to continue amplifying your content.</p>
+            <div style="text-align: center;">
+                <a href="${process.env.BASE_URL}/videos" class="button">Go to My Videos</a>
+            </div>
+            <p>Thank you for being part of the AmplifyContent.ai community!</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateSubscriptionResumedEmailText(data) {
+    return `
+Welcome Back! Your Subscription Has Been Resumed
+
+Hello ${data.firstName || 'there'},
+
+Great news! Your ${data.planName || 'subscription'} has been resumed.
+
+All your premium features are now active again, and you're ready to continue amplifying your content.
+
+Go to your videos:
+${process.env.BASE_URL}/videos
+
+Thank you for being part of the AmplifyContent.ai community!
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
   }
 }
 

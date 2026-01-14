@@ -650,9 +650,7 @@ class AIChatService {
 
       const {
         aspectRatio = '16:9',
-        numberOfImages = 1,
-        negativePrompt = '',
-        personGeneration = 'dont_allow'
+        numberOfImages = 1
       } = options;
 
       logger.info('Generating image with Vertex AI Imagen 4', {
