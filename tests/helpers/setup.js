@@ -8,6 +8,23 @@ process.env.EMAIL_PASS = 'test-password';
 process.env.AIRTABLE_API_KEY = 'test-airtable-key';
 process.env.AIRTABLE_BASE_ID = 'test-base-id';
 
+// Mock logger before any other imports to prevent errors during module loading
+jest.mock('../../src/utils/logger', () => ({
+  error: jest.fn(),
+  warn: jest.fn(),
+  info: jest.fn(),
+  debug: jest.fn(),
+  log: jest.fn(),
+  request: jest.fn(),
+  auth: jest.fn(),
+  database: jest.fn(),
+  security: jest.fn(),
+  performance: jest.fn(),
+  event: jest.fn(),
+  maskEmail: jest.fn((email) => email),
+  sanitize: jest.fn((str) => str)
+}));
+
 // HTTPS and OAuth testing environment
 process.env.HOST = '0.0.0.0';
 process.env.HTTPS_PORT = '4433'; // Different port for testing to avoid conflicts

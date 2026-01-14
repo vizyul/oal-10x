@@ -33,8 +33,20 @@ jest.mock('../../src/utils', () => ({
   logger: {
     info: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn()
-  }
+    error: jest.fn(),
+    debug: jest.fn(),
+    log: jest.fn(),
+    request: jest.fn(),
+    auth: jest.fn(),
+    database: jest.fn(),
+    security: jest.fn(),
+    performance: jest.fn(),
+    event: jest.fn(),
+    maskEmail: jest.fn((email) => email),
+    sanitize: jest.fn((str) => str)
+  },
+  validators: {},
+  helpers: {}
 }));
 
 describe('Auth Routes Integration Tests', () => {
