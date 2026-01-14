@@ -22,6 +22,18 @@ const { logger } = require('./utils');
 // Create Express app
 const app = express();
 
+// Health check endpoint - MUST be first, before any middleware
+// This ensures Railway health checks respond quickly without going through
+// security middleware, rate limiting, logging, etc.
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime()
+  });
+});
+
 // Set trust proxy for Railway deployment (development and production)
 // Railway always runs behind a proxy, regardless of NODE_ENV
 const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.CORS_ORIGIN?.includes('dev.amplifycontent.ai');
@@ -170,16 +182,6 @@ app.use('/api/transcript', require('./routes/transcript.routes'));
 
 // Routes
 app.use('/', routes);
-
-// Health check endpoint (for Railway)
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime()
-  });
-});
 
 // 404 handler
 app.use((req, res, _next) => {
