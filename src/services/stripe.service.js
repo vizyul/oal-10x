@@ -682,6 +682,18 @@ class StripeService {
     const newPriceId = subscription.items.data[0].price.id;
     const priceChanged = subscriptionRecord.price_id !== newPriceId;
 
+    // Always log tier comparison for debugging upgrade emails
+    logger.info('Subscription update tier comparison', {
+      subscriptionId: subscription.id,
+      userId: pgUserId,
+      oldTier,
+      newTier,
+      tierChanged,
+      priceChanged,
+      subscriptionRecordPriceId: subscriptionRecord.price_id,
+      newPriceId
+    });
+
     if (tierChanged) {
       logger.info('Plan change detected', {
         subscriptionId: subscription.id,
@@ -751,6 +763,14 @@ class StripeService {
     // SEND UPGRADE EMAIL if tier changed to a higher tier
     if (tierChanged) {
       const changeType = this.getChangeType(oldTier, newTier);
+      logger.info('Tier change email decision', {
+        subscriptionId: subscription.id,
+        userId: pgUserId,
+        oldTier,
+        newTier,
+        changeType,
+        willSendEmail: changeType === 'upgrade'
+      });
 
       if (changeType === 'upgrade') {
         try {
@@ -783,7 +803,20 @@ class StripeService {
           });
           // Don't fail webhook if email fails
         }
+      } else {
+        logger.info('No upgrade email sent - not an upgrade', {
+          subscriptionId: subscription.id,
+          userId: pgUserId,
+          changeType
+        });
       }
+    } else {
+      logger.info('No upgrade email sent - tier did not change', {
+        subscriptionId: subscription.id,
+        userId: pgUserId,
+        currentTier: oldTier,
+        incomingTier: newTier
+      });
     }
 
     logger.info('Subscription updated:', {

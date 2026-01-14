@@ -984,7 +984,7 @@ input:checked + .slider:before {
 
 /* Redirect Banner */
 .redirect-banner {
-  background: linear-gradient(135deg, var(--accent-color, #C39D43), #A67E33);
+  background: var(--green);
   color: white;
   padding: 1rem;
   border-radius: 12px;
@@ -1026,12 +1026,12 @@ input:checked + .slider:before {
 }
 
 .redirect-banner .btn-primary {
-  background-color: white;
-  color: var(--accent-color, #C39D43);
+  background-color: #000000;
+  color: #ffffff;
 }
 
 .redirect-banner .btn-primary:hover {
-  background-color: #f8fafc;
+  background-color: #333333;
   transform: translateY(-1px);
 }
 
