@@ -680,7 +680,7 @@ class StripeService {
     // Detect plan change
     const tierChanged = oldTier !== newTier;
     const newPriceId = subscription.items.data[0].price.id;
-    const priceChanged = subscriptionRecord.stripe_price_id !== newPriceId;
+    const priceChanged = subscriptionRecord.price_id !== newPriceId;
 
     if (tierChanged) {
       logger.info('Plan change detected', {
@@ -701,8 +701,8 @@ class StripeService {
     // Detect billing period change
     const subscriptionPlansService = require('./subscription-plans.service');
     const newPrice = await subscriptionPlansService.getPlanByStripePriceId(newPriceId);
-    const oldPrice = subscriptionRecord.stripe_price_id ?
-      await subscriptionPlansService.getPlanByStripePriceId(subscriptionRecord.stripe_price_id) : null;
+    const oldPrice = subscriptionRecord.price_id ?
+      await subscriptionPlansService.getPlanByStripePriceId(subscriptionRecord.price_id) : null;
 
     const periodChanged = oldPrice && newPrice && oldPrice.billing_period !== newPrice.billing_period;
 
@@ -735,7 +735,7 @@ class StripeService {
       current_period_start: updatedPeriod.startDate,
       current_period_end: updatedPeriod.endDate,
       cancel_at_period_end: subscription.cancel_at_period_end,
-      stripe_price_id: newPriceId
+      price_id: newPriceId
     });
 
     // Update user record
