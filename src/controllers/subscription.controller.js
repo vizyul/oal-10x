@@ -44,8 +44,10 @@ const subscriptionController = {
 
       logger.info('Creating checkout session:', {
         userId: user.id,
+        userIdType: typeof user.id,
         priceId,
-        email: user.email
+        email: user.email,
+        userObject: JSON.stringify(user)
       });
 
       // Validate price ID exists in our configuration
