@@ -25,7 +25,7 @@ const app = express();
 // Health check endpoint - MUST be first, before any middleware
 // This ensures Railway health checks respond quickly without going through
 // security middleware, rate limiting, logging, etc.
-app.get('/health', (req, res) => {
+app.get('/healthy', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
