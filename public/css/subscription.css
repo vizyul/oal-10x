@@ -321,6 +321,18 @@
   margin-top: 1.5rem;
 }
 
+/* Button Outline Style for Dashboard */
+.card-actions .btn-outline {
+  background-color: transparent;
+  color: var(--text-primary, #1e293b);
+  border: 2px solid var(--text-primary, #1e293b);
+}
+
+.card-actions .btn-outline:hover {
+  background-color: var(--text-primary, #1e293b);
+  color: white;
+}
+
 /* Pricing Grid - Upgrade Page */
 .subscription-upgrade-container {
   max-width: 1800px;
