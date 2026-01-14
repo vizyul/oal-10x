@@ -577,6 +577,19 @@ class StripeService {
       }
     }
 
+    // Get user's current tier BEFORE updating to detect upgrades
+    const currentUser = await UserModel.findById(pgUserId);
+    const oldTier = currentUser?.subscription_tier || 'free';
+    const isUpgrade = this.getChangeType(oldTier, tier) === 'upgrade';
+
+    logger.info('Subscription created - tier check', {
+      subscriptionId: subscription.id,
+      userId: pgUserId,
+      oldTier,
+      newTier: tier,
+      isUpgrade
+    });
+
     // Update user record with proper ID resolution (use already resolved pgUserId)
     await UserModel.updateUser(pgUserId, {
       subscription_tier: tier,
@@ -585,6 +598,40 @@ class StripeService {
 
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
+
+    // SEND UPGRADE EMAIL if this is an upgrade (handles checkout-based upgrades)
+    if (isUpgrade && oldTier !== tier) {
+      try {
+        const userForEmail = await UserModel.findById(pgUserId);
+        if (userForEmail && userForEmail.email) {
+          const subscriptionPlansService = require('./subscription-plans.service');
+          const newPlanData = await subscriptionPlansService.getPlanByKey(tier);
+          const newFeatures = newPlanData ? newPlanData.features : [];
+
+          await emailService.sendSubscriptionUpgraded(userForEmail.email, {
+            firstName: userForEmail.first_name || 'User',
+            oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
+            newPlanName: tier.charAt(0).toUpperCase() + tier.slice(1),
+            newFeatures: newFeatures
+          });
+
+          logger.info('Upgrade email sent from handleSubscriptionCreated', {
+            userId: pgUserId,
+            email: userForEmail.email,
+            oldTier,
+            newTier: tier
+          });
+        }
+      } catch (emailError) {
+        logger.error('Failed to send upgrade email from handleSubscriptionCreated', {
+          error: emailError.message,
+          userId: pgUserId,
+          oldTier,
+          newTier: tier
+        });
+        // Don't fail webhook if email fails
+      }
+    }
 
     // Create initial usage record for the subscription
     await this.createUsageRecord(userId, subscription, subscriptionRecord, tier);
