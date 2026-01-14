@@ -1142,10 +1142,10 @@ Thank you for being part of the AmplifyContent.ai community!
         <div class="content">
             <h2>Hello ${data.firstName || 'there'},</h2>
             <p>Your subscription has been successfully upgraded!</p>
-            <p style="text-align: center;">
-                <span style="color: #64748b;">${data.oldPlanName || 'Previous Plan'}</span>
-                <span style="margin: 0 10px;">→</span>
-                <span class="upgrade-badge">${data.newPlanName || 'New Plan'}</span>
+            <p style="text-align: center; font-size: 18px;">
+                <span style="color: #64748b; font-weight: bold;">${data.oldPlanName || 'Previous Plan'}</span>
+                <span style="margin: 0 15px; color: #333;">→</span>
+                <span style="background-color: #10b981; color: white; display: inline-block; padding: 8px 20px; border-radius: 20px; font-weight: bold;">${data.newPlanName || 'New Plan'}</span>
             </p>
             ${featuresList ? `<p>Your new plan includes:</p>${featuresList}` : ''}
             <p>Your upgraded features are now active and ready to use!</p>
