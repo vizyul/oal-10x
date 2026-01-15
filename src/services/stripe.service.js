@@ -7,6 +7,11 @@ const { clearCachedUser, forceTokenRefresh } = require('../middleware');
 const emailService = require('./email.service');
 const trackingService = require('./tracking.service');
 
+// Simple in-memory cache to prevent duplicate tracking events
+// Key: subscriptionId, Value: timestamp when tracked
+const trackedPurchases = new Map();
+const TRACKING_CACHE_TTL = 60000; // 60 seconds - enough to catch duplicate webhooks
+
 /**
  * Extract period dates from subscription object
  * Handles both top-level fields and nested items.data[0] structure
@@ -665,37 +670,60 @@ class StripeService {
 
     // Server-side pixel tracking (Meta Conversions API & TikTok Events API)
     // This ensures tracking even if user doesn't reach success page or has ad blockers
-    try {
-      const userForTracking = await UserModel.findById(pgUserId);
-      const subscriptionAmount = subscription.items.data[0].price.unit_amount / 100;
+    // Check if we've already tracked this subscription (prevents duplicate webhook tracking)
+    const trackingCacheKey = subscription.id;
+    const alreadyTracked = trackedPurchases.has(trackingCacheKey);
 
-      await trackingService.trackPurchase({
-        email: userForTracking?.email,
-        userId: pgUserId,
-        value: subscriptionAmount,
-        currency: (subscription.currency || 'usd').toUpperCase(),
-        planName: `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`,
+    if (alreadyTracked) {
+      logger.info('Skipping duplicate purchase tracking', {
         subscriptionId: subscription.id,
-        eventSourceUrl: `${process.env.BASE_URL || 'https://amplifycontent.ai'}/subscription/success`,
-        // Additional parameters for improved Meta event match quality
-        firstName: userForTracking?.first_name,
-        lastName: userForTracking?.last_name
-        // Note: ipAddress, userAgent, fbc, fbp would need to be captured during checkout
-        // and stored with the session/user to be available here in the webhook context
-      });
-
-      logger.info('Server-side purchase tracking completed', {
-        userId: pgUserId,
-        tier,
-        amount: subscriptionAmount
-      });
-    } catch (trackingError) {
-      logger.error('Server-side purchase tracking error:', {
-        error: trackingError.message,
         userId: pgUserId,
         tier
       });
-      // Don't fail subscription creation if tracking fails
+    } else {
+      try {
+        // Mark as tracked immediately to prevent race conditions
+        trackedPurchases.set(trackingCacheKey, Date.now());
+
+        // Clean up old entries from cache
+        const now = Date.now();
+        for (const [key, timestamp] of trackedPurchases.entries()) {
+          if (now - timestamp > TRACKING_CACHE_TTL) {
+            trackedPurchases.delete(key);
+          }
+        }
+
+        const userForTracking = await UserModel.findById(pgUserId);
+        const subscriptionAmount = subscription.items.data[0].price.unit_amount / 100;
+
+        await trackingService.trackPurchase({
+          email: userForTracking?.email,
+          userId: pgUserId,
+          value: subscriptionAmount,
+          currency: (subscription.currency || 'usd').toUpperCase(),
+          planName: `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`,
+          subscriptionId: subscription.id,
+          eventSourceUrl: `${process.env.BASE_URL || 'https://amplifycontent.ai'}/subscription/success`,
+          // Additional parameters for improved Meta event match quality
+          firstName: userForTracking?.first_name,
+          lastName: userForTracking?.last_name
+          // Note: ipAddress, userAgent, fbc, fbp would need to be captured during checkout
+          // and stored with the session/user to be available here in the webhook context
+        });
+
+        logger.info('Server-side purchase tracking completed', {
+          userId: pgUserId,
+          tier,
+          amount: subscriptionAmount
+        });
+      } catch (trackingError) {
+        logger.error('Server-side purchase tracking error:', {
+          error: trackingError.message,
+          userId: pgUserId,
+          tier
+        });
+        // Don't fail subscription creation if tracking fails
+      }
     }
 
     logger.info('Subscription created:', {
