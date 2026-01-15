@@ -38,9 +38,16 @@ class TrackingService {
    * @param {string} params.planName - Subscription plan name
    * @param {string} params.subscriptionId - Stripe subscription ID
    * @param {string} params.eventSourceUrl - URL where event originated
+   * @param {string} params.firstName - User first name (for improved match quality)
+   * @param {string} params.lastName - User last name (for improved match quality)
+   * @param {string} params.ipAddress - User IP address (for improved match quality)
+   * @param {string} params.userAgent - User agent string (for improved match quality)
+   * @param {string} params.fbc - Facebook click ID cookie (for improved match quality)
+   * @param {string} params.fbp - Facebook browser ID cookie (for improved match quality)
    */
   async trackPurchase(params) {
-    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl } = params;
+    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl,
+            firstName, lastName, ipAddress, userAgent, fbc, fbp } = params;
 
     logger.info('Server-side tracking: Purchase event', {
       userId,
@@ -66,7 +73,13 @@ class TrackingService {
           currency,
           planName,
           subscriptionId,
-          eventSourceUrl
+          eventSourceUrl,
+          firstName,
+          lastName,
+          ipAddress,
+          userAgent,
+          fbc,
+          fbp
         });
       } catch (error) {
         logger.error('Meta Conversions API error:', {
@@ -89,7 +102,9 @@ class TrackingService {
           currency,
           planName,
           subscriptionId,
-          eventSourceUrl
+          eventSourceUrl,
+          ipAddress,
+          userAgent
         });
       } catch (error) {
         logger.error('TikTok Events API error:', {
@@ -109,10 +124,25 @@ class TrackingService {
    * Track purchase on Meta Conversions API
    */
   async trackMetaPurchase(params) {
-    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl } = params;
+    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl,
+            firstName, lastName, ipAddress, userAgent, fbc, fbp } = params;
 
     const eventTime = Math.floor(Date.now() / 1000);
     const eventId = `purchase_${subscriptionId}_${eventTime}`;
+
+    // Build user_data with all available parameters for improved match quality
+    const userData = {
+      em: email ? [this.hashData(email)] : [],
+      external_id: userId ? [this.hashData(String(userId))] : []
+    };
+
+    // Add optional parameters for improved event match quality (up to 35% improvement each)
+    if (firstName) userData.fn = [this.hashData(firstName)];
+    if (lastName) userData.ln = [this.hashData(lastName)];
+    if (ipAddress) userData.client_ip_address = ipAddress; // Not hashed
+    if (userAgent) userData.client_user_agent = userAgent; // Not hashed
+    if (fbc) userData.fbc = fbc; // Facebook click ID cookie
+    if (fbp) userData.fbp = fbp; // Facebook browser ID cookie
 
     const payload = {
       data: [{
@@ -121,10 +151,7 @@ class TrackingService {
         event_id: eventId,
         event_source_url: eventSourceUrl || process.env.BASE_URL || 'https://amplifycontent.ai',
         action_source: 'website',
-        user_data: {
-          em: email ? [this.hashData(email)] : [],
-          external_id: userId ? [this.hashData(String(userId))] : []
-        },
+        user_data: userData,
         custom_data: {
           value: value || 0,
           currency: currency || 'USD',
@@ -166,25 +193,33 @@ class TrackingService {
    * Track purchase on TikTok Events API
    */
   async trackTikTokPurchase(params) {
-    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl } = params;
+    const { email, userId, value, currency, planName, subscriptionId, eventSourceUrl,
+            ipAddress, userAgent } = params;
 
     const eventTime = new Date().toISOString();
     const eventId = `purchase_${subscriptionId}_${Date.now()}`;
+
+    // Build context with all available parameters for better attribution
+    const context = {
+      page: {
+        url: eventSourceUrl || process.env.BASE_URL || 'https://amplifycontent.ai'
+      },
+      user: {
+        email: email ? this.hashData(email) : undefined,
+        external_id: userId ? this.hashData(String(userId)) : undefined
+      }
+    };
+
+    // Add IP and User Agent if available (improves match quality)
+    if (ipAddress) context.ip = ipAddress;
+    if (userAgent) context.user_agent = userAgent;
 
     const payload = {
       pixel_code: this.tiktokPixelId,
       event: 'CompletePayment',
       event_id: eventId,
       timestamp: eventTime,
-      context: {
-        page: {
-          url: eventSourceUrl || process.env.BASE_URL || 'https://amplifycontent.ai'
-        },
-        user: {
-          email: email ? this.hashData(email) : undefined,
-          external_id: userId ? this.hashData(String(userId)) : undefined
-        }
-      },
+      context: context,
       properties: {
         value: value || 0,
         currency: currency || 'USD',

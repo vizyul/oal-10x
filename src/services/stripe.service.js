@@ -676,7 +676,12 @@ class StripeService {
         currency: (subscription.currency || 'usd').toUpperCase(),
         planName: `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`,
         subscriptionId: subscription.id,
-        eventSourceUrl: `${process.env.BASE_URL || 'https://amplifycontent.ai'}/subscription/success`
+        eventSourceUrl: `${process.env.BASE_URL || 'https://amplifycontent.ai'}/subscription/success`,
+        // Additional parameters for improved Meta event match quality
+        firstName: userForTracking?.first_name,
+        lastName: userForTracking?.last_name
+        // Note: ipAddress, userAgent, fbc, fbp would need to be captured during checkout
+        // and stored with the session/user to be available here in the webhook context
       });
 
       logger.info('Server-side purchase tracking completed', {
