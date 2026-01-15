@@ -44,31 +44,40 @@
      */
     trackPurchase: function(params) {
       params = params || {};
+      var contentName = params.content_name || 'Subscription';
+      var contentId = params.content_id || contentName.toLowerCase().replace(/\s+/g, '_');
+      var value = params.value || 0;
 
       // Meta Pixel - Purchase event
       if (typeof fbq === 'function') {
         fbq('track', 'Purchase', {
-          value: params.value || 0,
+          value: value,
           currency: params.currency || 'USD',
-          content_name: params.content_name || 'Subscription',
+          content_name: contentName,
           content_type: 'product',
-          content_ids: params.content_id ? [params.content_id] : []
+          content_ids: [contentId]
         });
         console.log('[Meta Pixel] Purchase tracked:', params);
       }
 
-      // TikTok Pixel - CompletePayment event
+      // TikTok Pixel - CompletePayment event with contents array
       if (typeof ttq === 'object' && ttq.track) {
         ttq.track('CompletePayment', {
-          value: params.value || 0,
+          value: value,
           currency: params.currency || 'USD',
-          content_name: params.content_name || 'Subscription',
-          content_type: 'product',
-          content_id: params.content_id || ''
+          contents: [
+            {
+              content_id: contentId,
+              content_type: 'product',
+              content_name: contentName,
+              price: value,
+              quantity: 1
+            }
+          ]
         });
         // Also fire Subscribe event for subscription-specific tracking
         ttq.track('Subscribe', {
-          value: params.value || 0,
+          value: value,
           currency: params.currency || 'USD'
         });
         console.log('[TikTok Pixel] Purchase tracked:', params);
@@ -81,11 +90,13 @@
      */
     trackViewContent: function(params) {
       params = params || {};
+      var contentName = params.content_name || 'Pricing Page';
+      var contentId = params.content_id || contentName.toLowerCase().replace(/\s+/g, '_');
 
       // Meta Pixel
       if (typeof fbq === 'function') {
         fbq('track', 'ViewContent', {
-          content_name: params.content_name || 'Pricing Page',
+          content_name: contentName,
           content_type: 'product',
           value: params.value || 0,
           currency: params.currency || 'USD'
@@ -93,13 +104,18 @@
         console.log('[Meta Pixel] ViewContent tracked:', params);
       }
 
-      // TikTok Pixel
+      // TikTok Pixel - use contents array format
       if (typeof ttq === 'object' && ttq.track) {
         ttq.track('ViewContent', {
-          content_name: params.content_name || 'Pricing Page',
-          content_type: 'product',
           value: params.value || 0,
-          currency: params.currency || 'USD'
+          currency: params.currency || 'USD',
+          contents: [
+            {
+              content_id: contentId,
+              content_type: 'product',
+              content_name: contentName
+            }
+          ]
         });
         console.log('[TikTok Pixel] ViewContent tracked:', params);
       }
@@ -111,27 +127,36 @@
      */
     trackInitiateCheckout: function(params) {
       params = params || {};
+      var contentName = params.content_name || 'Subscription';
+      var contentId = params.content_id || contentName.toLowerCase().replace(/\s+/g, '_');
+      var value = params.value || 0;
 
       // Meta Pixel
       if (typeof fbq === 'function') {
         fbq('track', 'InitiateCheckout', {
-          value: params.value || 0,
+          value: value,
           currency: params.currency || 'USD',
-          content_name: params.content_name || 'Subscription',
+          content_name: contentName,
           content_type: 'product',
           num_items: 1
         });
         console.log('[Meta Pixel] InitiateCheckout tracked:', params);
       }
 
-      // TikTok Pixel
+      // TikTok Pixel - use contents array format
       if (typeof ttq === 'object' && ttq.track) {
         ttq.track('InitiateCheckout', {
-          value: params.value || 0,
+          value: value,
           currency: params.currency || 'USD',
-          content_name: params.content_name || 'Subscription',
-          content_type: 'product',
-          quantity: 1
+          contents: [
+            {
+              content_id: contentId,
+              content_type: 'product',
+              content_name: contentName,
+              price: value,
+              quantity: 1
+            }
+          ]
         });
         console.log('[TikTok Pixel] InitiateCheckout tracked:', params);
       }
