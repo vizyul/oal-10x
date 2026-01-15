@@ -166,7 +166,15 @@
     const yearlyLabel = document.getElementById('yearly-label');
     const monthlyPricing = document.querySelectorAll('.monthly-pricing');
     const yearlyPricing = document.querySelectorAll('.yearly-pricing');
-    
+
+    // Track ViewContent event for upgrade/pricing page
+    if (typeof trackViewContent === 'function') {
+      trackViewContent({
+        content_name: 'Upgrade Page',
+        content_type: 'product'
+      });
+    }
+
     // Set initial state
     monthlyLabel.classList.add('active');
     yearlyLabel.classList.remove('active');
@@ -202,6 +210,14 @@
       if (!priceId) {
         showNotification('Price ID not configured for this tier. Please contact support.', 'error');
         return;
+      }
+
+      // Track InitiateCheckout event
+      if (typeof trackInitiateCheckout === 'function') {
+        trackInitiateCheckout({
+          content_name: tier.charAt(0).toUpperCase() + tier.slice(1) + ' Plan',
+          content_id: priceId
+        });
       }
 
       // Show loading state

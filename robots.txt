@@ -55,7 +55,7 @@ Disallow: /
 
 # END Cloudflare Managed Content
 
-# robots.txt for Our AI Legacy / Amplify Content AI
+# robots.txt for AmplifyContent.ai
 # Enterprise policy: Allow search engines, block AI training bots
 
 # Allow major search engines (SEO benefit)

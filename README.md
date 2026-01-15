@@ -1,4 +1,4 @@
-# Our AI Legacy Application
+# AmplifyContent.ai Application
 
 A modern Node.js Express application with Handlebars templating and Airtable integration.
 

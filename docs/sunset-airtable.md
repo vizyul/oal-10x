@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-This document outlines the complete migration strategy from Airtable to PostgreSQL for the "Our AI Legacy" application. The application currently operates with a dual-database architecture where data is written to both Airtable (primary) and PostgreSQL (secondary). This migration will sunset Airtable entirely and consolidate all data operations to PostgreSQL.
+This document outlines the complete migration strategy from Airtable to PostgreSQL for the "AmplifyContent.ai" application. The application currently operates with a dual-database architecture where data is written to both Airtable (primary) and PostgreSQL (secondary). This migration will sunset Airtable entirely and consolidate all data operations to PostgreSQL.
 
 **Benefits of Migration**:
 - **Cost Reduction**: Eliminate Airtable subscription costs (~$20-50/month per user)

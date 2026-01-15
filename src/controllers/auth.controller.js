@@ -443,7 +443,7 @@ class AuthController {
           success: true,
           message: isAffiliateSignup
             ? 'Account created! Now complete your affiliate registration.'
-            : 'Account created successfully! Welcome to Our AI Legacy.',
+            : 'Account created successfully! Welcome to AmplifyContent.ai.',
           data: {
             user: {
               id: user.id,
@@ -460,7 +460,7 @@ class AuthController {
       // Redirect based on signup flow
       req.flash('success', isAffiliateSignup
         ? 'Account created! Complete your affiliate registration below.'
-        : 'Welcome to Our AI Legacy! Your account has been created successfully.');
+        : 'Welcome to AmplifyContent.ai! Your account has been created successfully.');
       res.redirect(redirectUrl);
 
     } catch (error) {

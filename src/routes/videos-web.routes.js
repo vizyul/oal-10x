@@ -15,7 +15,7 @@ router.use(subscriptionMiddleware.addSubscriptionInfo);
  */
 router.get('/', (req, res) => {
   res.render('videos/dashboard', {
-    title: 'Video Dashboard - Our AI Legacy',
+    title: 'Video Dashboard - AmplifyContent.ai',
     description: 'Manage your video content and AI-generated insights',
     user: req.user,
     subscription: req.subscriptionInfo,
@@ -64,7 +64,7 @@ router.get('/upload',
     }
 
     res.render('videos/upload', {
-      title: 'Upload Video - Our AI Legacy',
+      title: 'Upload Video - AmplifyContent.ai',
       description: 'Add videos by URL or connect your YouTube account',
       user: req.user,
       subscription: req.subscriptionInfo,
@@ -88,7 +88,7 @@ router.get('/upload',
  */
 router.get('/browse', (req, res) => {
   res.render('videos/browse', {
-    title: 'Browse YouTube Videos - Our AI Legacy',
+    title: 'Browse YouTube Videos - AmplifyContent.ai',
     description: 'Browse and import videos from your YouTube channels',
     user: req.user,
     showHeader: true,
@@ -106,7 +106,7 @@ router.get('/browse', (req, res) => {
  */
 router.get('/channels', (req, res) => {
   res.render('videos/channels', {
-    title: 'YouTube Channels - Our AI Legacy',
+    title: 'YouTube Channels - AmplifyContent.ai',
     description: 'Manage your connected YouTube channels',
     user: req.user,
     showHeader: true,
@@ -126,7 +126,7 @@ router.get('/analytics',
   subscriptionMiddleware.requireFeature('analytics'),
   (req, res) => {
     res.render('videos/analytics', {
-      title: 'Video Analytics - Our AI Legacy',
+      title: 'Video Analytics - AmplifyContent.ai',
       description: 'View insights and performance metrics for your videos',
       user: req.user,
       subscription: req.subscriptionInfo,
@@ -164,7 +164,7 @@ router.get('/:id', (req, res) => {
   const videoId = req.params.id;
 
   res.render('videos/details', {
-    title: 'Video Details - Our AI Legacy',
+    title: 'Video Details - AmplifyContent.ai',
     description: 'View and edit video details and AI-generated content',
     user: req.user,
     videoId: videoId,
@@ -185,7 +185,7 @@ router.get('/:id/edit', (req, res) => {
   const videoId = req.params.id;
 
   res.render('videos/edit', {
-    title: 'Edit Video - Our AI Legacy',
+    title: 'Edit Video - AmplifyContent.ai',
     description: 'Edit video information and AI-generated content',
     user: req.user,
     videoId: videoId,

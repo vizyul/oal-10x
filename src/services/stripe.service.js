@@ -5,6 +5,7 @@ const { user: UserModel, userSubscription, subscriptionUsage, subscriptionEvents
 const { logger } = require('../utils');
 const { clearCachedUser, forceTokenRefresh } = require('../middleware');
 const emailService = require('./email.service');
+const trackingService = require('./tracking.service');
 
 /**
  * Extract period dates from subscription object
@@ -660,6 +661,36 @@ class StripeService {
     } catch (affiliateError) {
       logger.error('Error tracking affiliate conversion:', affiliateError);
       // Don't fail subscription creation if affiliate tracking fails
+    }
+
+    // Server-side pixel tracking (Meta Conversions API & TikTok Events API)
+    // This ensures tracking even if user doesn't reach success page or has ad blockers
+    try {
+      const userForTracking = await UserModel.findById(pgUserId);
+      const subscriptionAmount = subscription.items.data[0].price.unit_amount / 100;
+
+      await trackingService.trackPurchase({
+        email: userForTracking?.email,
+        userId: pgUserId,
+        value: subscriptionAmount,
+        currency: (subscription.currency || 'usd').toUpperCase(),
+        planName: `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`,
+        subscriptionId: subscription.id,
+        eventSourceUrl: `${process.env.BASE_URL || 'https://amplifycontent.ai'}/subscription/success`
+      });
+
+      logger.info('Server-side purchase tracking completed', {
+        userId: pgUserId,
+        tier,
+        amount: subscriptionAmount
+      });
+    } catch (trackingError) {
+      logger.error('Server-side purchase tracking error:', {
+        error: trackingError.message,
+        userId: pgUserId,
+        tier
+      });
+      // Don't fail subscription creation if tracking fails
     }
 
     logger.info('Subscription created:', {

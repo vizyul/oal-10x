@@ -1,6 +1,6 @@
 # Authentication System Documentation
 
-This document explains how the OAuth integration and authentication system works in Our AI Legacy application.
+This document explains how the OAuth integration and authentication system works in AmplifyContent.ai application.
 
 ## Overview
 

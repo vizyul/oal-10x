@@ -1,0 +1,223 @@
+{{!--
+  Tracking Events Helper
+  Provides functions to fire Meta and TikTok pixel events
+
+  Usage in templates:
+  1. Include this partial: {{> tracking-events}}
+  2. Call tracking functions in your page's JavaScript:
+     - trackEvent('ViewContent', { content_name: 'Upgrade Page', value: 29.99, currency: 'USD' })
+     - trackPurchase({ value: 29.99, currency: 'USD', content_name: 'Premium Plan' })
+     - trackInitiateCheckout({ value: 29.99, currency: 'USD' })
+     - trackCompleteRegistration({ content_name: 'Email Signup' })
+--}}
+
+<script>
+(function() {
+  // Unified tracking helper
+  window.AmplifyTracking = {
+    /**
+     * Track a generic event on both Meta and TikTok pixels
+     * @param {string} eventName - Event name (Meta standard events)
+     * @param {object} params - Event parameters
+     */
+    trackEvent: function(eventName, params) {
+      params = params || {};
+
+      // Meta Pixel
+      if (typeof fbq === 'function') {
+        fbq('track', eventName, params);
+        console.log('[Meta Pixel] Tracked:', eventName, params);
+      }
+
+      // TikTok Pixel - map Meta events to TikTok equivalents
+      if (typeof ttq === 'object' && ttq.track) {
+        var tiktokEvent = this._mapToTikTokEvent(eventName);
+        var tiktokParams = this._mapToTikTokParams(params);
+        ttq.track(tiktokEvent, tiktokParams);
+        console.log('[TikTok Pixel] Tracked:', tiktokEvent, tiktokParams);
+      }
+    },
+
+    /**
+     * Track subscription/product purchase
+     * @param {object} params - { value, currency, content_name, content_id, transaction_id }
+     */
+    trackPurchase: function(params) {
+      params = params || {};
+
+      // Meta Pixel - Purchase event
+      if (typeof fbq === 'function') {
+        fbq('track', 'Purchase', {
+          value: params.value || 0,
+          currency: params.currency || 'USD',
+          content_name: params.content_name || 'Subscription',
+          content_type: 'product',
+          content_ids: params.content_id ? [params.content_id] : []
+        });
+        console.log('[Meta Pixel] Purchase tracked:', params);
+      }
+
+      // TikTok Pixel - CompletePayment event
+      if (typeof ttq === 'object' && ttq.track) {
+        ttq.track('CompletePayment', {
+          value: params.value || 0,
+          currency: params.currency || 'USD',
+          content_name: params.content_name || 'Subscription',
+          content_type: 'product',
+          content_id: params.content_id || ''
+        });
+        // Also fire Subscribe event for subscription-specific tracking
+        ttq.track('Subscribe', {
+          value: params.value || 0,
+          currency: params.currency || 'USD'
+        });
+        console.log('[TikTok Pixel] Purchase tracked:', params);
+      }
+    },
+
+    /**
+     * Track when user views upgrade/pricing page
+     * @param {object} params - { content_name, value, currency }
+     */
+    trackViewContent: function(params) {
+      params = params || {};
+
+      // Meta Pixel
+      if (typeof fbq === 'function') {
+        fbq('track', 'ViewContent', {
+          content_name: params.content_name || 'Pricing Page',
+          content_type: 'product',
+          value: params.value || 0,
+          currency: params.currency || 'USD'
+        });
+        console.log('[Meta Pixel] ViewContent tracked:', params);
+      }
+
+      // TikTok Pixel
+      if (typeof ttq === 'object' && ttq.track) {
+        ttq.track('ViewContent', {
+          content_name: params.content_name || 'Pricing Page',
+          content_type: 'product',
+          value: params.value || 0,
+          currency: params.currency || 'USD'
+        });
+        console.log('[TikTok Pixel] ViewContent tracked:', params);
+      }
+    },
+
+    /**
+     * Track when user initiates checkout
+     * @param {object} params - { value, currency, content_name, content_id }
+     */
+    trackInitiateCheckout: function(params) {
+      params = params || {};
+
+      // Meta Pixel
+      if (typeof fbq === 'function') {
+        fbq('track', 'InitiateCheckout', {
+          value: params.value || 0,
+          currency: params.currency || 'USD',
+          content_name: params.content_name || 'Subscription',
+          content_type: 'product',
+          num_items: 1
+        });
+        console.log('[Meta Pixel] InitiateCheckout tracked:', params);
+      }
+
+      // TikTok Pixel
+      if (typeof ttq === 'object' && ttq.track) {
+        ttq.track('InitiateCheckout', {
+          value: params.value || 0,
+          currency: params.currency || 'USD',
+          content_name: params.content_name || 'Subscription',
+          content_type: 'product',
+          quantity: 1
+        });
+        console.log('[TikTok Pixel] InitiateCheckout tracked:', params);
+      }
+    },
+
+    /**
+     * Track user registration completion
+     * @param {object} params - { content_name, status }
+     */
+    trackCompleteRegistration: function(params) {
+      params = params || {};
+
+      // Meta Pixel
+      if (typeof fbq === 'function') {
+        fbq('track', 'CompleteRegistration', {
+          content_name: params.content_name || 'User Signup',
+          status: params.status || 'complete'
+        });
+        console.log('[Meta Pixel] CompleteRegistration tracked:', params);
+      }
+
+      // TikTok Pixel
+      if (typeof ttq === 'object' && ttq.track) {
+        ttq.track('CompleteRegistration', {
+          content_name: params.content_name || 'User Signup'
+        });
+        ttq.track('SubmitForm', {
+          content_name: params.content_name || 'User Signup'
+        });
+        console.log('[TikTok Pixel] CompleteRegistration tracked:', params);
+      }
+    },
+
+    /**
+     * Track lead generation (e.g., email signup, contact form)
+     * @param {object} params - { content_name, content_category }
+     */
+    trackLead: function(params) {
+      params = params || {};
+
+      // Meta Pixel
+      if (typeof fbq === 'function') {
+        fbq('track', 'Lead', {
+          content_name: params.content_name || 'Lead',
+          content_category: params.content_category || 'signup'
+        });
+        console.log('[Meta Pixel] Lead tracked:', params);
+      }
+
+      // TikTok Pixel
+      if (typeof ttq === 'object' && ttq.track) {
+        ttq.track('SubmitForm', {
+          content_name: params.content_name || 'Lead'
+        });
+        console.log('[TikTok Pixel] Lead tracked:', params);
+      }
+    },
+
+    // Internal: Map Meta event names to TikTok equivalents
+    _mapToTikTokEvent: function(metaEvent) {
+      var mapping = {
+        'ViewContent': 'ViewContent',
+        'AddToCart': 'AddToCart',
+        'InitiateCheckout': 'InitiateCheckout',
+        'Purchase': 'CompletePayment',
+        'CompleteRegistration': 'CompleteRegistration',
+        'Lead': 'SubmitForm',
+        'Search': 'Search',
+        'AddPaymentInfo': 'AddPaymentInfo'
+      };
+      return mapping[metaEvent] || metaEvent;
+    },
+
+    // Internal: Map Meta params to TikTok format
+    _mapToTikTokParams: function(params) {
+      // TikTok uses similar param names, just return as-is
+      return params;
+    }
+  };
+
+  // Expose globally for easy access
+  window.trackEvent = window.AmplifyTracking.trackEvent.bind(window.AmplifyTracking);
+  window.trackPurchase = window.AmplifyTracking.trackPurchase.bind(window.AmplifyTracking);
+  window.trackViewContent = window.AmplifyTracking.trackViewContent.bind(window.AmplifyTracking);
+  window.trackInitiateCheckout = window.AmplifyTracking.trackInitiateCheckout.bind(window.AmplifyTracking);
+  window.trackCompleteRegistration = window.AmplifyTracking.trackCompleteRegistration.bind(window.AmplifyTracking);
+  window.trackLead = window.AmplifyTracking.trackLead.bind(window.AmplifyTracking);
+})();
+</script>

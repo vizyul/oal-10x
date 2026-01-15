@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS subscription_plan_features (
     shared_workspace BOOLEAN NOT NULL DEFAULT false,
 
     -- Branding
-    white_label BOOLEAN NOT NULL DEFAULT false,    -- Remove "Our AI Legacy" branding
+    white_label BOOLEAN NOT NULL DEFAULT false,    -- Remove "AmplifyContent.ai" branding
     custom_domain BOOLEAN NOT NULL DEFAULT false,
 
     -- Metadata
@@ -256,7 +256,7 @@ CREATE INDEX idx_plan_migrations_created ON subscription_plan_migrations(created
 
 -- Insert base plans
 INSERT INTO subscription_plans (plan_key, plan_name, plan_slug, is_active, is_visible, sort_order, description, features, video_limit, api_calls_limit, storage_limit) VALUES
-('free', 'Free', 'free', true, true, 1, 'Try Our AI Legacy with 1 free video',
+('free', 'Free', 'free', true, true, 1, 'Try AmplifyContent.ai with 1 free video',
  '["1 free video", "All CREATOR Content Types", "Priority Support", "Dedicated Account Manager", "Custom Integration", "Team Collaboration"]'::jsonb,
  1, 0, 1),
 

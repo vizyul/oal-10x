@@ -1,4 +1,4 @@
-// Main JavaScript for Our AI Legacy App
+// Main JavaScript for AmplifyContent.ai
 
 // Affiliate Referral Code Capture
 // Captures ?ref= parameter from URL and stores in localStorage for signup attribution

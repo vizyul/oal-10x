@@ -174,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_plan_migrations_created ON subscription_plan_migr
 -- Insert base plans (ON CONFLICT = safe for re-runs)
 INSERT INTO subscription_plans (plan_key, plan_name, plan_slug, is_active, is_visible, sort_order, description, features)
 VALUES
-('free', 'Free', 'free', true, true, 1, 'Try Our AI Legacy with 1 free video',
+('free', 'Free', 'free', true, true, 1, 'Try AmplifyContent.ai with 1 free video',
  '["1 free video", "Basic AI summaries", "Community support"]'::jsonb)
 ON CONFLICT (plan_key) DO UPDATE SET
     plan_name = EXCLUDED.plan_name,

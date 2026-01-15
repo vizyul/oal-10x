@@ -37,7 +37,7 @@ router.get('/upgrade', optionalAuthMiddleware, (req, res) => {
     }
 
     res.render('subscription/upgrade', {
-      title: 'Upgrade Subscription - Our AI Legacy',
+      title: 'Upgrade Subscription - AmplifyContent.ai',
       description: 'Choose the perfect plan for your needs',
       user: req.user || null,
       subscription: req.subscriptionInfo || null,
@@ -80,7 +80,7 @@ router.use(subscriptionMiddleware.addSubscriptionInfo);
  */
 router.get('/', (req, res) => {
   res.render('subscription/dashboard', {
-    title: 'Subscription - Our AI Legacy',
+    title: 'Subscription - AmplifyContent.ai',
     description: 'Manage your subscription and billing',
     user: req.user,
     subscription: req.subscriptionInfo,
@@ -222,6 +222,18 @@ router.get('/success', async (req, res) => {
         const planData = await subscriptionPlansService.getPlanByKey(freshUser.subscription_tier || 'free');
         const featureFlags = await subscriptionPlansService.getFeatureFlags(freshUser.subscription_tier || 'free');
 
+        // Get price info from session for tracking
+        let priceAmount = 0;
+        let priceCurrency = 'USD';
+        try {
+          if (session.amount_total) {
+            priceAmount = session.amount_total / 100; // Convert cents to dollars
+            priceCurrency = (session.currency || 'usd').toUpperCase();
+          }
+        } catch (priceError) {
+          logger.warn('Could not get price from session:', priceError.message);
+        }
+
         req.subscriptionInfo = {
           tier: freshUser.subscription_tier || 'free',
           status: freshUser.subscription_status || 'none',
@@ -234,7 +246,10 @@ router.get('/success', async (req, res) => {
             storage: 0  // TODO: Add to subscription_plans
           },
           percentages: { videos: 0, api_calls: 0, storage: 0 },
-          remainingVideos: planData?.videoLimit || 0
+          remainingVideos: planData?.videoLimit || 0,
+          // Tracking info
+          priceAmount: priceAmount,
+          priceCurrency: priceCurrency
         };
 
         // Clear any pending refresh flags
@@ -262,7 +277,7 @@ router.get('/success', async (req, res) => {
   });
 
   res.render('subscription/success', {
-    title: 'Subscription Successful - Our AI Legacy',
+    title: 'Subscription Successful - AmplifyContent.ai',
     description: 'Welcome to your new subscription!',
     user: req.user,
     subscription: req.subscriptionInfo,
@@ -282,7 +297,7 @@ router.get('/success', async (req, res) => {
  */
 router.get('/cancel', (req, res) => {
   res.render('subscription/cancel', {
-    title: 'Subscription Canceled - Our AI Legacy',
+    title: 'Subscription Canceled - AmplifyContent.ai',
     description: 'Your subscription was not completed',
     user: req.user,
     subscription: req.subscriptionInfo,
@@ -302,7 +317,7 @@ router.get('/cancel', (req, res) => {
  */
 router.get('/usage', (req, res) => {
   res.render('subscription/usage', {
-    title: 'Usage Dashboard - Our AI Legacy',
+    title: 'Usage Dashboard - AmplifyContent.ai',
     description: 'Track your current usage and limits',
     user: req.user,
     subscription: req.subscriptionInfo,

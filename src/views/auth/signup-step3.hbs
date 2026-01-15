@@ -190,7 +190,7 @@
         <circle cx="12" cy="12" r="10"></circle>
       </svg>
     </div>
-    <h3 class="modal-title">Welcome to Our AI Legacy!</h3>
+    <h3 class="modal-title">Welcome to AmplifyContent.ai!</h3>
     <p class="modal-message">
       Your account has been created successfully. You're now ready to explore 
       the future of AI in business with confidence and responsibility.
@@ -311,10 +311,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
       
       if (response.ok && result.success) {
+        // Track CompleteRegistration event
+        if (typeof trackCompleteRegistration === 'function') {
+          trackCompleteRegistration({
+            content_name: 'User Signup',
+            status: 'complete'
+          });
+        }
+
         // Show success modal
         loadingOverlay.classList.remove('show');
         successModal.classList.add('show');
-        
+
         // Auto-redirect after 3 seconds
         setTimeout(() => {
           window.location.href = result.data.redirectTo || '/dashboard';
