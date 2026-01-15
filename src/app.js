@@ -149,6 +149,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Make tracking pixel IDs available to all templates
+app.use((req, res, next) => {
+  res.locals.metaPixelId = process.env.META_PIXEL_ID || null;
+  res.locals.tiktokPixelId = process.env.TIKTOK_PIXEL_ID || null;
+  next();
+});
+
 // Initialize OAuth service and Passport
 const oauthService = require('./services/oauth.service');
 app.use(oauthService.initialize());
