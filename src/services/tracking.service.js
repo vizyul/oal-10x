@@ -223,10 +223,17 @@ class TrackingService {
       properties: {
         value: value || 0,
         currency: currency || 'USD',
-        content_name: planName,
-        content_type: 'subscription',
-        content_id: planName?.toLowerCase() || 'subscription',
-        order_id: subscriptionId
+        order_id: subscriptionId,
+        // TikTok expects contents as an array of objects
+        contents: [
+          {
+            content_id: planName?.toLowerCase().replace(/\s+/g, '_') || 'subscription',
+            content_type: 'product',
+            content_name: planName || 'Subscription',
+            price: value || 0,
+            quantity: 1
+          }
+        ]
       }
     };
 
