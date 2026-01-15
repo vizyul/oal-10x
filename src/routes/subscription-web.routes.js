@@ -156,13 +156,15 @@ router.get('/success', async (req, res) => {
 
       // First, ensure webhook has processed by manually syncing from Stripe
       // This handles the race condition where user arrives before webhook
-      try {
-        const stripeConfigModule = require('../config/stripe.config');
-        const stripe = require('stripe')(stripeConfigModule.getSecretKey());
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const stripeConfigModule = require('../config/stripe.config');
+      const stripe = require('stripe')(stripeConfigModule.getSecretKey());
+      let stripeSession = null;
 
-        if (session.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      try {
+        stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+
+        if (stripeSession.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(stripeSession.subscription);
 
           // Check if webhook has processed this subscription
           const UserSubscription = require('../models/UserSubscription');
@@ -226,9 +228,9 @@ router.get('/success', async (req, res) => {
         let priceAmount = 0;
         let priceCurrency = 'USD';
         try {
-          if (session.amount_total) {
-            priceAmount = session.amount_total / 100; // Convert cents to dollars
-            priceCurrency = (session.currency || 'usd').toUpperCase();
+          if (stripeSession && stripeSession.amount_total) {
+            priceAmount = stripeSession.amount_total / 100; // Convert cents to dollars
+            priceCurrency = (stripeSession.currency || 'usd').toUpperCase();
           }
         } catch (priceError) {
           logger.warn('Could not get price from session:', priceError.message);

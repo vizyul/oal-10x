@@ -4,6 +4,7 @@
  * Used by Stripe webhooks to track purchases server-side (more reliable than client-side)
  */
 
+/* global fetch */
 const crypto = require('crypto');
 const { logger } = require('../utils');
 
