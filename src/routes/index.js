@@ -24,8 +24,8 @@ router.use('/auth', authRoutes);
 // Home page route
 router.get('/', (req, res) => {
   res.render('index', {
-    title: 'AmplifyContent.ai - Drop a Video. Get 15+ Content Pieces. In Seconds.',
-    description: 'AmplifyContent.ai transcribes your video and transforms it into blog posts, social copy, newsletters, and more—so you can publish everywhere without the grind.',
+    title: 'AmplifyContent.ai - Drop a Video. Get 15+ Content Pieces & Viral Thumbnails. In Seconds.',
+    description: 'AmplifyContent.ai amplifies your content into viral thumbnails, video chapters, blog posts, social posts, and more—so you can publish everywhere without the grind.',
     ogimage: ogimg,
     user: req.user,
     userTheme: req.userTheme,
