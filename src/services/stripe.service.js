@@ -871,6 +871,39 @@ class StripeService {
     clearCachedUser(userId);
     forceTokenRefresh(pgUserId);
 
+    // SEND CANCELLATION SCHEDULED EMAIL if cancel_at_period_end changed to true
+    const wasCancelScheduled = subscriptionRecord.cancel_at_period_end;
+    const isCancelScheduled = subscription.cancel_at_period_end;
+
+    if (!wasCancelScheduled && isCancelScheduled) {
+      try {
+        const userForEmail = await UserModel.findById(pgUserId);
+        if (userForEmail && userForEmail.email) {
+          const endDate = updatedPeriod.endTimestamp.toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+          });
+
+          await emailService.sendSubscriptionCancellationScheduled(userForEmail.email, {
+            firstName: userForEmail.first_name || 'User',
+            planName: newTier ? newTier.charAt(0).toUpperCase() + newTier.slice(1) : 'subscription',
+            endDate: endDate
+          });
+
+          logger.info('Cancellation scheduled email sent', {
+            userId: pgUserId,
+            email: userForEmail.email,
+            endDate
+          });
+        }
+      } catch (emailError) {
+        logger.error('Failed to send cancellation scheduled email', {
+          error: emailError.message,
+          userId: pgUserId
+        });
+        // Don't fail webhook if email fails
+      }
+    }
+
     // SEND UPGRADE EMAIL if tier changed to a higher tier
     if (tierChanged) {
       const changeType = this.getChangeType(oldTier, newTier);

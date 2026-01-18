@@ -1185,6 +1185,82 @@ Thank you for your continued trust in AmplifyContent.ai!
 © ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
     `;
   }
+
+  async sendSubscriptionCancellationScheduled(email, data) {
+    try {
+      await this.ensureInitialized();
+      const subject = 'Your Subscription Cancellation is Scheduled';
+      const html = this.generateSubscriptionCancellationScheduledEmailHTML(data);
+      const text = this.generateSubscriptionCancellationScheduledEmailText(data);
+
+      return await this.sendEmail(email, subject, html, text);
+    } catch (error) {
+      logger.error('Error sending subscription cancellation scheduled email:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateSubscriptionCancellationScheduledEmailHTML(data) {
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Cancellation Scheduled</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #f59e0b; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0; font-size: 28px; color: white; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .highlight { background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+            .button { background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Cancellation Scheduled</h1>
+        </div>
+        <div class="content">
+            <h2>Hello ${data.firstName || 'there'},</h2>
+            <p>We've received your request to cancel your <strong>${data.planName || 'subscription'}</strong>.</p>
+            <div class="highlight">
+                <strong>Your subscription will remain active until ${data.endDate}.</strong>
+                <p style="margin: 10px 0 0 0;">You'll continue to have full access to all your premium features until then.</p>
+            </div>
+            <p>Changed your mind? You can reactivate your subscription anytime before ${data.endDate}:</p>
+            <div style="text-align: center;">
+                <a href="${process.env.STRIPE_CUSTOMER_PORTAL_URL || process.env.BASE_URL + '/subscription/dashboard'}" class="button">Manage Subscription</a>
+            </div>
+            <p>We're sorry to see you go! If there's anything we could have done better, we'd love to hear from you at <a href="mailto:support@amplifycontent.ai">support@amplifycontent.ai</a>.</p>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generateSubscriptionCancellationScheduledEmailText(data) {
+    return `
+Cancellation Scheduled
+
+Hello ${data.firstName || 'there'},
+
+We've received your request to cancel your ${data.planName || 'subscription'}.
+
+Your subscription will remain active until ${data.endDate}.
+You'll continue to have full access to all your premium features until then.
+
+Changed your mind? You can reactivate your subscription anytime before ${data.endDate}:
+${process.env.STRIPE_CUSTOMER_PORTAL_URL || process.env.BASE_URL + '/subscription/dashboard'}
+
+We're sorry to see you go! If there's anything we could have done better, we'd love to hear from you at support@amplifycontent.ai.
+
+© ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+    `;
+  }
 }
 
 module.exports = new EmailService();
