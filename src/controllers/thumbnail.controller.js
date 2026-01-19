@@ -137,7 +137,8 @@ class ThumbnailController {
                 aspectRatio,
                 categoryKey,
                 referenceImageIds,
-                characterAnchor
+                characterAnchor,
+                creativeTitles
             } = req.body;
 
             // Validate required fields
@@ -179,7 +180,10 @@ class ThumbnailController {
 
             const jobId = jobResult.rows[0].id;
 
-            logger.info(`Starting thumbnail generation job ${jobId} for video ${req.params.videoId}`);
+            logger.info(`Starting thumbnail generation job ${jobId} for video ${req.params.videoId}`, {
+                creativeTitles: creativeTitles,
+                topic: topic
+            });
 
             // Start generation asynchronously
             thumbnailService.generateThumbnails({
@@ -192,7 +196,8 @@ class ThumbnailController {
                 categoryKey,
                 referenceImageIds,
                 characterAnchor,
-                jobId
+                jobId,
+                creativeTitles: creativeTitles || false
             }).catch(error => {
                 logger.error(`Thumbnail generation job ${jobId} failed:`, error);
                 database.query(

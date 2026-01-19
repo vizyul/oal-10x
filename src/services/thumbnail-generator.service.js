@@ -19,17 +19,24 @@ const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY });
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-exp';
 
 // Default character anchor - used when user hasn't created a profile
-// This ensures consistent character generation across all thumbnails
+// Focuses on FACIAL LIKENESS only - pose, expression, and clothing should vary
 const DEFAULT_CHARACTER_ANCHOR = `
-CHARACTER ANCHOR ATTRIBUTES (Do not deviate):
-- Race: Match exactly from reference images
-- Age: Match exactly from reference images
-- Face shape: Match exactly from reference images
-- Eyes: Match exactly from reference images, including any glasses
-- Hair: Match exactly from reference images
-- Skin tone: Match exactly from reference images
-- Distinguishing features: Match ALL distinguishing features from reference images exactly
-- CRITICAL: The generated person MUST be identical to the person in the reference images
+FACIAL FEATURES TO MATCH (these make it the same person):
+- Race/ethnicity: Match from reference
+- Age appearance: Match from reference
+- Face shape and bone structure: Match from reference
+- Eye shape, color, spacing: Match from reference
+- Nose shape and size: Match from reference
+- Mouth and lip shape: Match from reference
+- Skin tone and complexion: Match from reference
+- Hair (if any) or bald head: Match from reference
+- Any permanent distinguishing features (moles, scars, etc.): Match from reference
+
+DO NOT COPY FROM REFERENCE:
+- Pose (follow variation instructions instead)
+- Facial expression (follow variation instructions instead)
+- Clothing/outfit (create new attire for each thumbnail)
+- Accessories (add or remove as needed for the thumbnail)
 `.trim();
 
 // Cache for styles and expressions (loaded from DB)
@@ -93,45 +100,196 @@ function getBackgroundStyle(topic, category) {
 
 /**
  * Get visual hook element based on topic
+ * Returns topic-specific suggestions or instructs to focus on person/typography if no clear visual fits
  */
 function getVisualHook(topic) {
     const t = (topic || '').toLowerCase();
 
-    if (t.includes('break') || t.includes('end') || t.includes('destroy')) {
-        return 'A giant heavy sledgehammer smashing through a symbolic object with sparks and debris flying.';
+    // Religious/spiritual topics
+    if (t.includes('prayer') || t.includes('religion') || t.includes('church') || t.includes('faith') || t.includes('god') || t.includes('jesus') || t.includes('bible')) {
+        return 'Religious imagery that fits the topic tone: crosses, churches, stained glass, prayer hands, religious texts, candles. If the topic is critical/negative, show crumbling, abandoned, or decaying religious symbols.';
     }
-    if (t.includes('expose') || t.includes('truth') || t.includes('secret')) {
-        return 'Bright cinematic flares and glowing particles emerging from a dark void, revealing hidden elements.';
+    // Money/wealth topics
+    if (t.includes('money') || t.includes('rich') || t.includes('wealth') || t.includes('broke') || t.includes('debt') || t.includes('financial')) {
+        return 'Money-related imagery: cash, coins, gold bars, piggy banks, wallets, bank vaults. Match the tone - luxury for wealth topics, empty wallets for debt topics.';
     }
-    if (t.includes('curse') || t.includes('spirit') || t.includes('dark')) {
-        return 'Swirling cosmic energy with split themes of hellish fire (red/orange) and celestial ice (blue/cyan).';
+    // Tech/AI topics
+    if (t.includes('ai') || t.includes('tech') || t.includes('app') || t.includes('software') || t.includes('computer') || t.includes('digital')) {
+        return 'Technology imagery: screens, devices, code, circuit patterns, holographic elements. Keep it modern and clean.';
     }
-    if (t.includes('money') || t.includes('rich') || t.includes('gold')) {
-        return 'Floating golden coins, bars, and luxury textures with high-end bokeh.';
+    // Health/fitness topics
+    if (t.includes('health') || t.includes('fitness') || t.includes('workout') || t.includes('diet') || t.includes('weight')) {
+        return 'Health/fitness imagery: gym equipment, healthy food, athletic poses, transformation visuals.';
+    }
+    // Destruction/breaking topics
+    if (t.includes('break') || t.includes('end') || t.includes('destroy') || t.includes('ruin') || t.includes('fail')) {
+        return 'Destruction imagery: cracking, shattering, crumbling objects related to the topic. Sparks, debris, dramatic breaking.';
+    }
+    // Secret/expose topics
+    if (t.includes('expose') || t.includes('truth') || t.includes('secret') || t.includes('reveal') || t.includes('hidden')) {
+        return 'Revelation imagery: spotlights, unveiling curtains, magnifying glasses, documents, dramatic lighting revealing something.';
     }
 
-    return 'A high-contrast, glowing symbolic element that represents the central hook of the topic, placed strategically to lead the eye.';
+    // Default: Don't force a visual element - focus on person and typography
+    return 'ONLY add a visual element if it DIRECTLY relates to the specific topic. If no obvious visual fits, focus entirely on the person and typography - a powerful expression with bold text is often more effective than a forced, unrelated graphic.';
+}
+
+/**
+ * Get design principles for viral thumbnail composition
+ * These are PRINCIPLES, not literal elements - the AI should apply them intelligently
+ * based on what makes sense for the specific topic
+ */
+function getDesignPrinciples() {
+    return `
+VIRAL THUMBNAIL DESIGN PRINCIPLES (Apply intelligently based on topic):
+
+1. LAYERING & DEPTH (Create visual hierarchy):
+   - Use 3-4 distinct layers: background → middle elements → foreground/character
+   - Each layer should have different focus/blur levels
+   - Background: environmental context or gradient with depth
+   - Middle: supporting visual elements relevant to the topic
+   - Foreground: person and primary text
+
+2. RULE OF THIRDS PLACEMENT:
+   - Position the character on the left or right third (not center)
+   - Key visual elements should fall on intersection points
+   - Create visual flow that guides the eye through the composition
+
+3. BOLD TYPOGRAPHY WITH SEPARATION:
+   - Main text should have strong visual weight (3D, shadows, outlines)
+   - Clear visual separation between title and subtitle (if applicable)
+   - Text must not overlap with face - typically positioned at top
+
+4. HIGH CONTRAST & SATURATION:
+   - Vibrant, punchy colors (+25% saturation boost)
+   - Strong light/dark contrast for impact
+   - Rim lighting on character to separate from background
+
+5. TOPIC-RELEVANT VISUAL ELEMENTS (CRITICAL):
+   - Every visual element MUST logically connect to the Main Topic and Sub-Topic
+   - Ask yourself: "Does this object/symbol directly relate to what the topic is about?"
+   - DO NOT add generic elements like question marks, random icons, or abstract shapes unless they specifically relate to the topic
+   - If the topic is about religion, show religious imagery (crosses, churches, prayer hands, etc.)
+   - If the topic is about money, show money-related imagery
+   - If NO relevant visual element makes sense, focus entirely on the person and typography - that's perfectly fine
+   - WRONG: Adding a broken question mark for a topic about prayer (question marks aren't about prayer)
+   - RIGHT: Adding a crumbling church or fading cross for a topic about "rotten prayer" (directly related)
+
+6. DYNAMIC ENERGY:
+   - Subtle motion cues: light rays, particles, bokeh
+   - Diagonal lines or angles for visual interest
+   - Avoid static, flat compositions
+`.trim();
+}
+
+/**
+ * Get creative direction guidance - empowers AI to make topic-driven decisions
+ * Encourages visual storytelling, dramatic composition changes, and conceptual reframing
+ */
+function getCreativeGuidance(variationNumber, topic, subTopic, category) {
+    return `
+=== VARIATION ${variationNumber} OF 4 - CREATE A UNIQUE VISUAL STORY ===
+
+You are creating variation ${variationNumber} of 4 thumbnails for the same topic.
+Each variation must tell the story DIFFERENTLY - not just change colors or poses.
+
+TOPIC CONTEXT:
+- Main Topic: "${topic}"
+- Sub-topic: "${subTopic || 'None'}"
+- Category: ${category}
+
+=== THINK LIKE A CREATIVE DIRECTOR ===
+
+Before designing, ask yourself: "What's an interesting ANGLE or STORY I can tell about '${topic}'?"
+
+Each variation should explore a DIFFERENT CONCEPT, such as:
+- The CONFRONTATION angle (show conflict or tension related to the topic)
+- The MYSTERY angle (create intrigue, questions, secrets being revealed)
+- The TEACHING angle (person explaining, demonstrating, showing evidence)
+- The WARNING angle (danger, caution, things to avoid)
+- The REVELATION angle (discovery, "aha moment", truth being unveiled)
+- The DEBUNKING angle (crossing out myths, showing what's wrong)
+
+=== VISUAL STORYTELLING ELEMENTS ===
+
+Don't just show a person with text. CREATE A SCENE by adding:
+
+1. **SUPPORTING VISUAL ELEMENTS** that tell the story:
+   - Other characters or figures (if the topic involves conflict, show who/what)
+   - Symbolic objects that represent the topic (not just held, but as scene elements)
+   - Visual metaphors (blood drops for blood topics, chains for bondage topics, light rays for revelation)
+
+2. **DRAMATIC PROPS** the person INTERACTS with:
+   - Not just holding a book - READING it with visible reaction
+   - Not just standing - POINTING AT something specific in the scene
+   - Not just posing - REACTING TO something happening
+
+3. **VISUAL ARGUMENTS** when appropriate:
+   - Crossing out false things with X marks
+   - Before/after splits showing transformation
+   - Comparison imagery (this vs that)
+
+=== COMPOSITION VARIATION ===
+
+Each thumbnail should have a DRAMATICALLY different layout:
+- Variation might have person LARGE and central with supporting elements around
+- Another might have person SMALLER with a giant symbolic element dominating
+- Another might have SPLIT composition (person on one side, visual story on other)
+- Another might have person INTERACTING with scene elements
+
+=== YOUR CREATIVE CHOICES ===
+
+1. **CONCEPTUAL ANGLE** - What story/angle are you telling for this variation?
+
+2. **COMPOSITION** - How is the frame organized? Where is the person? What dominates?
+
+3. **VISUAL ELEMENTS** - What objects, figures, or symbols support the story?
+
+4. **PERSON'S ROLE** - Is the person confronting? Teaching? Reacting? Warning? Discovering?
+
+5. **TYPOGRAPHY** - What style fits THIS interpretation? (dripping horror text? clean authoritative? mysterious glow?)
+
+6. **COLOR MOOD** - What palette tells THIS version of the story?
+
+7. **CLOTHING** - What outfit fits the role the person plays in this scene?
+
+=== CRITICAL REQUIREMENTS ===
+
+- This MUST look like a completely different creative concept from the other 3 variations
+- Add visual storytelling elements - don't just show a person with text
+- The person should be ENGAGED with the scene, not just posing
+- Every visual element must relate to "${topic}"
+- Make it look like a professional YouTube thumbnail that tells a story at a glance
+
+Think: "If I saw all 4 variations side by side, would each one feel like a different creative take on the topic?"
+`.trim();
 }
 
 /**
  * Build the thumbnail generation prompt
+ * Uses design PRINCIPLES that the AI applies intelligently based on the topic
+ * Each of the 4 thumbnails explores a different visual approach
  */
 function buildThumbnailPrompt(params) {
     const {
         topic,
         subTopic,
         category,
-        expression,
+        expression, // User's selected expression - this is the PRIMARY driver for facial expression
         aspectRatio,
         styleDescription,
-        characterAnchor
+        characterAnchor,
+        variationNumber = 1,
+        creativeTitles = false // When true, AI can create viral title variations
     } = params;
 
     const orientation = aspectRatio === '16:9' ? 'landscape (16:9)' : 'portrait (9:16)';
 
-    const compositionAdvice = aspectRatio === '16:9'
-        ? 'Subject (Head + Shoulders) occupies 50% of the frame, positioned to one side (Rule of Thirds). TYPOGRAPHY LAYOUT: Place the text on the opposite side of the character or centered.'
-        : 'Subject (Head + Shoulders) occupies the middle-to-bottom half of the frame. TYPOGRAPHY LAYOUT: Place the text at the top or center-top area. Ensure vertical balance.';
+    // Get the design principles (consistent across all variations)
+    const designPrinciples = getDesignPrinciples();
+
+    // Get creative guidance - AI makes topic-driven decisions, not templates
+    const creativeGuidance = getCreativeGuidance(variationNumber, topic, subTopic, category);
 
     const visualHook = getVisualHook(topic);
     const backgroundStyle = getBackgroundStyle(topic, category);
@@ -143,61 +301,146 @@ function buildThumbnailPrompt(params) {
 
     // Build content section - only include subtopic if provided
     const hasSubTopic = subTopic && subTopic.trim().length > 0;
+
+    // Creative titles section - when enabled, AI MUST generate viral title variations
+    const creativeTitlesSection = creativeTitles
+        ? `
+=== CREATIVE TITLE MODE - MANDATORY ===
+
+*** DO NOT USE THE EXACT TITLES PROVIDED ***
+
+You MUST create a VIRAL TITLE VARIATION for this thumbnail. DO NOT just copy "${topic}".
+
+The user's original topic is: "${topic}"
+${hasSubTopic ? `The user's original sub-topic is: "${subTopic}"` : ''}
+
+You MUST REWRITE these into a more viral, attention-grabbing title. Here are approaches to use:
+
+FOR THIS VARIATION (Variation ${variationNumber}), use one of these hook styles:
+${variationNumber === 1 ? '- USE A QUESTION HOOK: "Are Vampires Real?" / "Is [Topic] Biblical?" / "What Does The Bible Say About [Topic]?"' : ''}
+${variationNumber === 2 ? '- USE A REVELATION HOOK: "[Topic] Secrets Exposed" / "The Truth About [Topic]" / "What They Hide About [Topic]"' : ''}
+${variationNumber === 3 ? '- USE A WARNING HOOK: "WARNING: [Topic]" / "The Danger of [Topic]" / "Don\'t Ignore This About [Topic]"' : ''}
+${variationNumber === 4 ? '- USE A MYSTERY/CONTROVERSY HOOK: "The Hidden Truth" / "Why [Topic] Is Wrong" / "[Topic]: Debunked"' : ''}
+
+REQUIREMENTS:
+1. DO NOT write "${topic}" as the title - create something MORE VIRAL
+2. The new title must capture the essence of the topic but be more click-worthy
+3. Make it SHORT, PUNCHY, and ATTENTION-GRABBING
+4. This variation's title MUST be different from the other 3 variations
+
+EXAMPLE: If topic is "Vampires & The Bible", you might write:
+- "ARE VAMPIRES REAL?" (question hook)
+- "BLOOD SECRETS EXPOSED" (revelation hook)
+- "THE BIBLICAL TRUTH" (mystery hook)
+- "WHAT THE BIBLE WARNS" (warning hook)
+
+*** REMEMBER: DO NOT JUST COPY THE ORIGINAL TITLE - CREATE A VIRAL VERSION ***
+`
+        : '';
+
     const contentSection = hasSubTopic
-        ? `CONTENT:
-- Main Topic: "${topic}"
-- Sub-Topic: "${subTopic}"`
-        : `CONTENT:
-- Main Topic: "${topic}"
-- Sub-Topic: NONE - DO NOT ADD ANY SUBTITLE TEXT`;
+        ? `CONTENT REFERENCE (${creativeTitles ? 'FOR INSPIRATION - DO NOT USE EXACTLY' : 'USE EXACTLY'}):
+- Original Topic: "${topic}"
+- Original Sub-Topic: "${subTopic}"
+${!creativeTitles ? '- USE THESE EXACT TITLES - do not modify or rewrite them' : '- CREATE A VIRAL REWRITE - do not use these exact words'}`
+        : `CONTENT REFERENCE (${creativeTitles ? 'FOR INSPIRATION - DO NOT USE EXACTLY' : 'USE EXACTLY'}):
+- Original Topic: "${topic}"
+- Sub-Topic: NONE - DO NOT ADD ANY SUBTITLE TEXT
+${!creativeTitles ? '- USE THIS EXACT TITLE - do not modify or rewrite it' : '- CREATE A VIRAL REWRITE - do not use these exact words'}`;
 
     // Build typography section based on whether subtopic exists
+    // Typography STYLE is now chosen by AI based on topic - this section covers placement and spelling
     const typographySection = hasSubTopic
-        ? `COMPOSITION & TYPOGRAPHY:
-- ${compositionAdvice}
-- MAIN TOPIC TEXT: Bold, high-impact 3D typography (Chrome, Gold, or White with thick borders).
-- SUB-TOPIC TEXT: High-readability sans-serif text placed directly below the main topic.
-- VISUAL SEPARATION: Include a glowing, cinematic horizontal line (divider) between the Main Topic and the Sub-Topic.
-- TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly.`
-        : `COMPOSITION & TYPOGRAPHY:
-- ${compositionAdvice}
-- MAIN TOPIC TEXT ONLY: Bold, high-impact 3D typography (Chrome, Gold, or White with thick borders).
-- NO SUBTITLE: There is no sub-topic, so DO NOT add any subtitle, tagline, quote, or secondary text whatsoever.
-- DO NOT INVENT TEXT: Only render the Main Topic text. Nothing else.
-- TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly.`;
+        ? `TYPOGRAPHY PLACEMENT & SPELLING:
+- Main Topic text positioned at TOP of image
+- Sub-Topic text placed below the main topic
+- TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly
+- Text should NOT overlap with the character's face
+- YOU CHOOSE the typography STYLE (bold, chrome, neon, distressed, etc.) based on what fits the topic's tone`
+        : `TYPOGRAPHY PLACEMENT & SPELLING:
+- Main Topic text positioned at TOP of image
+- NO SUBTITLE: There is no sub-topic, so DO NOT add any subtitle, tagline, or secondary text
+- TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly
+- Text should NOT overlap with the character's face
+- YOU CHOOSE the typography STYLE (bold, chrome, neon, distressed, etc.) based on what fits the topic's tone`;
+
+    // Log variation for debugging
+    logger.info(`Thumbnail variation ${variationNumber}: Generating with principle-based approach`, {
+        variationNumber,
+        topic: topic.substring(0, 50),
+        creativeTitles: creativeTitles // Log whether creative titles is enabled
+    });
 
     return `
-SYSTEM ROLE: Expert YouTube Thumbnail Designer creating PHOTOREALISTIC thumbnails.
+SYSTEM ROLE: Expert YouTube Thumbnail Designer creating PHOTOREALISTIC viral thumbnails.
 TASK: Generate a high-CTR, viral-style thumbnail in ${orientation} orientation.
+VARIATION: ${variationNumber} of 4 - Each variation MUST look dramatically different!
 
-CRITICAL TEXT RULES (MANDATORY - READ CAREFULLY):
+${creativeTitles ? `TEXT RULES (CREATIVE MODE):
+- You have creative license to generate viral title variations (see CREATIVE TITLE MODE section below)
+- Text must be clearly readable and professionally styled
+- DO NOT add random letters, symbols, or gibberish
+- If you cannot render text clearly, OMIT IT ENTIRELY rather than rendering incorrectly
+` : `CRITICAL TEXT RULES (MANDATORY - READ CAREFULLY):
 - ONLY include text that EXACTLY matches the Main Topic${hasSubTopic ? ' and Sub-Topic' : ''} provided below
 - DO NOT add any additional text, words, labels, watermarks, or captions
 - DO NOT invent, modify, abbreviate, or misspell any words
 - DO NOT add random letters, symbols, or gibberish text anywhere in the image
 - If you cannot render text clearly and correctly, OMIT IT ENTIRELY rather than rendering it incorrectly
-${hasSubTopic ? '- Every word in the image must come directly from the topic/subtopic - no exceptions' : '- The ONLY text allowed is the Main Topic - absolutely NO other text'}
+${hasSubTopic ? '- Every word in the image must come directly from the topic/subtopic - no exceptions' : '- The ONLY text allowed is the Main Topic - absolutely NO other text'}`}
 
 REALISM REQUIREMENTS (MANDATORY):
 - The person MUST look like a real photograph, NOT digital art, CGI, or illustration
-- Use the reference images to match EXACT facial features, skin texture, pores, and natural lighting
-- Avoid any "AI-generated", "uncanny valley", "plastic", or "overly smooth" appearance
 - Skin should have natural texture, pores, and subtle imperfections
 - The final image should be indistinguishable from a professional studio photograph
 - NO cyberpunk, neon-outline, or sci-fi aesthetic unless specifically requested in the topic
 
 ${contentSection}
+${creativeTitlesSection}
 
-CHARACTER CONSISTENCY (MANDATORY):
-Use the likeness from the provided reference images.
+=== CRITICAL: CHARACTER CREATION RULES ===
+
+FACIAL LIKENESS ONLY - Use the reference images to match:
+- Face shape, bone structure, and proportions
+- Skin tone and complexion
+- Eye shape, color, and spacing
+- Nose and mouth shape
+- Age appearance
+- Any permanent features (bald head, facial hair pattern, etc.)
+
+EVERYTHING ELSE SHOULD BE CREATED FRESH FOR THIS THUMBNAIL:
+- POSE: Create a NEW pose as specified in the variation instructions below (DO NOT copy the pose from reference images)
+- CLOTHING: Design NEW attire that fits the topic and variation mood (DO NOT copy outfits from reference images)
+- ACCESSORIES: Feel free to add glasses, watches, jewelry if it enhances the thumbnail
+- BODY POSITION: Generate the body position required by this variation's pose instructions
+
+The reference images show you WHAT THE PERSON LOOKS LIKE (their face).
+They do NOT show you how to pose them - that comes from the variation instructions below.
+
+Think of it like this: You are a photographer who has been shown photos of a client.
+Now you must photograph that same person in a completely NEW pose and NEW outfit.
+
 ${characterSection}
 
-EXPRESSION MAPPING:
+=== FACIAL EXPRESSION (USER'S SELECTION - THIS IS MANDATORY) ===
+
+The user has specifically chosen this expression type. This MUST be the character's facial expression:
+
 Expression Type: ${expression.name}
-Primary: ${expression.primary_emotion}
+Primary Emotion: ${expression.primary_emotion}
 Face Details: ${expression.face_details}
 Eyes: ${expression.eye_details}
-Intensity: Level ${expression.intensity} (YouTube "Face" style - expressive but natural).
+Intensity Level: ${expression.intensity}/10 (YouTube "Face" style - expressive but natural)
+
+IMPORTANT: The expression above is what the user selected. Apply this expression to whatever POSE you choose.
+For example: If you decide a pointing pose fits the topic and the user selected "Shocked" expression,
+show the person POINTING with a SHOCKED facial expression.
+
+${creativeGuidance}
+
+=== DESIGN PRINCIPLES ===
+
+${designPrinciples}
 
 ${typographySection}
 
@@ -222,14 +465,18 @@ VIRAL STYLE MODIFIERS:
 - Extremely high contrast.
 - Aspect Ratio: ${aspectRatio}.
 - CRISP focus on the face and text, soft bokeh on background elements.
-- The person should look like they were photographed in a professional studio.
 
 FINAL CHECKLIST:
-1. Does the person look photorealistic (not AI-generated)?
-2. Is the Main Topic text spelled exactly as provided?
-${hasSubTopic ? '3. Is the Sub-Topic text spelled exactly as provided?' : '3. Is there ANY subtitle or secondary text? (If yes, REMOVE IT - only Main Topic allowed)'}
-4. Is there any extra text that wasn't provided? (If yes, remove it)
-5. Does the person match the reference images?
+1. Does the person's FACE match the reference (same person)?
+2. Is the POSE a creative choice that fits the topic?
+3. Is the EXPRESSION matching the USER'S SELECTED expression type (${expression.name})?
+4. Is the CLOTHING newly created and appropriate for the ${category} category?
+5. Is the TYPOGRAPHY STYLE a creative choice that fits the topic's tone?
+${creativeTitles ? `6. *** CRITICAL ***: Did you create a NEW VIRAL TITLE? (You must NOT use "${topic}" exactly - create a hook like "Are [Topic] Real?" or "[Topic] Secrets Exposed")
+7. Is the title DIFFERENT from the other 3 variations?` : `6. Is the Main Topic text spelled exactly as provided?
+${hasSubTopic ? '7. Is the Sub-Topic text spelled exactly as provided?' : '7. Is there ANY subtitle or secondary text? (If yes, REMOVE IT - only Main Topic allowed)'}`}
+8. Are the visual elements DIRECTLY RELEVANT to the topic?
+9. Does this variation look DISTINCTLY DIFFERENT from the other 3 (not a template)?
 `.trim();
 }
 
@@ -376,6 +623,7 @@ class ThumbnailGeneratorService {
 
     /**
      * Generate all 4 thumbnail variations for a video
+     * Each thumbnail gets a different composition style based on topic analysis
      */
     async generateThumbnails(params) {
         const {
@@ -388,7 +636,8 @@ class ThumbnailGeneratorService {
             categoryKey,
             referenceImageIds,
             characterAnchor,
-            jobId
+            jobId,
+            creativeTitles = false
         } = params;
 
         const { styles, expressions } = await loadLookupData();
@@ -460,6 +709,7 @@ class ThumbnailGeneratorService {
             }
 
             try {
+                // Each variation explores a different visual approach using principle-based guidance
                 const prompt = buildThumbnailPrompt({
                     topic,
                     subTopic,
@@ -467,7 +717,9 @@ class ThumbnailGeneratorService {
                     expression,
                     aspectRatio,
                     styleDescription: style.description,
-                    characterAnchor: effectiveCharacterAnchor
+                    characterAnchor: effectiveCharacterAnchor,
+                    variationNumber: i + 1,
+                    creativeTitles
                 });
 
                 logger.info(`Generating thumbnail ${i + 1}/4 (${style.name}) for video ${videoId}`);

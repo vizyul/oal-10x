@@ -485,6 +485,7 @@ class ThumbnailStudioPage {
         const subTopic = document.getElementById('thumbnail-subtopic').value.trim();
         const categoryKey = this.selectedCategory || 'entertainment';
         const aspectRatio = document.querySelector('input[name="aspect-ratio"]:checked').value;
+        const creativeTitles = document.getElementById('creative-titles')?.checked || false;
 
         // Show progress
         this.showProgress(true);
@@ -505,7 +506,8 @@ class ThumbnailStudioPage {
                     expressionKey: this.selectedExpression,
                     aspectRatio,
                     categoryKey,
-                    referenceImageIds: this.referenceImages.map(img => img.id)
+                    referenceImageIds: this.referenceImages.map(img => img.id),
+                    creativeTitles
                 })
             });
 
