@@ -246,23 +246,63 @@ class ThumbnailController {
             }
 
             // Only delete existing thumbnails with the same aspect ratio
+
+            // DEBUG-SLOW-DELETE: Log pool stats and timing for slow query investigation
+            const debugTimings = { start: Date.now() };
+            const poolStats = database.pool ? {
+                totalCount: database.pool.totalCount,
+                idleCount: database.pool.idleCount,
+                waitingCount: database.pool.waitingCount
+            } : 'pool unavailable';
+            logger.info(`DEBUG-SLOW-DELETE: Starting deletion - Pool stats: ${JSON.stringify(poolStats)}`);
+            // END DEBUG-SLOW-DELETE
+
             const existingThumbnails = await database.query(
                 `SELECT id, cloudinary_public_id FROM video_thumbnails
                  WHERE video_id = $1 AND users_id = $2 AND aspect_ratio = $3`,
                 [videoId, userId, aspectRatio]
             );
 
+            // DEBUG-SLOW-DELETE: Log SELECT timing
+            debugTimings.afterSelect = Date.now();
+            logger.info(`DEBUG-SLOW-DELETE: SELECT took ${debugTimings.afterSelect - debugTimings.start}ms, found ${existingThumbnails.rows.length} rows`);
+            // END DEBUG-SLOW-DELETE
+
             if (existingThumbnails.rows.length > 0) {
                 logger.info(`Deleting ${existingThumbnails.rows.length} existing ${aspectRatio} thumbnails for video ${videoId}`);
 
                 // Delete from Cloudinary
+                // DEBUG-SLOW-DELETE: Track Cloudinary timing
+                debugTimings.cloudinaryStart = Date.now();
+                // END DEBUG-SLOW-DELETE
+
                 for (const thumb of existingThumbnails.rows) {
                     try {
+                        // DEBUG-SLOW-DELETE: Time each Cloudinary delete
+                        const cloudStart = Date.now();
+                        // END DEBUG-SLOW-DELETE
+
                         await cloudinaryService.deleteImage(thumb.cloudinary_public_id);
+
+                        // DEBUG-SLOW-DELETE: Log individual Cloudinary timing
+                        logger.info(`DEBUG-SLOW-DELETE: Cloudinary delete for ${thumb.id} took ${Date.now() - cloudStart}ms`);
+                        // END DEBUG-SLOW-DELETE
                     } catch (cloudErr) {
                         logger.warn(`Failed to delete thumbnail from Cloudinary: ${thumb.cloudinary_public_id}`, cloudErr.message);
                     }
                 }
+
+                // DEBUG-SLOW-DELETE: Log total Cloudinary timing and pool stats before DELETE
+                debugTimings.cloudinaryEnd = Date.now();
+                const poolStatsBeforeDelete = database.pool ? {
+                    totalCount: database.pool.totalCount,
+                    idleCount: database.pool.idleCount,
+                    waitingCount: database.pool.waitingCount
+                } : 'pool unavailable';
+                logger.info(`DEBUG-SLOW-DELETE: All Cloudinary deletes took ${debugTimings.cloudinaryEnd - debugTimings.cloudinaryStart}ms total`);
+                logger.info(`DEBUG-SLOW-DELETE: Pool stats before DELETE: ${JSON.stringify(poolStatsBeforeDelete)}`);
+                debugTimings.deleteStart = Date.now();
+                // END DEBUG-SLOW-DELETE
 
                 // Delete from database
                 await database.query(
@@ -270,6 +310,18 @@ class ThumbnailController {
                      WHERE video_id = $1 AND users_id = $2 AND aspect_ratio = $3`,
                     [videoId, userId, aspectRatio]
                 );
+
+                // DEBUG-SLOW-DELETE: Log DELETE timing and final pool stats
+                debugTimings.deleteEnd = Date.now();
+                const poolStatsAfterDelete = database.pool ? {
+                    totalCount: database.pool.totalCount,
+                    idleCount: database.pool.idleCount,
+                    waitingCount: database.pool.waitingCount
+                } : 'pool unavailable';
+                logger.info(`DEBUG-SLOW-DELETE: DELETE query took ${debugTimings.deleteEnd - debugTimings.deleteStart}ms`);
+                logger.info(`DEBUG-SLOW-DELETE: Pool stats after DELETE: ${JSON.stringify(poolStatsAfterDelete)}`);
+                logger.info(`DEBUG-SLOW-DELETE: Total deletion flow took ${debugTimings.deleteEnd - debugTimings.start}ms`);
+                // END DEBUG-SLOW-DELETE
 
                 logger.info(`Deleted existing ${aspectRatio} thumbnails for video ${videoId}`);
             }

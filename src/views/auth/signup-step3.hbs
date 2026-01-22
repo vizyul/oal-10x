@@ -311,11 +311,20 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
       
       if (response.ok && result.success) {
-        // Track CompleteRegistration event
+        // Track CompleteRegistration event (Meta/TikTok pixels)
         if (typeof trackCompleteRegistration === 'function') {
           trackCompleteRegistration({
             content_name: 'User Signup',
             status: 'complete'
+          });
+        }
+
+        // Google Ads Conversion Tracking
+        if (typeof gtag === 'function') {
+          gtag('event', 'conversion', {
+            'send_to': 'AW-17881586055/DOpECNC9z-obEIezzc5C',
+            'value': 1.0,
+            'currency': 'USD'
           });
         }
 
