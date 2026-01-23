@@ -62,6 +62,7 @@ router.post('/videos/:videoId/regenerate', thumbnailController.regenerateThumbna
 router.post('/:thumbnailId/refine', thumbnailController.refineThumbnail.bind(thumbnailController));
 router.post('/:thumbnailId/select', thumbnailController.selectThumbnail.bind(thumbnailController));
 router.post('/:thumbnailId/download', thumbnailController.downloadThumbnail.bind(thumbnailController));
+router.post('/:thumbnailId/upload-youtube', thumbnailController.uploadToYouTube.bind(thumbnailController));
 router.delete('/:thumbnailId', thumbnailController.deleteThumbnail.bind(thumbnailController));
 
 module.exports = router;

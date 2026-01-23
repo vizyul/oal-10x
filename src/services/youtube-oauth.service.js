@@ -377,6 +377,13 @@ class YouTubeOAuthService {
           const videoId = item.snippet.resourceId.videoId;
           const videoDetails = videoDetailsResponse.data.items?.find(v => v.id === videoId);
 
+          // Detect video type from thumbnail dimensions
+          // Shorts have vertical thumbnails (height > width)
+          const thumbnails = videoDetails?.snippet?.thumbnails || item.snippet.thumbnails;
+          const maxresThumbnail = thumbnails?.maxres || thumbnails?.high || thumbnails?.medium || thumbnails?.default;
+          const isVertical = maxresThumbnail && maxresThumbnail.height > maxresThumbnail.width;
+          const videoType = isVertical ? 'short' : 'video';
+
           return {
             id: videoId,
             videoId: videoId,
@@ -386,7 +393,8 @@ class YouTubeOAuthService {
             publishedAt: item.snippet.publishedAt,
             channelTitle: item.snippet.channelTitle,
             duration: videoDetails ? this.parseDuration(videoDetails.contentDetails.duration) : null,
-            viewCount: videoDetails ? parseInt(videoDetails.statistics?.viewCount || 0) : 0
+            viewCount: videoDetails ? parseInt(videoDetails.statistics?.viewCount || 0) : 0,
+            videoType: videoType
           };
         });
 
@@ -788,6 +796,99 @@ class YouTubeOAuthService {
     } catch (error) {
       logger.error('Error deactivating user tokens:', error);
       throw new Error('Failed to deactivate tokens');
+    }
+  }
+
+  /**
+   * Upload thumbnail to YouTube video
+   * @param {string} userId - User ID
+   * @param {string} youtubeVideoId - YouTube video ID
+   * @param {string} imageUrl - Cloudinary URL of the thumbnail image
+   * @returns {Object} Upload result with thumbnail URLs
+   */
+  async uploadThumbnail(userId, youtubeVideoId, imageUrl) {
+    try {
+      await this.setUserCredentials(userId);
+
+      // First verify that the video exists and user owns it
+      const videoResponse = await this.youtube.videos.list({
+        part: ['snippet'],
+        id: youtubeVideoId
+      });
+
+      if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
+        throw new Error('Video not found on YouTube');
+      }
+
+      // Check if user's channel owns this video
+      const videoSnippet = videoResponse.data.items[0].snippet;
+      const userChannels = await this.getUserChannels(userId);
+      const channelIds = userChannels.map(ch => ch.id);
+
+      if (!channelIds.includes(videoSnippet.channelId)) {
+        throw new Error('You can only upload thumbnails to videos on your connected channels');
+      }
+
+      // Download the thumbnail from Cloudinary
+      const https = require('https');
+      const http = require('http');
+      const { Readable } = require('stream');
+
+      const imageBuffer = await new Promise((resolve, reject) => {
+        const protocol = imageUrl.startsWith('https') ? https : http;
+        protocol.get(imageUrl, (response) => {
+          if (response.statusCode !== 200) {
+            reject(new Error(`Failed to download image: HTTP ${response.statusCode}`));
+            return;
+          }
+
+          const chunks = [];
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => resolve(Buffer.concat(chunks)));
+          response.on('error', reject);
+        }).on('error', reject);
+      });
+
+      // Create a readable stream from the buffer
+      const imageStream = new Readable();
+      imageStream.push(imageBuffer);
+      imageStream.push(null);
+
+      // Upload thumbnail to YouTube
+      const uploadResponse = await this.youtube.thumbnails.set({
+        videoId: youtubeVideoId,
+        media: {
+          mimeType: 'image/png',
+          body: imageStream
+        }
+      });
+
+      logger.info(`Thumbnail uploaded to YouTube for video ${youtubeVideoId}`, {
+        userId,
+        thumbnails: uploadResponse.data?.items?.[0]
+      });
+
+      return {
+        success: true,
+        videoId: youtubeVideoId,
+        thumbnails: uploadResponse.data?.items?.[0] || null
+      };
+    } catch (error) {
+      logger.error('Error uploading thumbnail to YouTube:', error);
+
+      // Handle specific YouTube API errors
+      if (error.code === 403) {
+        if (error.message?.includes('forbidden')) {
+          throw new Error('Your YouTube account may not be verified for custom thumbnails. Please verify your account at youtube.com/verify');
+        }
+        throw new Error('Access denied. Please reconnect your YouTube account.');
+      }
+
+      if (error.code === 404) {
+        throw new Error('Video not found on YouTube');
+      }
+
+      throw new Error(`Failed to upload thumbnail: ${error.message}`);
     }
   }
 

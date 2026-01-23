@@ -392,6 +392,15 @@ class YouTubeController {
             logger.warn(`Could not extract metadata for ${videoId}:`, metadataError.message);
           }
 
+          // Detect video type from metadata (thumbnail dimensions for OAuth imports)
+          let videoType = 'video'; // default
+          if (metadata?.videoType) {
+            videoType = metadata.videoType;
+          } else if (metadata?.thumbnailWidth && metadata?.thumbnailHeight) {
+            // If thumbnail dimensions available, check if vertical (Short)
+            videoType = metadata.thumbnailHeight > metadata.thumbnailWidth ? 'short' : 'video';
+          }
+
           // Prepare video data for PostgreSQL
           const videoData = {
             // Basic video information
@@ -406,6 +415,9 @@ class YouTubeController {
             duration: metadata?.duration || 0,
             upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, // Direct URL for PostgreSQL
+
+            // Video type (video, short, live)
+            video_type: videoType,
 
             // Processing and categorization
             status: 'pending',

@@ -6,6 +6,7 @@
 const thumbnailService = require('../services/thumbnail-generator.service');
 const cloudinaryService = require('../services/cloudinary.service');
 const database = require('../services/database.service');
+const youtubeOAuth = require('../services/youtube-oauth.service');
 const { logger } = require('../utils');
 
 class ThumbnailController {
@@ -117,7 +118,46 @@ class ThumbnailController {
                 req.params.videoId,
                 req.user.id
             );
-            res.json({ success: true, data: thumbnails });
+
+            // Check if user can upload thumbnails to YouTube for this video
+            // (video must be from a connected YouTube channel)
+            let canUploadToYouTube = false;
+            let videoType = 'video'; // default
+            try {
+                // Get the video's channel info and video type
+                const videoResult = await database.query(
+                    `SELECT v.channel_handle, v.videoid, v.video_type
+                     FROM videos v
+                     WHERE v.id = $1 AND v.users_id = $2`,
+                    [req.params.videoId, req.user.id]
+                );
+
+                if (videoResult.rows.length > 0) {
+                    videoType = videoResult.rows[0].video_type || 'video';
+
+                    if (videoResult.rows[0].channel_handle) {
+                        const videoChannelHandle = videoResult.rows[0].channel_handle;
+
+                        // Check if user has a connected YouTube channel matching this handle
+                        const channelResult = await database.query(
+                            `SELECT id FROM user_youtube_channels
+                             WHERE users_id = $1 AND channel_handle = $2`,
+                            [req.user.id, videoChannelHandle]
+                        );
+
+                        canUploadToYouTube = channelResult.rows.length > 0;
+                    }
+                }
+            } catch (channelError) {
+                logger.debug('Could not check YouTube channel ownership:', channelError.message);
+            }
+
+            res.json({
+                success: true,
+                data: thumbnails,
+                canUploadToYouTube,
+                videoType  // 'video', 'short', or 'live'
+            });
         } catch (error) {
             logger.error('Failed to get video thumbnails:', error);
             res.status(500).json({ success: false, error: 'Failed to load thumbnails' });
@@ -572,6 +612,99 @@ class ThumbnailController {
         } catch (error) {
             logger.error('Failed to set default character profile:', error);
             res.status(500).json({ success: false, error: error.message });
+        }
+    }
+
+    /**
+     * POST /api/thumbnails/:thumbnailId/upload-youtube
+     * Upload a thumbnail to YouTube
+     */
+    async uploadToYouTube(req, res) {
+        try {
+            const thumbnailId = parseInt(req.params.thumbnailId);
+            const userId = req.user.id;
+
+            // Get thumbnail with associated video info
+            const thumbResult = await database.query(
+                `SELECT t.*, v.videoid as youtube_video_id, v.video_title
+                 FROM video_thumbnails t
+                 JOIN videos v ON t.video_id = v.id
+                 WHERE t.id = $1 AND t.users_id = $2`,
+                [thumbnailId, userId]
+            );
+
+            if (thumbResult.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Thumbnail not found' });
+            }
+
+            const thumbnail = thumbResult.rows[0];
+
+            // Check if video has a YouTube video ID
+            if (!thumbnail.youtube_video_id) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'This video does not have an associated YouTube video ID'
+                });
+            }
+
+            // Check if thumbnail is already uploaded
+            if (thumbnail.is_uploaded_to_youtube) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'This thumbnail has already been uploaded to YouTube',
+                    alreadyUploaded: true
+                });
+            }
+
+            // Check YouTube OAuth connection
+            const tokenValidation = await youtubeOAuth.validateTokens(userId);
+            if (!tokenValidation.valid) {
+                return res.status(401).json({
+                    success: false,
+                    error: 'Please connect your YouTube account first',
+                    requiresYouTubeConnection: true
+                });
+            }
+
+            // Upload thumbnail to YouTube
+            const uploadResult = await youtubeOAuth.uploadThumbnail(
+                userId,
+                thumbnail.youtube_video_id,
+                thumbnail.cloudinary_secure_url
+            );
+
+            if (uploadResult.success) {
+                // Update database to mark as uploaded
+                await database.query(
+                    `UPDATE video_thumbnails
+                     SET is_uploaded_to_youtube = TRUE, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $1`,
+                    [thumbnailId]
+                );
+
+                logger.info(`Thumbnail ${thumbnailId} uploaded to YouTube video ${thumbnail.youtube_video_id}`, {
+                    userId,
+                    videoTitle: thumbnail.video_title
+                });
+
+                return res.json({
+                    success: true,
+                    message: 'Thumbnail uploaded to YouTube successfully',
+                    videoId: thumbnail.youtube_video_id,
+                    thumbnails: uploadResult.thumbnails
+                });
+            }
+
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to upload thumbnail to YouTube'
+            });
+        } catch (error) {
+            logger.error('Failed to upload thumbnail to YouTube:', error);
+
+            // Return user-friendly error messages
+            const errorMessage = error.message || 'Failed to upload thumbnail to YouTube';
+            res.status(500).json({ success: false, error: errorMessage });
         }
     }
 }

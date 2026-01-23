@@ -16,6 +16,8 @@ class ThumbnailStudioPage {
         this.jobId = null;
         this.pollInterval = null;
         this.thumbnailsData = [];
+        this.canUploadToYouTube = false;
+        this.videoType = 'video'; // 'video', 'short', or 'live'
     }
 
     /**
@@ -146,6 +148,8 @@ class ThumbnailStudioPage {
         if (!videoId) return;
 
         this.videoId = videoId;
+        this.canUploadToYouTube = false; // Reset until we check
+        this.videoType = 'video'; // Reset until we check
         const selector = document.getElementById('video-selector');
         const selectedOption = selector.options[selector.selectedIndex];
         this.videoTitle = selectedOption.text;
@@ -351,6 +355,10 @@ class ThumbnailStudioPage {
             const response = await fetch(`/api/thumbnails/videos/${this.videoId}`);
             const data = await response.json();
 
+            // Store whether user can upload to YouTube for this video
+            this.canUploadToYouTube = data.canUploadToYouTube || false;
+            this.videoType = data.videoType || 'video';
+
             if (data.success && data.data.length > 0) {
                 // Store ALL thumbnails (up to 8: 4 for 16:9 + 4 for 9:16)
                 this.thumbnailsData = data.data;
@@ -394,6 +402,21 @@ class ThumbnailStudioPage {
      */
     getSelectedAspectRatio() {
         return document.querySelector('input[name="aspect-ratio"]:checked')?.value || '16:9';
+    }
+
+    /**
+     * Check if YouTube upload button should be shown for current view
+     * Only shows when:
+     * - canUploadToYouTube is true (video is from connected channel)
+     * - Current aspect ratio matches video type (9:16 for shorts, 16:9 for videos/lives)
+     */
+    shouldShowYouTubeUpload() {
+        if (!this.canUploadToYouTube) return false;
+
+        const currentRatio = this.getSelectedAspectRatio();
+        const expectedRatio = this.videoType === 'short' ? '9:16' : '16:9';
+
+        return currentRatio === expectedRatio;
     }
 
     /**
@@ -648,6 +671,15 @@ class ThumbnailStudioPage {
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
                         </button>
+                        ${this.shouldShowYouTubeUpload() ? `
+                        <button class="thumbnail-youtube-btn ${thumb.is_uploaded_to_youtube ? 'uploaded' : ''}" data-id="${thumb.id}" title="${thumb.is_uploaded_to_youtube ? 'Already uploaded to YouTube' : 'Upload to YouTube'}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                                <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
+                            </svg>
+                            ${thumb.is_uploaded_to_youtube ? '<span class="uploaded-check">✓</span>' : ''}
+                        </button>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -682,6 +714,14 @@ class ThumbnailStudioPage {
                     downloadBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this.downloadSingleThumbnail(downloadBtn.dataset.url, downloadBtn.dataset.style);
+                    });
+                }
+
+                const youtubeBtn = newSlot.querySelector('.thumbnail-youtube-btn');
+                if (youtubeBtn) {
+                    youtubeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.handleYouTubeUploadClick(parseInt(youtubeBtn.dataset.id));
                     });
                 }
             }
@@ -777,6 +817,15 @@ class ThumbnailStudioPage {
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                     </button>
+                    ${this.shouldShowYouTubeUpload() ? `
+                    <button class="thumbnail-youtube-btn ${thumb.is_uploaded_to_youtube ? 'uploaded' : ''}" data-id="${thumb.id}" title="${thumb.is_uploaded_to_youtube ? 'Already uploaded to YouTube' : 'Upload to YouTube'}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
+                        </svg>
+                        ${thumb.is_uploaded_to_youtube ? '<span class="uploaded-check">✓</span>' : ''}
+                    </button>
+                    ` : ''}
                 </div>
             </div>
         `).join('');
@@ -820,6 +869,14 @@ class ThumbnailStudioPage {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.downloadSingleThumbnail(btn.dataset.url, btn.dataset.style);
+            });
+        });
+
+        // Add click handlers for YouTube upload buttons
+        grid.querySelectorAll('.thumbnail-youtube-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.handleYouTubeUploadClick(parseInt(btn.dataset.id));
             });
         });
 
@@ -1052,6 +1109,131 @@ class ThumbnailStudioPage {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, 4000);
+    }
+
+    /**
+     * Handle YouTube upload button click
+     */
+    handleYouTubeUploadClick(thumbnailId) {
+        const thumbnail = this.thumbnailsData?.find(t => t.id === thumbnailId);
+        if (!thumbnail) {
+            this.showToast('Thumbnail not found', 'error');
+            return;
+        }
+
+        // Check if already uploaded
+        if (thumbnail.is_uploaded_to_youtube) {
+            this.showToast('This thumbnail has already been uploaded to YouTube', 'info');
+            return;
+        }
+
+        // Show confirmation modal
+        this.showYouTubeUploadModal(thumbnailId);
+    }
+
+    /**
+     * Show YouTube upload confirmation modal
+     */
+    showYouTubeUploadModal(thumbnailId) {
+        // Remove existing modal if any
+        this.hideYouTubeUploadModal();
+
+        const modal = document.createElement('div');
+        modal.id = 'youtube-upload-modal';
+        modal.className = 'youtube-upload-modal';
+        modal.innerHTML = `
+            <div class="youtube-upload-modal-overlay"></div>
+            <div class="youtube-upload-modal-content">
+                <div class="youtube-upload-modal-header">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#FF0000" stroke="none">
+                        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                        <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="#FFFFFF"></polygon>
+                    </svg>
+                    <h3>Upload to YouTube</h3>
+                </div>
+                <p class="youtube-upload-modal-message">
+                    This will replace any existing custom thumbnail on your YouTube video.
+                </p>
+                <div class="youtube-upload-modal-actions">
+                    <button class="btn btn-secondary" id="youtube-upload-cancel">Cancel</button>
+                    <button class="btn btn-youtube" id="youtube-upload-confirm" data-id="${thumbnailId}">
+                        Upload to YouTube
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Add event listeners
+        modal.querySelector('#youtube-upload-cancel').addEventListener('click', () => this.hideYouTubeUploadModal());
+        modal.querySelector('.youtube-upload-modal-overlay').addEventListener('click', () => this.hideYouTubeUploadModal());
+        modal.querySelector('#youtube-upload-confirm').addEventListener('click', () => {
+            this.uploadToYouTube(thumbnailId);
+        });
+
+        // Trigger animation
+        setTimeout(() => modal.classList.add('active'), 10);
+    }
+
+    /**
+     * Hide YouTube upload modal
+     */
+    hideYouTubeUploadModal() {
+        const modal = document.getElementById('youtube-upload-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            setTimeout(() => modal.remove(), 200);
+        }
+    }
+
+    /**
+     * Upload thumbnail to YouTube
+     */
+    async uploadToYouTube(thumbnailId) {
+        this.hideYouTubeUploadModal();
+        this.showToast('Uploading to YouTube...', 'info');
+
+        try {
+            const response = await fetch(`/api/thumbnails/${thumbnailId}/upload-youtube`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('Thumbnail uploaded to YouTube successfully!', 'success');
+
+                // Update local data
+                const thumbnail = this.thumbnailsData?.find(t => t.id === thumbnailId);
+                if (thumbnail) {
+                    thumbnail.is_uploaded_to_youtube = true;
+                }
+
+                // Update the button state in the DOM
+                const btn = document.querySelector(`.thumbnail-youtube-btn[data-id="${thumbnailId}"]`);
+                if (btn) {
+                    btn.classList.add('uploaded');
+                    btn.title = 'Already uploaded to YouTube';
+                    if (!btn.querySelector('.uploaded-check')) {
+                        btn.insertAdjacentHTML('beforeend', '<span class="uploaded-check">✓</span>');
+                    }
+                }
+            } else {
+                // Handle specific error cases
+                if (data.requiresYouTubeConnection) {
+                    this.showToast('Please connect your YouTube account first', 'error');
+                } else if (data.alreadyUploaded) {
+                    this.showToast('This thumbnail has already been uploaded to YouTube', 'info');
+                } else {
+                    this.showToast(data.error || 'Failed to upload to YouTube', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('YouTube upload failed:', error);
+            this.showToast('Failed to upload to YouTube', 'error');
+        }
     }
 }
 

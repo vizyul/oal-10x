@@ -223,6 +223,9 @@ class VideosController {
         logger.warn('Could not extract metadata:', metadataError.message);
       }
 
+      // Detect video type from URL (short, live, or video)
+      const videoType = this.detectVideoTypeFromUrl(youtube_url);
+
       // Prepare video data for PostgreSQL
       const videoData = {
         // Basic video info
@@ -237,6 +240,9 @@ class VideosController {
         duration: metadata?.duration || 0,
         upload_date: metadata?.publishedAt ? new Date(metadata.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         thumbnail: metadata?.highResThumbnail || metadata?.thumbnails?.[0]?.url || '', // High-res thumbnail URL
+
+        // Video type (video, short, live)
+        video_type: videoType,
 
         // Processing status
         status: 'pending',
@@ -876,6 +882,28 @@ class VideosController {
     }
 
     return null;
+  }
+
+  /**
+   * Detect video type from YouTube URL
+   * @param {string} url - YouTube URL
+   * @returns {string} - 'video', 'short', or 'live'
+   */
+  detectVideoTypeFromUrl(url) {
+    if (!url) return 'video';
+
+    // Check for Shorts URL pattern
+    if (/youtube\.com\/shorts\//i.test(url)) {
+      return 'short';
+    }
+
+    // Check for Live URL pattern
+    if (/youtube\.com\/live\//i.test(url)) {
+      return 'live';
+    }
+
+    // Default to regular video
+    return 'video';
   }
 
   /**

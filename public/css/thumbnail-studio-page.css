@@ -554,7 +554,8 @@
 }
 
 .thumbnail-view-btn,
-.thumbnail-download-btn {
+.thumbnail-download-btn,
+.thumbnail-youtube-btn {
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -566,10 +567,12 @@
     justify-content: center;
     transition: all 0.2s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
 }
 
 .thumbnail-view-btn svg,
-.thumbnail-download-btn svg {
+.thumbnail-download-btn svg,
+.thumbnail-youtube-btn svg {
     color: var(--text-primary);
     stroke: var(--text-primary);
     width: 16px;
@@ -588,6 +591,46 @@
 
 .thumbnail-download-btn:hover svg {
     stroke: var(--green);
+}
+
+/* YouTube upload button */
+.thumbnail-youtube-btn:hover {
+    background: #ffffff;
+    transform: scale(1.1);
+}
+
+.thumbnail-youtube-btn:hover svg {
+    stroke: #FF0000;
+}
+
+.thumbnail-youtube-btn.uploaded {
+    background: rgba(16, 185, 129, 0.95);
+    cursor: default;
+}
+
+.thumbnail-youtube-btn.uploaded svg {
+    stroke: #ffffff;
+}
+
+.thumbnail-youtube-btn.uploaded:hover {
+    transform: none;
+}
+
+.thumbnail-youtube-btn .uploaded-check {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    background: var(--green);
+    border-radius: 50%;
+    font-size: 9px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border: 2px solid white;
 }
 
 /* Actions Panel */
@@ -832,4 +875,95 @@
     font-size: 0.8125rem;
     color: var(--text-secondary);
     line-height: 1.4;
+}
+
+/* YouTube Upload Modal */
+.youtube-upload-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.youtube-upload-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.youtube-upload-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.youtube-upload-modal-content {
+    position: relative;
+    background: var(--background-primary);
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.95);
+    transition: transform 0.2s ease;
+}
+
+.youtube-upload-modal.active .youtube-upload-modal-content {
+    transform: scale(1);
+}
+
+.youtube-upload-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.youtube-upload-modal-header svg {
+    flex-shrink: 0;
+}
+
+.youtube-upload-modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.youtube-upload-modal-message {
+    margin: 0 0 1.5rem 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.youtube-upload-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.btn-youtube {
+    background: #FF0000;
+    color: white;
+    border: 2px solid #FF0000;
+}
+
+.btn-youtube:hover {
+    background: #CC0000;
+    border-color: #CC0000;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 0, 0, 0.3);
 }
