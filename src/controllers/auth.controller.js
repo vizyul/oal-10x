@@ -408,6 +408,20 @@ class AuthController {
         // Don't fail the registration if welcome email fails
       }
 
+      // Add user to BREVO CRM as trial user
+      try {
+        const brevoService = require('../services/brevo.service');
+        await brevoService.addTrialUser({
+          email,
+          firstName,
+          lastName,
+          userId: user.id
+        });
+      } catch (brevoError) {
+        logger.error('BREVO integration error during signup:', brevoError);
+        // Don't fail registration if BREVO fails
+      }
+
       // Generate JWT token for immediate login
       const jwtToken = jwt.sign(
         {

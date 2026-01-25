@@ -668,6 +668,18 @@ class StripeService {
       // Don't fail subscription creation if affiliate tracking fails
     }
 
+    // Add contact to BREVO Subscribers list
+    try {
+      const brevoService = require('./brevo.service');
+      const userForBrevo = await UserModel.findById(pgUserId);
+      if (userForBrevo && userForBrevo.email) {
+        await brevoService.addToSubscribersList(userForBrevo.email, tier);
+      }
+    } catch (brevoError) {
+      logger.error('BREVO integration error during subscription:', brevoError);
+      // Don't fail subscription creation if BREVO fails
+    }
+
     // Server-side pixel tracking (Meta Conversions API & TikTok Events API)
     // This ensures tracking even if user doesn't reach success page or has ad blockers
     // Check if we've already tracked this subscription (prevents duplicate webhook tracking)
@@ -876,6 +888,18 @@ class StripeService {
     const isCancelScheduled = subscription.cancel_at_period_end;
 
     if (!wasCancelScheduled && isCancelScheduled) {
+      // Remove from BREVO Subscribers list
+      try {
+        const brevoService = require('./brevo.service');
+        const userForBrevo = await UserModel.findById(pgUserId);
+        if (userForBrevo && userForBrevo.email) {
+          await brevoService.removeFromSubscribersList(userForBrevo.email);
+        }
+      } catch (brevoError) {
+        logger.error('BREVO integration error during cancellation scheduling:', brevoError);
+        // Don't fail webhook if BREVO fails
+      }
+
       try {
         const userForEmail = await UserModel.findById(pgUserId);
         if (userForEmail && userForEmail.email) {
@@ -1006,6 +1030,18 @@ class StripeService {
 
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
+
+    // Remove from BREVO Subscribers list
+    try {
+      const brevoService = require('./brevo.service');
+      const userForBrevo = await UserModel.findById(pgUserId);
+      if (userForBrevo && userForBrevo.email) {
+        await brevoService.removeFromSubscribersList(userForBrevo.email);
+      }
+    } catch (brevoError) {
+      logger.error('BREVO integration error during subscription deletion:', brevoError);
+      // Don't fail webhook if BREVO fails
+    }
 
     // SEND EMAIL
     try {
