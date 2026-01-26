@@ -71,31 +71,21 @@ async function loadLookupData() {
 
 /**
  * Get dynamic background style based on topic keywords
+ * Now lets AI decide colors based on topic - no hardcoded color schemes
  */
 function getBackgroundStyle(topic, category) {
-    const t = (topic || '').toLowerCase();
-    const cat = (category || '').toLowerCase();
+    return `
+Analyze the topic "${topic}" and category "${category || 'general'}" to create the PERFECT background:
 
-    if (t.includes('money') || t.includes('rich') || t.includes('wealth') || t.includes('broke')) {
-        return 'Lush green and vibrant gold color palette. Textures of cash, gold leaf, or high-end architectural gradients.';
-    }
-    if (t.includes('horror') || t.includes('scary') || t.includes('mystery') || t.includes('ghost')) {
-        return 'Deep purple, midnight black, and eerie fog. Cold, desaturated tones with a single piercing accent color like neon green or crimson.';
-    }
-    if (t.includes('tech') || t.includes('ai') || t.includes('phone') || t.includes('future')) {
-        return 'Electric cyan, deep navy, and holographic glass textures. Digital circuit patterns or data-stream bokeh.';
-    }
-    if (t.includes('nature') || t.includes('ocean') || t.includes('earth') || t.includes('world')) {
-        return 'Vibrant forest greens, cerulean blues, and earthy browns. Organic textures and natural lens flares.';
-    }
-    if (t.includes('exposed') || t.includes('truth') || t.includes('news') || cat.includes('news')) {
-        return 'High-alert caution yellow and deep charcoal gray. Industrial textures, newspaper halftone patterns, or glowing orange embers.';
-    }
-    if (t.includes('break') || t.includes('destroy') || t.includes('rage') || t.includes('war')) {
-        return 'High-energy collision background. Shattered glass, volcanic orange fire, and dark obsidian smoke.';
-    }
+1. CHOOSE COLORS that emotionally match the topic's tone and message
+2. AVOID defaulting to green - only use green if the topic specifically requires it
+3. Consider the psychological impact: warm colors for urgency/passion, cool colors for trust/calm, dark for mystery/drama
+4. Create HIGH CONTRAST between background and foreground elements
+5. Use complementary or split-complementary color schemes for visual impact
+6. Add depth with gradients, textures, or environmental elements that fit the topic
 
-    return 'A custom dynamic color palette derived from the emotional hook of the topic. Avoid repetitive red/blue splits. Use complementary high-contrast colors.';
+The background should enhance the topic's emotional impact while ensuring the person and text remain the focal point.
+`.trim();
 }
 
 /**
