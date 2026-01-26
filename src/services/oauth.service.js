@@ -415,6 +415,21 @@ class OAuthService {
                 logger.error('Failed to send welcome email to Apple user:', emailError);
                 // Don't fail the login if welcome email fails
               }
+
+              // Add user to BREVO CRM as trial user (only if welcome email wasn't sent before)
+              try {
+                const brevoService = require('./brevo.service');
+                await brevoService.addTrialUser({
+                  email: userData.email,
+                  firstName: existingUser.firstName || '',
+                  lastName: existingUser.lastName || '',
+                  userId: existingUser.id
+                });
+                logger.info(`BREVO: Added existing Apple private relay user to trial list: ${userData.email}`);
+              } catch (brevoError) {
+                logger.error('BREVO integration error during Apple login activation:', brevoError);
+                // Don't fail login if BREVO fails
+              }
             }
 
             // Update the user object with verified status for token generation
@@ -469,6 +484,21 @@ class OAuthService {
         } catch (emailError) {
           logger.error('Failed to send welcome email to new Apple user:', emailError);
           // Don't fail the signup if welcome email fails
+        }
+
+        // Add user to BREVO CRM as trial user
+        try {
+          const brevoService = require('./brevo.service');
+          await brevoService.addTrialUser({
+            email: userData.email,
+            firstName: newUser.firstName || '',
+            lastName: newUser.lastName || '',
+            userId: newUser.id
+          });
+          logger.info(`BREVO: Added new Apple private relay user to trial list: ${userData.email}`);
+        } catch (brevoError) {
+          logger.error('BREVO integration error during Apple signup:', brevoError);
+          // Don't fail signup if BREVO fails
         }
 
         // Update the user object with verified status for token generation
@@ -674,6 +704,21 @@ class OAuthService {
       } catch (emailError) {
         logger.error('Failed to send welcome email to social user:', emailError);
         // Don't fail the verification if welcome email fails
+      }
+
+      // Add user to BREVO CRM as trial user
+      try {
+        const brevoService = require('./brevo.service');
+        await brevoService.addTrialUser({
+          email: email,
+          firstName: user.firstName || user['First Name'] || '',
+          lastName: user.lastName || user['Last Name'] || '',
+          userId: user.id
+        });
+        logger.info(`BREVO: Added OAuth user to trial list: ${email}`);
+      } catch (brevoError) {
+        logger.error('BREVO integration error during OAuth verification:', brevoError);
+        // Don't fail verification if BREVO fails
       }
 
       // Refresh user data to get the most current information including the updates
