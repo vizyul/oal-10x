@@ -19,7 +19,7 @@ const securityMiddleware = [
         scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', 'https://analytics.tiktok.com', 'https://connect.facebook.net', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://googleads.g.doubleclick.net', 'https://snap.licdn.com'],
         imgSrc: ['\'self\'', 'data:', 'https:', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://googleads.g.doubleclick.net', 'https://www.google.com', 'https://www.facebook.com', 'https://analytics.tiktok.com'],
         connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://analytics.tiktok.com', 'https://www.facebook.com', 'https://res.cloudinary.com', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://region1.google-analytics.com', 'https://analytics.google.com', 'https://googleads.g.doubleclick.net', 'https://graph.facebook.com', 'https://business-api.tiktok.com'],
-        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com', 'https://www.googletagmanager.com', 'https://td.doubleclick.net', 'https://www.facebook.com']
+        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com', 'https://www.googletagmanager.com', 'https://td.doubleclick.net', 'https://www.facebook.com', 'https://www.youtube.com', 'https://youtube.com']
       }
     },
     crossOriginEmbedderPolicy: false
