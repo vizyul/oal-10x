@@ -416,6 +416,16 @@ class OAuthService {
                 // Don't fail the login if welcome email fails
               }
 
+              // Initialize free subscription for Apple user (CRITICAL: enables video limit tracking)
+              try {
+                const subscriptionService = require('./subscription.service');
+                await subscriptionService.initializeFreeUserSubscription(existingUser.id);
+                logger.info(`Initialized free subscription for existing Apple user ${existingUser.id}`);
+              } catch (subError) {
+                logger.error('Error initializing free subscription for existing Apple user:', subError);
+                // Don't fail login if subscription setup fails
+              }
+
               // Add user to BREVO CRM as trial user (only if welcome email wasn't sent before)
               try {
                 const brevoService = require('./brevo.service');
@@ -484,6 +494,16 @@ class OAuthService {
         } catch (emailError) {
           logger.error('Failed to send welcome email to new Apple user:', emailError);
           // Don't fail the signup if welcome email fails
+        }
+
+        // Initialize free subscription for Apple user (CRITICAL: enables video limit tracking)
+        try {
+          const subscriptionService = require('./subscription.service');
+          await subscriptionService.initializeFreeUserSubscription(newUser.id);
+          logger.info(`Initialized free subscription for new Apple user ${newUser.id}`);
+        } catch (subError) {
+          logger.error('Error initializing free subscription for Apple user:', subError);
+          // Don't fail signup if subscription setup fails
         }
 
         // Add user to BREVO CRM as trial user
@@ -704,6 +724,16 @@ class OAuthService {
       } catch (emailError) {
         logger.error('Failed to send welcome email to social user:', emailError);
         // Don't fail the verification if welcome email fails
+      }
+
+      // Initialize free subscription for OAuth user (CRITICAL: enables video limit tracking)
+      try {
+        const subscriptionService = require('./subscription.service');
+        await subscriptionService.initializeFreeUserSubscription(user.id);
+        logger.info(`Initialized free subscription for OAuth user ${user.id}`);
+      } catch (subError) {
+        logger.error('Error initializing free subscription for OAuth user:', subError);
+        // Don't fail verification if subscription setup fails
       }
 
       // Add user to BREVO CRM as trial user
