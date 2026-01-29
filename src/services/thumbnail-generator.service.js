@@ -16,7 +16,8 @@ const { logger } = require('../utils');
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY });
 
 // Get model from environment variable with fallback
-const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-exp';
+// Note: Must use a model that supports image generation with aspectRatio
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
 
 // Default character anchor - used when user hasn't created a profile
 // Focuses on FACIAL LIKENESS only - pose, expression, and clothing should vary

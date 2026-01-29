@@ -7,19 +7,23 @@ const jwt = require('jsonwebtoken');
 const { logger } = require('../utils');
 const { authService } = require('../services');
 
+// Parse CSP environment variables (comma-separated domain lists)
+const envDomains = (key) => process.env[key]?.split(',').map(d => d.trim()).filter(Boolean) || [];
+
 // Security Middleware
 const securityMiddleware = [
   // Helmet for security headers
+  // Core infrastructure domains are hardcoded; third-party services are configurable via CSP_* env vars
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ['\'self\''],
         styleSrc: ['\'self\'', '\'unsafe-inline\'', 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
         fontSrc: ['\'self\'', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', 'https://analytics.tiktok.com', 'https://connect.facebook.net', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://googleads.g.doubleclick.net', 'https://snap.licdn.com'],
-        imgSrc: ['\'self\'', 'data:', 'https:', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://googleads.g.doubleclick.net', 'https://www.google.com', 'https://www.facebook.com', 'https://analytics.tiktok.com'],
-        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://analytics.tiktok.com', 'https://www.facebook.com', 'https://res.cloudinary.com', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://region1.google-analytics.com', 'https://analytics.google.com', 'https://googleads.g.doubleclick.net', 'https://graph.facebook.com', 'https://business-api.tiktok.com'],
-        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com', 'https://www.googletagmanager.com', 'https://td.doubleclick.net', 'https://www.facebook.com', 'https://www.youtube.com', 'https://youtube.com']
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', ...envDomains('CSP_SCRIPT_SRC')],
+        imgSrc: ['\'self\'', 'data:', 'https:', ...envDomains('CSP_IMG_SRC')],
+        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://res.cloudinary.com', ...envDomains('CSP_CONNECT_SRC')],
+        frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com', 'https://www.youtube.com', 'https://youtube.com', ...envDomains('CSP_FRAME_SRC')]
       }
     },
     crossOriginEmbedderPolicy: false
