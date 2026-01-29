@@ -219,6 +219,7 @@ router.get('/google/callback', (req, res, _next) => {
       res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
@@ -328,6 +329,7 @@ router.post('/apple/callback', async (req, res, _next) => {
         res.cookie('auth_token', token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
           maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
         logger.info('🍎 Auth cookie set successfully');
@@ -380,6 +382,7 @@ router.get('/microsoft/callback', (req, res, _next) => {
       res.cookie('auth_token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
@@ -432,6 +435,7 @@ router.post('/social-verify', async (req, res) => {
       res.cookie('auth_token', result.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
