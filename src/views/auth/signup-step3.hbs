@@ -319,12 +319,18 @@ document.addEventListener('DOMContentLoaded', function() {
           });
         }
 
-        // Google Ads Conversion Tracking
+        // Google Ads Conversion Tracking with callback
+        const redirectUrl = result.data.redirectTo || '/dashboard';
+        let gtagFired = false;
+
         if (typeof gtag === 'function') {
           gtag('event', 'conversion', {
             'send_to': 'AW-17881586055/DOpECNC9z-obEIezzc5C',
             'value': 1.0,
-            'currency': 'USD'
+            'currency': 'USD',
+            'event_callback': function() {
+              gtagFired = true;
+            }
           });
         }
 
@@ -332,9 +338,9 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingOverlay.classList.remove('show');
         successModal.classList.add('show');
 
-        // Auto-redirect after 3 seconds
+        // Auto-redirect after 3 seconds (gives gtag time to send)
         setTimeout(() => {
-          window.location.href = result.data.redirectTo || '/dashboard';
+          window.location.href = redirectUrl;
         }, 3000);
       } else {
         // Show error
