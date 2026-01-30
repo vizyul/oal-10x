@@ -114,11 +114,25 @@
 
     // Google Ads Conversion Tracking
     if (typeof gtag === 'function') {
+      // Google Ads conversion
       gtag('event', 'conversion', {
         'send_to': 'AW-17881586055/A3lMCJTZ3uobEIezzc5C',
         'value': {{#if subscription.priceAmount}}{{subscription.priceAmount}}{{else}}1.0{{/if}},
         'currency': '{{#if subscription.priceCurrency}}{{subscription.priceCurrency}}{{else}}USD{{/if}}',
         'transaction_id': '{{#if sessionId}}{{sessionId}}{{/if}}'
+      });
+
+      // GA4 purchase event (for analytics attribution)
+      gtag('event', 'purchase', {
+        'transaction_id': '{{#if sessionId}}{{sessionId}}{{/if}}',
+        'value': {{#if subscription.priceAmount}}{{subscription.priceAmount}}{{else}}1.0{{/if}},
+        'currency': '{{#if subscription.priceCurrency}}{{subscription.priceCurrency}}{{else}}USD{{/if}}',
+        'items': [{
+          'item_name': '{{#if subscription.tier}}{{capitalize subscription.tier}} Plan{{else}}Subscription{{/if}}',
+          'item_category': 'subscription',
+          'price': {{#if subscription.priceAmount}}{{subscription.priceAmount}}{{else}}1.0{{/if}},
+          'quantity': 1
+        }]
       });
     }
   });

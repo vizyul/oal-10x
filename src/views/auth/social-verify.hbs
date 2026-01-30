@@ -239,9 +239,32 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok && result.success) {
         // Success - redirect to complete profile step or dashboard
         showAlert('Email verified successfully! Redirecting...', 'success');
+
+        // Track conversion events for social signup
+        if (typeof trackCompleteRegistration === 'function') {
+          trackCompleteRegistration({
+            content_name: 'User Signup',
+            status: 'complete'
+          });
+        }
+
+        if (typeof gtag === 'function') {
+          // Google Ads conversion
+          gtag('event', 'conversion', {
+            'send_to': 'AW-17881586055/DOpECNC9z-obEIezzc5C',
+            'value': 1.0,
+            'currency': 'USD'
+          });
+
+          // GA4 sign_up event (for analytics attribution)
+          gtag('event', 'sign_up', {
+            'method': '{{provider}}'
+          });
+        }
+
         setTimeout(() => {
           window.location.href = result.data.redirectTo || '/dashboard';
-        }, 1500);
+        }, 2000);
       } else {
         // Show error
         if (result.field) {
