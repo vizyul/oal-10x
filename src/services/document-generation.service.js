@@ -6,11 +6,10 @@
 
 // eslint-disable-next-line no-unused-vars
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, PageBreak, Table, TableRow, TableCell, WidthType, TableBorders, VerticalAlign } = require('docx');
-const puppeteer = require('puppeteer');
+const PDFDocument = require('pdfkit');
 const { logger } = require('../utils');
 
-// Browser instance for PDF generation (reused for performance)
-let browserInstance = null;
+// PDFKit-based PDF generation (no browser dependency)
 
 class DocumentGenerationService {
   constructor() {
@@ -1000,226 +999,180 @@ class DocumentGenerationService {
 
 
   /**
-   * Get or create browser instance for PDF generation
-   * Reuses browser instance for better performance
-   * @returns {Promise<Browser>} Puppeteer browser instance
-   */
-  async getBrowser() {
-    if (!browserInstance) {
-      browserInstance = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      });
-      logger.info('Puppeteer browser instance created for PDF generation');
-    }
-    return browserInstance;
-  }
-
-  /**
-   * Convert markdown content to styled HTML for PDF rendering
-   * @param {string} content - Markdown content
-   * @param {string} contentLabel - Content type label
-   * @param {string} videoTitle - Video title
-   * @returns {string} Styled HTML
-   */
-  convertMarkdownToHtml(content, contentLabel, videoTitle) {
-    const sections = this.parseMarkdownContent(content);
-    let htmlContent = '';
-
-    for (const section of sections) {
-      // Escape HTML entities but preserve emojis
-      const escapeHtml = (text) => {
-        return this.stripMarkdown(text)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-      };
-
-      switch (section.type) {
-        case 'heading1':
-          htmlContent += `<h1>${escapeHtml(section.text)}</h1>\n`;
-          break;
-        case 'heading2':
-          htmlContent += `<h2>${escapeHtml(section.text)}</h2>\n`;
-          break;
-        case 'heading3':
-          htmlContent += `<h3>${escapeHtml(section.text)}</h3>\n`;
-          break;
-        case 'heading4':
-          htmlContent += `<h4>${escapeHtml(section.text)}</h4>\n`;
-          break;
-        case 'heading5':
-          htmlContent += `<h5>${escapeHtml(section.text)}</h5>\n`;
-          break;
-        case 'heading6':
-          htmlContent += `<h6>${escapeHtml(section.text)}</h6>\n`;
-          break;
-        case 'horizontalRule':
-          htmlContent += '<hr>\n';
-          break;
-        case 'table':
-          htmlContent += '<table>\n';
-          section.rows.forEach((row, idx) => {
-            const tag = section.hasHeader && idx === 0 ? 'th' : 'td';
-            htmlContent += '<tr>';
-            row.forEach(cell => {
-              htmlContent += `<${tag}>${escapeHtml(cell)}</${tag}>`;
-            });
-            htmlContent += '</tr>\n';
-          });
-          htmlContent += '</table>\n';
-          break;
-        case 'bullet':
-          htmlContent += `<ul><li>${escapeHtml(section.text)}</li></ul>\n`;
-          break;
-        case 'numberedItem':
-          htmlContent += `<ol><li>${escapeHtml(section.text)}</li></ol>\n`;
-          break;
-        case 'quote':
-          htmlContent += `<blockquote>${escapeHtml(section.text)}</blockquote>\n`;
-          break;
-        case 'paragraph':
-        default:
-          htmlContent += `<p>${escapeHtml(section.text)}</p>\n`;
-          break;
-      }
-    }
-
-    // Build complete HTML document with styling
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    @page {
-      size: letter;
-      margin: 1in;
-    }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: ${this.styles.colors.text};
-      max-width: 100%;
-    }
-    .header {
-      border-bottom: 1px solid #CCCCCC;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
-    }
-    .title {
-      font-size: 28pt;
-      font-weight: bold;
-      color: ${this.styles.colors.primary};
-      margin: 0 0 5px 0;
-    }
-    .subtitle {
-      font-size: 14pt;
-      font-style: italic;
-      color: ${this.styles.colors.muted};
-      margin: 0;
-    }
-    h1 { font-size: 24pt; color: ${this.styles.colors.secondary}; margin-top: 20px; }
-    h2 { font-size: 20pt; color: ${this.styles.colors.secondary}; margin-top: 18px; }
-    h3 { font-size: 16pt; color: ${this.styles.colors.secondary}; margin-top: 15px; }
-    h4 { font-size: 14pt; color: ${this.styles.colors.secondary}; margin-top: 12px; }
-    h5 { font-size: 13pt; color: ${this.styles.colors.secondary}; margin-top: 10px; }
-    h6 { font-size: 12pt; color: ${this.styles.colors.secondary}; margin-top: 8px; }
-    p { margin: 10px 0; }
-    ul, ol { margin: 10px 0; padding-left: 30px; }
-    li { margin: 5px 0; }
-    blockquote {
-      border-left: 3px solid #CCCCCC;
-      margin: 15px 0;
-      padding: 10px 20px;
-      font-style: italic;
-      color: ${this.styles.colors.muted};
-      background: #f9f9f9;
-    }
-    hr {
-      border: none;
-      border-top: 1px solid #CCCCCC;
-      margin: 20px 0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    th, td {
-      border: 1px solid #CCCCCC;
-      padding: 8px 12px;
-      text-align: left;
-    }
-    th {
-      background: #E8E8E8;
-      font-weight: bold;
-    }
-    .footer {
-      border-top: 1px solid #CCCCCC;
-      padding-top: 15px;
-      margin-top: 30px;
-      text-align: center;
-      font-style: italic;
-      font-size: 10pt;
-      color: ${this.styles.colors.muted};
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="title">${contentLabel}</div>
-    ${videoTitle ? `<div class="subtitle">${videoTitle}</div>` : ''}
-  </div>
-
-  <div class="content">
-    ${htmlContent}
-  </div>
-
-  <div class="footer">
-    Generated by AmplifyContent.ai
-  </div>
-</body>
-</html>`;
-  }
-
-  /**
-   * Generate PDF document from content using Puppeteer
-   * Uses Chrome/Chromium for native emoji support
+   * Generate PDF document from content using PDFKit
+   * No browser dependency - works in all environments
    * @param {string} content - Markdown content
    * @param {string} contentType - Content type key
    * @param {string} videoTitle - Video title
    * @returns {Promise<Buffer>} PDF buffer
    */
   async generatePdf(content, contentType, videoTitle) {
-    let page = null;
     try {
       // Remove "Character count: XXX/280" text from social media posts
       content = content.replace(/\s*Character count:\s*\d+\/\d+/gi, '');
 
       const contentLabel = this.formatContentTypeLabel(contentType);
-      const html = this.convertMarkdownToHtml(content, contentLabel, videoTitle);
+      const sections = this.parseMarkdownContent(content);
 
-      const browser = await this.getBrowser();
-      page = await browser.newPage();
-
-      // Set content and wait for it to load
-      await page.setContent(html, { waitUntil: 'domcontentloaded' });
-
-      // Generate PDF
-      const pdfBuffer = await page.pdf({
-        format: 'Letter',
-        margin: {
-          top: '1in',
-          right: '1in',
-          bottom: '1in',
-          left: '1in'
-        },
-        printBackground: true
+      const doc = new PDFDocument({
+        size: 'LETTER',
+        margins: { top: 72, bottom: 72, left: 72, right: 72 },
+        bufferPages: true
       });
 
-      logger.info(`Generated PDF for ${contentType} (Puppeteer)`, {
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+
+      const pdfReady = new Promise((resolve, reject) => {
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+      });
+
+      // Title
+      doc.font('Helvetica-Bold')
+        .fontSize(this.styles.sizes.title)
+        .fillColor(this.styles.colors.primary)
+        .text(this.stripMarkdownForPdf(contentLabel));
+
+      // Subtitle (video title)
+      if (videoTitle) {
+        doc.font('Helvetica-Oblique')
+          .fontSize(this.styles.sizes.heading3)
+          .fillColor(this.styles.colors.muted)
+          .text(this.stripMarkdownForPdf(videoTitle));
+      }
+
+      // Separator
+      doc.moveDown(0.5);
+      const lineY = doc.y;
+      doc.strokeColor('#CCCCCC')
+        .lineWidth(1)
+        .moveTo(72, lineY)
+        .lineTo(doc.page.width - 72, lineY)
+        .stroke();
+      doc.moveDown(0.5);
+
+      // Content sections
+      for (const section of sections) {
+        // Check if we need a new page (leave room for at least 2 lines)
+        if (doc.y > doc.page.height - 100) {
+          doc.addPage();
+        }
+
+        switch (section.type) {
+          case 'heading1':
+            doc.moveDown(0.5);
+            doc.font('Helvetica-Bold')
+              .fontSize(this.styles.sizes.heading1)
+              .fillColor(this.styles.colors.secondary)
+              .text(this.stripMarkdownForPdf(section.text));
+            doc.moveDown(0.3);
+            break;
+
+          case 'heading2':
+            doc.moveDown(0.4);
+            doc.font('Helvetica-Bold')
+              .fontSize(this.styles.sizes.heading2)
+              .fillColor(this.styles.colors.secondary)
+              .text(this.stripMarkdownForPdf(section.text));
+            doc.moveDown(0.2);
+            break;
+
+          case 'heading3':
+            doc.moveDown(0.3);
+            doc.font('Helvetica-Bold')
+              .fontSize(this.styles.sizes.heading3)
+              .fillColor(this.styles.colors.secondary)
+              .text(this.stripMarkdownForPdf(section.text));
+            doc.moveDown(0.2);
+            break;
+
+          case 'heading4':
+          case 'heading5':
+          case 'heading6':
+            doc.moveDown(0.2);
+            doc.font('Helvetica-Bold')
+              .fontSize(14)
+              .fillColor(this.styles.colors.secondary)
+              .text(this.stripMarkdownForPdf(section.text));
+            doc.moveDown(0.1);
+            break;
+
+          case 'horizontalRule': {
+            doc.moveDown(0.3);
+            const hrY = doc.y;
+            doc.strokeColor('#CCCCCC')
+              .lineWidth(1)
+              .moveTo(72, hrY)
+              .lineTo(doc.page.width - 72, hrY)
+              .stroke();
+            doc.moveDown(0.3);
+            break;
+          }
+
+          case 'table':
+            this.renderPdfTable(doc, section.rows, section.hasHeader);
+            break;
+
+          case 'bullet':
+            doc.font('Helvetica')
+              .fontSize(this.styles.sizes.body)
+              .fillColor(this.styles.colors.text)
+              .text(`  •  ${this.stripMarkdownForPdf(section.text)}`, {
+                indent: 20
+              });
+            break;
+
+          case 'numberedItem':
+            doc.font('Helvetica')
+              .fontSize(this.styles.sizes.body)
+              .fillColor(this.styles.colors.text)
+              .text(this.stripMarkdownForPdf(section.text), {
+                indent: 20
+              });
+            break;
+
+          case 'quote':
+            doc.font('Helvetica-Oblique')
+              .fontSize(this.styles.sizes.body)
+              .fillColor(this.styles.colors.muted)
+              .text(this.stripMarkdownForPdf(section.text), {
+                indent: 40
+              });
+            doc.font('Helvetica')
+              .fillColor(this.styles.colors.text);
+            break;
+
+          case 'paragraph':
+          default:
+            doc.font('Helvetica')
+              .fontSize(this.styles.sizes.body)
+              .fillColor(this.styles.colors.text)
+              .text(this.stripMarkdownForPdf(section.text));
+            doc.moveDown(0.3);
+            break;
+        }
+      }
+
+      // Footer
+      doc.moveDown(1);
+      const footerY = doc.y;
+      doc.strokeColor('#CCCCCC')
+        .lineWidth(1)
+        .moveTo(72, footerY)
+        .lineTo(doc.page.width - 72, footerY)
+        .stroke();
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Oblique')
+        .fontSize(10)
+        .fillColor(this.styles.colors.muted)
+        .text('Generated by AmplifyContent.ai', { align: 'center' });
+
+      doc.end();
+
+      const pdfBuffer = await pdfReady;
+
+      logger.info(`Generated PDF for ${contentType} (PDFKit)`, {
         contentType,
         videoTitle: videoTitle?.substring(0, 50),
         size: pdfBuffer.length
@@ -1230,11 +1183,6 @@ class DocumentGenerationService {
     } catch (error) {
       logger.error('Error generating PDF:', error);
       throw new Error(`Failed to generate PDF: ${error.message}`);
-    } finally {
-      // Close page but keep browser instance for reuse
-      if (page) {
-        await page.close().catch(() => {});
-      }
     }
   }
 
