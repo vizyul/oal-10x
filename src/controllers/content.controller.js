@@ -653,8 +653,9 @@ class ContentController {
 
       // Verify user owns this video and get video title (and transcript if needed)
       const database = require('../services/database.service');
+      const isNumeric = /^\d+$/.test(videoId);
       const videoCheck = await database.query(
-        'SELECT id, video_title, transcript_text FROM videos WHERE id = $1 AND users_id = $2',
+        `SELECT id, video_title, transcript_text FROM videos WHERE ${isNumeric ? 'id' : 'videoid'} = $1 AND users_id = $2`,
         [videoId, userId]
       );
 
@@ -665,6 +666,7 @@ class ContentController {
         });
       }
 
+      const dbVideoId = videoCheck.rows[0].id;
       const videoTitle = videoCheck.rows[0].video_title;
       let contentText = null;
 
@@ -674,7 +676,7 @@ class ContentController {
       } else {
         // Get the content from video_content table
         const content = await contentService.getVideoContentByType(
-          videoId,
+          dbVideoId,
           contentType,
           { publishedOnly: false }
         );
@@ -736,8 +738,9 @@ class ContentController {
 
       // Verify user owns this video and get video title (and transcript if needed)
       const database = require('../services/database.service');
+      const isNumeric = /^\d+$/.test(videoId);
       const videoCheck = await database.query(
-        'SELECT id, video_title, transcript_text FROM videos WHERE id = $1 AND users_id = $2',
+        `SELECT id, video_title, transcript_text FROM videos WHERE ${isNumeric ? 'id' : 'videoid'} = $1 AND users_id = $2`,
         [videoId, userId]
       );
 
@@ -748,6 +751,7 @@ class ContentController {
         });
       }
 
+      const dbVideoId = videoCheck.rows[0].id;
       const videoTitle = videoCheck.rows[0].video_title;
       let contentText = null;
 
@@ -757,7 +761,7 @@ class ContentController {
       } else {
         // Get the content from video_content table
         const content = await contentService.getVideoContentByType(
-          videoId,
+          dbVideoId,
           contentType,
           { publishedOnly: false }
         );

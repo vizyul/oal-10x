@@ -122,7 +122,7 @@ router.get('/videos/:videoId/legacy',
  */
 router.get('/videos/:videoId/:contentType/download/docx',
   authMiddleware,
-  param('videoId').isInt().withMessage('Video ID must be an integer'),
+  param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
   param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
   contentController.downloadDocx
 );
@@ -133,7 +133,7 @@ router.get('/videos/:videoId/:contentType/download/docx',
  */
 router.get('/videos/:videoId/:contentType/download/pdf',
   authMiddleware,
-  param('videoId').isInt().withMessage('Video ID must be an integer'),
+  param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
   param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
   contentController.downloadPdf
 );
