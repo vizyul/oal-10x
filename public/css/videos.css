@@ -1140,6 +1140,10 @@
 
 /* Error Message */
 .error-message {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   padding: 1rem 1.5rem;
   margin-bottom: 1rem;
   background-color: #fef2f2;
@@ -1148,6 +1152,35 @@
   border-radius: 8px;
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.error-message > span {
+  flex: 1;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.error-dismiss:hover {
+  color: #991b1b;
+}
+
+.error-message a {
+  color: #dc2626;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.error-message a:hover {
+  color: #991b1b;
 }
 
 .error-message.hidden {

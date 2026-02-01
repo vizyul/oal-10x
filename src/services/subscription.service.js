@@ -418,12 +418,23 @@ class SubscriptionService {
     try {
       // Get current usage using model
       const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
+      let videosProcessed = currentUsage ? (currentUsage.videos_processed || 0) : 0;
 
-      if (!currentUsage) {
-        return 0;
+      // For free tier users, also check free_video_used flag
+      if (videosProcessed === 0) {
+        const database = require('./database.service');
+        const userResult = await database.query(
+          'SELECT free_video_used, subscription_tier FROM users WHERE id = $1', [userId]
+        );
+        if (userResult.rows.length > 0) {
+          const user = userResult.rows[0];
+          if (user.subscription_tier === 'free' && user.free_video_used) {
+            videosProcessed = 1;
+          }
+        }
       }
 
-      return currentUsage.videos_processed || 0;
+      return videosProcessed;
     } catch (error) {
       logger.error('Error getting current period usage:', error);
       return 0;
@@ -448,16 +459,26 @@ class SubscriptionService {
       // Get current usage from subscription_usage table for ALL users (including free tier)
       const currentUsage = await subscriptionUsage.getCurrentByUserId(pgUserId);
 
-      if (!currentUsage) {
-        logger.warn(`No subscription usage record found for user ${pgUserId}`);
-        return { videos: 0, api_calls: 0, storage: 0, ai_summaries: 0 };
+      let videosProcessed = currentUsage ? (currentUsage.videos_processed || 0) : 0;
+
+      // For free tier users, also check free_video_used flag on the users table
+      // This ensures the display is accurate even when subscription_usage doesn't track the free video
+      const database = require('./database.service');
+      const userResult = await database.query(
+        'SELECT free_video_used, subscription_tier FROM users WHERE id = $1', [pgUserId]
+      );
+      if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+        if (user.subscription_tier === 'free' && user.free_video_used && videosProcessed === 0) {
+          videosProcessed = 1;
+        }
       }
 
       return {
-        videos: currentUsage.videos_processed || 0,
-        api_calls: currentUsage.api_calls_made || 0,
-        storage: currentUsage.storage_used_mb || 0,
-        ai_summaries: currentUsage.ai_summaries_generated || 0
+        videos: videosProcessed,
+        api_calls: currentUsage ? (currentUsage.api_calls_made || 0) : 0,
+        storage: currentUsage ? (currentUsage.storage_used_mb || 0) : 0,
+        ai_summaries: currentUsage ? (currentUsage.ai_summaries_generated || 0) : 0
       };
     } catch (error) {
       logger.error('Error getting current period usage breakdown:', error);

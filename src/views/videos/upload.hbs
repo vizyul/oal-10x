@@ -78,6 +78,9 @@
   </div>
   {{/if}}
 
+  <!-- Global error/notification banner (visible regardless of YouTube connection state) -->
+  <div id="global-error-message" class="error-message hidden" style="margin: 0 0 16px 0;"></div>
+
   <div class="upload-methods-container">
     <!-- YouTube OAuth Method -->
     <div class="upload-method youtube-method">
@@ -244,6 +247,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const loadedCountEl = document.getElementById('loaded-count');
   const totalCountEl = document.getElementById('total-count');
   const errorMessageEl = document.getElementById('error-message');
+  const globalErrorMessageEl = document.getElementById('global-error-message');
   const urlErrorMessageEl = document.getElementById('url-error-message');
   
   // Content Type Selection Elements
@@ -578,16 +582,13 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
   }
   
   function showError(message) {
-    errorMessageEl.innerHTML = message; // Use innerHTML to parse HTML tags in error messages
-    errorMessageEl.classList.remove('hidden');
-    // Auto-hide after 5 seconds
-    setTimeout(() => hideError(), 5000);
+    globalErrorMessageEl.innerHTML = `<span>${message}</span><button class="error-dismiss" onclick="this.parentElement.classList.add('hidden')">&times;</button>`;
+    globalErrorMessageEl.classList.remove('hidden');
   }
 
   function showPersistentError(message) {
-    errorMessageEl.innerHTML = message; // Use innerHTML for HTML formatting
-    errorMessageEl.classList.remove('hidden');
-    // No auto-hide timeout for persistent errors
+    globalErrorMessageEl.innerHTML = `<span>${message}</span><button class="error-dismiss" onclick="this.parentElement.classList.add('hidden')">&times;</button>`;
+    globalErrorMessageEl.classList.remove('hidden');
   }
 
   function showUrlError(message) {
@@ -601,7 +602,7 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
   }
 
   function hideError() {
-    errorMessageEl.classList.add('hidden');
+    globalErrorMessageEl.classList.add('hidden');
   }
   
   function displayVideos(videos, append = false) {
@@ -929,6 +930,7 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
         // Process responses
         let createdCount = 0;
         let hasErrors = false;
+        let hasSpecificError = false;
 
         for (const response of responses) {
           try {
@@ -953,12 +955,15 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
                 console.error('Import response error:', errMsg);
                 if (errMsg.toLowerCase().includes('upgrade') || errMsg.toLowerCase().includes('credit') || errMsg.toLowerCase().includes('limit')) {
                   showPersistentError(`${errMsg} <a href="/subscription/upgrade">Upgrade your plan</a> to continue.`);
+                  hasSpecificError = true;
                 } else {
                   showError(errMsg);
+                  hasSpecificError = true;
                 }
               } catch (_e) {
                 console.error('Import response error:', response.statusText);
                 showError(`Import failed: ${response.statusText}`);
+                hasSpecificError = true;
               }
             }
           } catch (parseError) {
@@ -975,7 +980,9 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
             window.location.href = `/videos?processing=true&count=${totalSelected}&contentTypes=${contentTypes.join(',')}`;
           }, 1000);
         } else {
-          showError('Some videos failed to import. Please check and try again.');
+          if (!hasSpecificError) {
+            showError('Some videos failed to import. Please check and try again.');
+          }
           hideProgress();
           importSelectedBtn.disabled = false;
         }

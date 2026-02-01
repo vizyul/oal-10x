@@ -131,7 +131,7 @@ const subscriptionMiddleware = {
           const freeVideoUsed = await subscriptionService.hasFreeVideoBeenUsed(userId);
 
           if (freeVideoUsed) {
-            return handleSubscriptionError(req, res, 'Free video credit used. Upgrade to continue.', 429, {
+            return handleSubscriptionError(req, res, 'Free video credit used. Upgrade to continue.', 403, {
               current_usage: 1,
               limit: 1,
               resource_type: resource,
@@ -172,7 +172,7 @@ const subscriptionMiddleware = {
         const newUsage = currentUsage + increment;
 
         if (newUsage > resourceLimit) {
-          return handleSubscriptionError(req, res, `${resource} limit exceeded`, 429, {
+          return handleSubscriptionError(req, res, `${resource} limit exceeded`, 403, {
             current_usage: currentUsage,
             limit: resourceLimit,
             resource_type: resource,
@@ -349,7 +349,7 @@ function handleSubscriptionError(req, res, message, statusCode = 403, details = 
   });
 
   // For API requests, return JSON
-  if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
+  if (req.xhr || req.headers.accept?.indexOf('json') > -1 || req.path.startsWith('/api/')) {
     return res.status(statusCode).json({
       success: false,
       message,

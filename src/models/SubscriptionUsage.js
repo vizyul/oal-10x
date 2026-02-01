@@ -115,10 +115,9 @@ class SubscriptionUsage extends BaseModel {
       const query = `
         SELECT su.* FROM ${this.tableName} su
         JOIN user_subscriptions us ON su.user_subscriptions_id = us.id
-        WHERE us.users_id = $1 
-        AND us.status = 'active'
+        WHERE us.users_id = $1
         AND (su.period_end IS NULL OR su.period_end > $2)
-        ORDER BY su.created_at DESC 
+        ORDER BY (us.status = 'active') DESC, su.created_at DESC
         LIMIT 1
       `;
 
