@@ -228,39 +228,9 @@ const RATE_LIMIT_CATEGORIES = {
     config: AUTH_LIMITS.REGISTRATION
   },
 
-  // API endpoints (user-tier aware)
-  // Note: Only applies to POST/PUT/DELETE operations, GET requests are excluded
-  API_GENERAL: {
-    paths: [
-      'POST /api/videos*',
-      'PUT /api/videos*',
-      'DELETE /api/videos*',
-      'POST /api/preferences*',
-      'PUT /api/preferences*',
-      'POST /api/subscription*',
-      'PUT /api/subscription*'
-    ],
-    config: 'USER_TIER_BASED', // Special handling in middleware
-    getUserTier: (req) => req.user?.subscription_tier || (req.user ? 'free' : 'anonymous')
-  },
-
-  // Content processing
-  VIDEO_PROCESSING: {
-    paths: [
-      'POST /api/videos/import',
-      'POST /api/videos/process',
-      'POST /api/videos/*/process-content'
-    ],
-    config: CONTENT_LIMITS.VIDEO_PROCESSING
-  },
-
-  AI_GENERATION: {
-    paths: [
-      'POST /api/videos/*/generate/*',
-      'POST /api/ai/*'
-    ],
-    config: CONTENT_LIMITS.AI_GENERATION
-  },
+  // API_GENERAL, VIDEO_PROCESSING, and AI_GENERATION categories removed.
+  // Cloudflare handles abuse protection at the edge.
+  // Subscription limits (checkUsageLimit) enforce per-user business rules.
 
   // Public web pages
   PUBLIC_PAGES: {
