@@ -949,13 +949,21 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
               hasErrors = true;
               try {
                 const errResult = await response.json();
-                console.error('Import response error:', errResult.message || response.statusText);
+                const errMsg = errResult.message || response.statusText;
+                console.error('Import response error:', errMsg);
+                if (errMsg.toLowerCase().includes('upgrade') || errMsg.toLowerCase().includes('credit') || errMsg.toLowerCase().includes('limit')) {
+                  showPersistentError(`${errMsg} <a href="/subscription/upgrade">Upgrade your plan</a> to continue.`);
+                } else {
+                  showError(errMsg);
+                }
               } catch (_e) {
                 console.error('Import response error:', response.statusText);
+                showError(`Import failed: ${response.statusText}`);
               }
             }
           } catch (parseError) {
             console.error('Error parsing import response:', parseError);
+            showError(`Import error: ${parseError.message}`);
             hasErrors = true;
           }
         }
