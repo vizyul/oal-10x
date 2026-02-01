@@ -971,9 +971,10 @@ class ContentController {
       }
 
       // Generate slide-style PDF
+      const themeId = req.query.theme || 'auto';
       let pdfBuffer;
       try {
-        pdfBuffer = await slideDeckGenerationService.generateSlidePdf(content.content_text, videoTitle);
+        pdfBuffer = await slideDeckGenerationService.generateSlidePdf(content.content_text, videoTitle, themeId);
       } catch (parseError) {
         logger.error(`Slide PDF generation failed for video ${videoId}:`, parseError.message);
         return res.status(422).json({
@@ -987,7 +988,7 @@ class ContentController {
       logger.info(`User ${userId} downloading slide PDF for video ${videoId} (${pdfBuffer.length} bytes)`);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
       res.setHeader('Content-Length', pdfBuffer.length);
       res.send(pdfBuffer);
 

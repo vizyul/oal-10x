@@ -2,6 +2,7 @@ const { logger } = require('../utils');
 const youtubeOAuth = require('../services/youtube-oauth.service');
 const { validationResult } = require('express-validator');
 const subscriptionService = require('../services/subscription.service');
+const database = require('../services/database.service');
 
 class YouTubeController {
   /**
@@ -331,10 +332,10 @@ class YouTubeController {
       }
 
       // Free users can only import 1 video at a time (unless they have an admin grant)
+      let userTier = 'free';
       if (!canProcessCheck.grantInfo) {
-        const database = require('../services/database.service');
         const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
-        const userTier = userResult.rows[0]?.subscription_tier || 'free';
+        userTier = userResult.rows[0]?.subscription_tier || 'free';
         if (userTier === 'free' && videoIds.length > 1) {
           return res.status(400).json({
             success: false,

@@ -157,6 +157,7 @@ router.get('/videos/:videoId/slide_deck_text/download/pptx',
 router.get('/videos/:videoId/slide_deck_text/download/slide-pdf',
   authMiddleware,
   param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
+  query('theme').optional().isIn(slideDeckGenerationService.VALID_THEME_IDS).withMessage('Invalid theme ID'),
   contentController.downloadSlidePdf
 );
 

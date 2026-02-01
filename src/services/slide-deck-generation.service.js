@@ -1244,23 +1244,179 @@ class SlideDeckGenerationService {
     }
   }
 
-  // ─── PDF GENERATION (UNCHANGED) ─────────────────────────────────────
+  // ─── PDF HELPERS ────────────────────────────────────────────────────
+
+  /**
+   * Draw a PDF icon as a vector shape at a position.
+   * Uses PDFKit path primitives — no special fonts needed.
+   * @param {object} doc - PDFKit document
+   * @param {string} slideType - one of: title, section_divider, bullets, quote, two_column, statistics, table, image_placeholder, summary
+   * @param {number} x - left edge (or area left for centered alignment)
+   * @param {number} y - top edge
+   * @param {number} size - logical size (matches font-size scale)
+   * @param {string} color - fill/stroke color
+   * @param {object} opts - { width, align }
+   */
+  drawPdfIcon(doc, slideType, x, y, size, color, opts = {}) {
+    doc.save();
+
+    const width = opts.width || size * 2;
+    const align = opts.align || 'left';
+    // Center of the drawing area
+    let cx = align === 'center' ? x + width / 2 : x + size * 0.4;
+    const cy = y + size * 0.45;
+    const r = size * 0.3; // base radius
+
+    switch (slideType) {
+      case 'title': {
+        // 4-pointed star (tall diamond)
+        doc.path(
+          `M ${cx} ${cy - r * 1.4} ` +
+          `L ${cx + r * 0.55} ${cy} ` +
+          `L ${cx} ${cy + r * 1.4} ` +
+          `L ${cx - r * 0.55} ${cy} Z`
+        ).fill(color);
+        break;
+      }
+      case 'section_divider': {
+        // Thick vertical bar
+        const bw = r * 0.5;
+        const bh = r * 3;
+        doc.rect(cx - bw / 2, cy - bh / 2, bw, bh).fill(color);
+        break;
+      }
+      case 'bullets': {
+        // Filled circle
+        doc.circle(cx, cy, r * 0.6).fill(color);
+        break;
+      }
+      case 'quote': {
+        // Use Times-Bold curly double-quote (U+201C is WinAnsi char 147, renders fine)
+        doc.font('Times-Bold')
+          .fontSize(size)
+          .fillColor(color)
+          .text('\u201C', x, y, { width, align });
+        doc.restore();
+        return; // early return — text handled by PDFKit
+      }
+      case 'two_column': {
+        // Two vertical bars
+        const bw2 = r * 0.35;
+        const bh2 = r * 2.5;
+        const gap = r * 0.8;
+        doc.rect(cx - gap / 2 - bw2, cy - bh2 / 2, bw2, bh2).fill(color);
+        doc.rect(cx + gap / 2, cy - bh2 / 2, bw2, bh2).fill(color);
+        break;
+      }
+      case 'statistics': {
+        // Right-pointing triangle
+        doc.path(
+          `M ${cx - r * 0.6} ${cy - r} ` +
+          `L ${cx + r} ${cy} ` +
+          `L ${cx - r * 0.6} ${cy + r} Z`
+        ).fill(color);
+        break;
+      }
+      case 'table': {
+        // Grid: square outline with center cross
+        const gs = r * 1.1;
+        const lw = Math.max(1, size * 0.05);
+        doc.rect(cx - gs, cy - gs, gs * 2, gs * 2).lineWidth(lw).stroke(color);
+        doc.moveTo(cx, cy - gs).lineTo(cx, cy + gs).lineWidth(lw).stroke(color);
+        doc.moveTo(cx - gs, cy).lineTo(cx + gs, cy).lineWidth(lw).stroke(color);
+        break;
+      }
+      case 'image_placeholder': {
+        // Circle outline with small mountain triangle inside
+        const cr = r * 1.2;
+        const lw2 = Math.max(1, size * 0.05);
+        doc.circle(cx, cy, cr).lineWidth(lw2).stroke(color);
+        const mr = r * 0.55;
+        doc.path(
+          `M ${cx - mr} ${cy + mr * 0.5} ` +
+          `L ${cx} ${cy - mr * 0.5} ` +
+          `L ${cx + mr} ${cy + mr * 0.5} Z`
+        ).fill(color);
+        break;
+      }
+      case 'summary': {
+        // Checkmark stroke
+        const lw3 = Math.max(1.5, size * 0.1);
+        doc.path(
+          `M ${cx - r * 0.7} ${cy + r * 0.05} ` +
+          `L ${cx - r * 0.1} ${cy + r * 0.65} ` +
+          `L ${cx + r * 0.8} ${cy - r * 0.55}`
+        ).lineWidth(lw3).lineJoin('round').lineCap('round').stroke(color);
+        break;
+      }
+      default: {
+        doc.circle(cx, cy, r * 0.6).fill(color);
+      }
+    }
+
+    doc.restore();
+  }
+
+  /**
+   * Draw a full-width dark header band with white heading and accent underline
+   */
+  addPdfHeaderBand(doc, text, theme, pageW) {
+    const bandH = 80;
+    doc.rect(0, 0, pageW, bandH).fill(theme.colors.dark_bg);
+    doc.rect(0, bandH, pageW, 3).fill(theme.colors.accent_color);
+    doc.font('Times-Bold')
+      .fontSize(26)
+      .fillColor(theme.colors.text_light)
+      .text(text, 40, 22, { width: pageW - 80 });
+  }
+
+  /**
+   * Draw a card panel: rounded rect with colored top border, white body, subtle shadow
+   */
+  addPdfCardPanel(doc, x, y, w, h, theme, opts = {}) {
+    const borderH = 5;
+    const borderColor = opts.borderColor || theme.colors.card_border_top;
+    const fillColor = opts.fill || theme.colors.card_bg;
+    const radius = 4;
+    // Shadow approximation
+    doc.save();
+    doc.opacity(0.06);
+    doc.roundedRect(x + 2, y + 2, w, h, radius).fill('#000000');
+    doc.restore();
+    // Top accent border
+    doc.roundedRect(x, y, w, borderH + radius, radius).fill(borderColor);
+    // Card body (overlaps border bottom to create clean join)
+    doc.roundedRect(x, y + borderH, w, h - borderH, radius).fill(fillColor);
+  }
+
+  /**
+   * Draw a narrow vertical accent bar
+   */
+  addPdfLeftAccentBar(doc, x, y, h, color) {
+    doc.rect(x, y, 5, h).fill(color);
+  }
+
+  // ─── PDF GENERATION ───────────────────────────────────────────────
 
   /**
    * Generate a presentation-style PDF (landscape pages mimicking slides)
    * @param {string} contentText - AI-generated JSON content
    * @param {string} videoTitle - Video title
+   * @param {string} themeId - Theme preset ID or 'auto' (backward-compatible)
    * @returns {Promise<Buffer>} PDF buffer
    */
-  async generateSlidePdf(contentText, videoTitle) {
+  async generateSlidePdf(contentText, videoTitle, themeId = 'auto') {
     const data = this.parseSlideJSON(contentText);
-    const { theme, slides } = data;
+    const { theme: aiTheme, slides } = data;
+    const theme = this.resolveTheme(themeId, aiTheme);
 
     return new Promise((resolve, reject) => {
       const chunks = [];
+      const pageW = 960; // 16:9 widescreen width in points
+      const pageH = 540; // 16:9 widescreen height in points
+
       const doc = new PDFDocument({
-        layout: 'landscape',
-        size: 'LETTER',
+        size: [pageW, pageH],
         margin: 0,
         info: {
           Title: videoTitle || 'Slide Deck',
@@ -1272,14 +1428,18 @@ class SlideDeckGenerationService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const pageW = 792; // Letter landscape width in points
-      const pageH = 612; // Letter landscape height in points
+      // Track variant cycling per slide type
+      const slideTypeCounts = {};
 
       for (let i = 0; i < slides.length; i++) {
         if (i > 0) doc.addPage();
 
         const slideData = slides[i];
-        this.renderPdfSlide(doc, slideData, theme, pageW, pageH);
+        const type = slideData.slide_type;
+        const variantIndex = slideTypeCounts[type] || 0;
+        slideTypeCounts[type] = variantIndex + 1;
+
+        this.renderPdfSlide(doc, slideData, theme, pageW, pageH, variantIndex);
       }
 
       doc.end();
@@ -1287,57 +1447,76 @@ class SlideDeckGenerationService {
   }
 
   /**
-   * Render a single slide to PDF
+   * Render a single slide to PDF with theme-aware backgrounds and variant dispatch
    */
-  renderPdfSlide(doc, slideData, theme, pageW, pageH) {
-    // Background
-    doc.rect(0, 0, pageW, pageH).fill(theme.background_color);
+  renderPdfSlide(doc, slideData, theme, pageW, pageH, variantIndex = 0) {
+    const type = slideData.slide_type;
+    const isDark = this.isDarkSlide(type, theme);
 
-    // Bottom accent bar
-    doc.rect(0, pageH - 40, pageW, 40).fill(theme.primary_color);
+    // Background — dark slides override handled per-variant for bullets
+    doc.rect(0, 0, pageW, pageH).fill(isDark ? theme.colors.dark_bg : theme.colors.light_bg);
 
-    switch (slideData.slide_type) {
+    switch (type) {
       case 'title':
         this.renderPdfTitleSlide(doc, slideData, theme, pageW, pageH);
         break;
       case 'section_divider':
-        this.renderPdfSectionDivider(doc, slideData, theme, pageW, pageH);
+        this.renderPdfSectionDivider(doc, slideData, theme, pageW, pageH, variantIndex);
+        break;
+      case 'bullets':
+        this.renderPdfBulletsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
         break;
       case 'quote':
-        this.renderPdfQuoteSlide(doc, slideData, theme, pageW, pageH);
+        this.renderPdfQuoteSlide(doc, slideData, theme, pageW, pageH, variantIndex);
+        break;
+      case 'two_column':
+        this.renderPdfTwoColumnSlide(doc, slideData, theme, pageW, pageH, variantIndex);
         break;
       case 'statistics':
-        this.renderPdfStatisticsSlide(doc, slideData, theme, pageW, pageH);
+        this.renderPdfStatisticsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
+        break;
+      case 'table':
+        this.renderPdfTableSlide(doc, slideData, theme, pageW, pageH);
+        break;
+      case 'image_placeholder':
+        this.renderPdfImagePlaceholderSlide(doc, slideData, theme, pageW, pageH);
         break;
       case 'summary':
-        this.renderPdfSummarySlide(doc, slideData, theme, pageW, pageH);
+        this.renderPdfSummarySlide(doc, slideData, theme, pageW, pageH, variantIndex);
         break;
       default:
-        // bullets, two_column, table, image_placeholder all get bullet treatment in PDF
-        this.renderPdfBulletsSlide(doc, slideData, theme, pageW, pageH);
+        this.renderPdfBulletsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
         break;
     }
   }
 
-  renderPdfTitleSlide(doc, data, theme, pageW, pageH) {
-    // Top accent line
-    doc.rect(0, 0, pageW, 6).fill(theme.accent_color);
+  // ─── PDF SLIDE RENDERERS ──────────────────────────────────────────
 
-    // Title
-    doc.font('Helvetica-Bold')
-      .fontSize(32)
-      .fillColor(theme.primary_color)
-      .text(data.title || 'Presentation', 60, pageH * 0.3, {
+  /**
+   * Title slide — dark bg, left accent bar, centered icon, serif title, accent subtitle
+   */
+  renderPdfTitleSlide(doc, data, theme, pageW, pageH) {
+    // Left accent bar
+    this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
+
+    // Centered icon
+    this.drawPdfIcon(doc, 'title', 0, 60, 44, theme.colors.accent_color, { width: pageW, align: 'center' });
+
+    // Title — large serif
+    doc.font('Times-Bold')
+      .fontSize(38)
+      .fillColor(theme.colors.text_light)
+      .text(data.title || 'Presentation', 60, pageH * 0.28, {
         width: pageW - 120,
         align: 'center'
       });
 
-    // Subtitle
+    // Subtitle — accent italic
     if (data.subtitle) {
-      doc.font('Helvetica')
-        .fontSize(16)
-        .fillColor(theme.secondary_color)
-        .text(data.subtitle, 100, pageH * 0.3 + 60, {
+      doc.font('Times-Italic')
+        .fontSize(18)
+        .fillColor(theme.colors.accent_color)
+        .text(data.subtitle, 100, pageH * 0.28 + 70, {
           width: pageW - 200,
           align: 'center'
         });
@@ -1345,156 +1524,594 @@ class SlideDeckGenerationService {
 
     // Footer
     if (data.footer) {
-      doc.font('Helvetica-Oblique')
-        .fontSize(11)
-        .fillColor(theme.secondary_color)
-        .text(data.footer, 60, pageH * 0.72, {
+      doc.font('Helvetica')
+        .fontSize(12)
+        .fillColor(theme.colors.text_light)
+        .text(data.footer, 60, pageH * 0.75, {
           width: pageW - 120,
           align: 'center'
         });
     }
   }
 
-  renderPdfSectionDivider(doc, data, theme, pageW, pageH) {
-    // Full background
-    doc.rect(0, 0, pageW, pageH).fill(theme.primary_color);
+  /**
+   * Section divider — 2 variants
+   * A: Centered icon + centered title + accent subtitle
+   * B: Left-aligned + large decorative icon at 50% opacity
+   */
+  renderPdfSectionDivider(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 2;
 
-    // Accent bar
-    doc.rect(100, pageH * 0.45, 120, 4).fill(theme.accent_color);
+    if (variant === 0) {
+      // Variant A: centered icon + centered title
+      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
 
-    // Heading
-    doc.font('Helvetica-Bold')
-      .fontSize(28)
-      .fillColor('#FFFFFF')
-      .text(data.heading || 'Section', 100, pageH * 0.48, {
-        width: pageW - 200
-      });
-  }
+      this.drawPdfIcon(doc, 'section_divider', 0, 60, 44, theme.colors.accent_color, { width: pageW, align: 'center' });
 
-  renderPdfBulletsSlide(doc, data, theme, pageW) {
-    // Heading
-    doc.font('Helvetica-Bold')
-      .fontSize(22)
-      .fillColor(theme.primary_color)
-      .text(data.heading || '', 60, 40, { width: pageW - 120 });
+      doc.font('Times-Bold')
+        .fontSize(34)
+        .fillColor(theme.colors.text_light)
+        .text(data.heading || 'Section', 60, pageH * 0.35, {
+          width: pageW - 120,
+          align: 'center'
+        });
 
-    // Accent underline
-    doc.rect(60, 72, 100, 3).fill(theme.accent_color);
+      if (data.subtitle) {
+        doc.font('Times-Italic')
+          .fontSize(16)
+          .fillColor(theme.colors.accent_color)
+          .text(data.subtitle, 100, pageH * 0.35 + 55, {
+            width: pageW - 200,
+            align: 'center'
+          });
+      }
+    } else {
+      // Variant B: left-aligned heading + decorative icon right
+      this.addPdfLeftAccentBar(doc, 44, 60, pageH - 120, theme.colors.accent_color);
 
-    // Bullets
-    const bullets = data.bullets || [];
-    let yPos = 95;
+      // Large decorative icon at right, 50% opacity
+      doc.save();
+      doc.opacity(0.5);
+      this.drawPdfIcon(doc, 'section_divider', pageW - 200, pageH * 0.2, 100, theme.colors.accent_color, { width: 160, align: 'center' });
+      doc.restore();
 
-    for (const bullet of bullets) {
-      // Bullet dot
-      doc.circle(72, yPos + 8, 3).fill(theme.accent_color);
+      doc.font('Times-Bold')
+        .fontSize(30)
+        .fillColor(theme.colors.text_light)
+        .text(data.heading || 'Section', 70, pageH * 0.40, {
+          width: pageW - 280
+        });
 
-      doc.font('Helvetica')
-        .fontSize(14)
-        .fillColor(theme.text_color)
-        .text(bullet, 85, yPos, { width: pageW - 160 });
-
-      yPos += doc.heightOfString(bullet, { width: pageW - 160 }) + 12;
+      // Accent underline
+      doc.rect(70, pageH * 0.40 + 50, 140, 4).fill(theme.colors.accent_color);
     }
   }
 
-  renderPdfQuoteSlide(doc, data, theme, pageW, pageH) {
-    // Decorative quote mark
-    doc.font('Helvetica')
-      .fontSize(72)
-      .fillColor(theme.accent_color)
-      .opacity(0.3)
-      .text('\u201C', 50, 40);
-    doc.opacity(1);
+  /**
+   * Bullets slide — 3 variants
+   * A: Light bg, header band, white card + accent bar, bullets
+   * B: Dark bg override, muted banner + white bullets
+   * C: Light bg, header band, icon + subtitle emphasis, bullets
+   */
+  renderPdfBulletsSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 3;
+    const bullets = data.bullets || [];
 
-    // Quote text
-    doc.font('Helvetica-Oblique')
-      .fontSize(18)
-      .fillColor(theme.text_color)
-      .text(data.quote || '', 100, pageH * 0.25, {
-        width: pageW - 200,
+    if (variant === 0) {
+      // Variant A: Light bg + dark header band + card with accent bar
+      this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+
+      // Card panel with left accent bar
+      this.addPdfCardPanel(doc, 36, 100, pageW - 72, pageH - 130, theme);
+      this.addPdfLeftAccentBar(doc, 36, 100, pageH - 130, theme.colors.accent_color);
+
+      // Icon beside accent bar
+      this.drawPdfIcon(doc, 'bullets', 50, 112, 22, theme.colors.primary_color, { width: 40 });
+
+      let yPos = 115;
+      for (const bullet of bullets) {
+        doc.circle(110, yPos + 8, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica')
+          .fontSize(14)
+          .fillColor(theme.colors.text_dark)
+          .text(bullet, 122, yPos, { width: pageW - 190 });
+        yPos += doc.heightOfString(bullet, { width: pageW - 190 }) + 12;
+      }
+
+    } else if (variant === 1) {
+      // Variant B: Dark bg override + heading + muted banner + white bullets
+      doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
+      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
+
+      doc.font('Times-Bold')
+        .fontSize(26)
+        .fillColor(theme.colors.text_light)
+        .text(data.heading || '', 52, 26, { width: pageW - 110 });
+
+      // Muted banner for subtitle
+      const subtitle = data.subtitle || '';
+      let bulletsY = 85;
+      if (subtitle) {
+        doc.roundedRect(36, 72, pageW - 72, 55, 4).fill(theme.colors.secondary_color);
+        doc.font('Times-Italic')
+          .fontSize(15)
+          .fillColor(theme.colors.accent_color)
+          .text(subtitle, 52, 82, { width: pageW - 110 });
+        bulletsY = 145;
+      }
+
+      for (const bullet of bullets) {
+        doc.circle(60, bulletsY + 8, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica')
+          .fontSize(14)
+          .fillColor(theme.colors.text_light)
+          .text(bullet, 74, bulletsY, { width: pageW - 140 });
+        bulletsY += doc.heightOfString(bullet, { width: pageW - 140 }) + 12;
+      }
+
+    } else {
+      // Variant C: Light bg + header band + icon + subtitle emphasis + bullets
+      this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+
+      const subtitle = data.subtitle || '';
+      let bulletsY = 100;
+      if (subtitle) {
+        this.drawPdfIcon(doc, 'bullets', 40, 96, 20, theme.colors.accent_color, { width: 30 });
+        doc.font('Helvetica-Bold')
+          .fontSize(15)
+          .fillColor(theme.colors.primary_color)
+          .text(subtitle, 80, 98, { width: pageW - 140 });
+        doc.rect(80, 120, pageW - 140, 3).fill(theme.colors.accent_color);
+        bulletsY = 138;
+      }
+
+      for (const bullet of bullets) {
+        doc.circle(60, bulletsY + 8, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica')
+          .fontSize(14)
+          .fillColor(theme.colors.text_dark)
+          .text(bullet, 74, bulletsY, { width: pageW - 140 });
+        bulletsY += doc.heightOfString(bullet, { width: pageW - 140 }) + 12;
+      }
+    }
+  }
+
+  /**
+   * Quote slide — 2 variants
+   * A: Dark bg, accent-bordered panel, large translucent quote mark
+   * B: Light bg, header band, white card with accent bar
+   */
+  renderPdfQuoteSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 2;
+
+    if (variant === 0) {
+      // Variant A: Dark bg + accent-bordered panel + large quote mark
+      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
+
+      // Bordered panel
+      doc.roundedRect(80, 70, pageW - 160, pageH - 160, 8)
+        .lineWidth(1.5)
+        .stroke(theme.colors.accent_color);
+
+      // Large translucent quote mark
+      doc.save();
+      doc.opacity(0.25);
+      this.drawPdfIcon(doc, 'quote', 90, 40, 120, theme.colors.accent_color, { width: 200 });
+      doc.restore();
+
+      // Quote text
+      doc.font('Times-Italic')
+        .fontSize(20)
+        .fillColor(theme.colors.text_light)
+        .text(data.quote || '', 130, pageH * 0.25, {
+          width: pageW - 260,
+          align: 'center'
+        });
+
+      // Separator
+      doc.rect(pageW / 2 - 60, pageH * 0.62, 120, 3).fill(theme.colors.accent_color);
+
+      // Attribution
+      if (data.attribution) {
+        doc.font('Helvetica')
+          .fontSize(13)
+          .fillColor(theme.colors.accent_color)
+          .text(`\u2014 ${data.attribution}`, 130, pageH * 0.66, {
+            width: pageW - 260,
+            align: 'right'
+          });
+      }
+
+    } else {
+      // Variant B: Light bg + header band + white card with accent bar
+      const heading = data.heading || data.attribution || 'Notable Quote';
+      // Redraw light bg since quote is normally dark
+      doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+      this.addPdfHeaderBand(doc, heading, theme, pageW);
+
+      // White card with accent bar
+      this.addPdfCardPanel(doc, 36, 100, pageW - 72, 220, theme);
+      this.addPdfLeftAccentBar(doc, 36, 100, 220, theme.colors.accent_color);
+
+      // Quote text inside card
+      doc.font('Times-Italic')
+        .fontSize(18)
+        .fillColor(theme.colors.text_dark)
+        .text(data.quote || '', 70, 130, {
+          width: pageW - 150
+        });
+
+      // Attribution below card
+      if (data.attribution) {
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor(theme.colors.text_muted)
+          .text(`\u2014 ${data.attribution}`, 70, 340, {
+            width: pageW - 150,
+            align: 'right'
+          });
+      }
+    }
+  }
+
+  /**
+   * Statistics slide — 2 variants
+   * A: Header band + white cards with accent top borders
+   * B: Colored-fill cards alternating primary/accent
+   */
+  renderPdfStatisticsSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 2;
+    const stats = data.stats || [];
+    const count = Math.min(stats.length, 4);
+    if (count === 0) return;
+
+    this.addPdfHeaderBand(doc, data.heading || 'Key Statistics', theme, pageW);
+
+    const totalWidth = pageW - 100;
+    const gap = 16;
+    const cardW = (totalWidth - gap * (count - 1)) / count;
+    const cardY = 110;
+    const cardH = pageH - 140;
+
+    if (variant === 0) {
+      // Variant A: White cards with accent top border
+      for (let i = 0; i < count; i++) {
+        const stat = stats[i];
+        const xPos = 50 + i * (cardW + gap);
+
+        this.addPdfCardPanel(doc, xPos, cardY, cardW, cardH, theme);
+
+        doc.font('Times-Bold')
+          .fontSize(34)
+          .fillColor(theme.colors.accent_color)
+          .text(stat.value || '', xPos + 10, cardY + 60, {
+            width: cardW - 20,
+            align: 'center'
+          });
+
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor(theme.colors.text_dark)
+          .text(stat.label || '', xPos + 10, cardY + 120, {
+            width: cardW - 20,
+            align: 'center'
+          });
+      }
+    } else {
+      // Variant B: Colored-fill cards alternating primary/accent
+      for (let i = 0; i < count; i++) {
+        const stat = stats[i];
+        const xPos = 50 + i * (cardW + gap);
+        const fillColor = i % 2 === 1 ? theme.colors.accent_color : theme.colors.primary_color;
+
+        doc.roundedRect(xPos, cardY, cardW, cardH, 6).fill(fillColor);
+
+        doc.font('Times-Bold')
+          .fontSize(34)
+          .fillColor('#FFFFFF')
+          .text(stat.value || '', xPos + 10, cardY + 60, {
+            width: cardW - 20,
+            align: 'center'
+          });
+
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor('#FFFFFF')
+          .text(stat.label || '', xPos + 10, cardY + 120, {
+            width: cardW - 20,
+            align: 'center'
+          });
+      }
+    }
+  }
+
+  /**
+   * Summary slide — 2 variants
+   * A: Dark bg, centered icon + title, white card with checkmarks, CTA footer
+   * B: Dark bg, accent bar + heading, white bullets, accent CTA button
+   */
+  renderPdfSummarySlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 2;
+    const takeaways = data.takeaways || [];
+
+    if (variant === 0) {
+      // Variant A: Centered icon + large title + white card panel
+      this.drawPdfIcon(doc, 'summary', 0, 20, 30, theme.colors.text_light, { width: pageW, align: 'center' });
+
+      doc.font('Times-Bold')
+        .fontSize(30)
+        .fillColor(theme.colors.text_light)
+        .text(data.heading || 'Key Takeaways', 60, 65, {
+          width: pageW - 120,
+          align: 'center'
+        });
+
+      // White card panel
+      const cardY = 120;
+      const cardH = pageH - 200;
+      this.addPdfCardPanel(doc, 60, cardY, pageW - 120, cardH, theme);
+
+      let yPos = cardY + 20;
+      for (const takeaway of takeaways) {
+        // Draw checkmark icon, then text in Helvetica
+        this.drawPdfIcon(doc, 'summary', 85, yPos, 14, theme.colors.accent_color, { width: 20 });
+        doc.font('Helvetica')
+          .fontSize(14)
+          .fillColor(theme.colors.text_dark)
+          .text(takeaway, 108, yPos, { width: pageW - 200 });
+        yPos += doc.heightOfString(takeaway, { width: pageW - 200 }) + 10;
+      }
+
+      // CTA as italic accent footer
+      if (data.call_to_action) {
+        doc.font('Times-Italic')
+          .fontSize(14)
+          .fillColor(theme.colors.accent_color)
+          .text(data.call_to_action, 60, pageH - 60, {
+            width: pageW - 120,
+            align: 'center'
+          });
+      }
+
+    } else {
+      // Variant B: Left accent bar + heading + takeaways + accent CTA button
+      this.addPdfLeftAccentBar(doc, 44, 30, pageH - 60, theme.colors.accent_color);
+
+      doc.font('Times-Bold')
+        .fontSize(24)
+        .fillColor(theme.colors.text_light)
+        .text(data.heading || 'Key Takeaways', 70, 35, {
+          width: pageW - 140
+        });
+
+      doc.rect(70, 70, 100, 4).fill(theme.colors.accent_color);
+
+      let yPos = 95;
+      for (const takeaway of takeaways) {
+        doc.circle(80, yPos + 8, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica')
+          .fontSize(14)
+          .fillColor(theme.colors.text_light)
+          .text(takeaway, 94, yPos, { width: pageW - 170 });
+        yPos += doc.heightOfString(takeaway, { width: pageW - 170 }) + 10;
+      }
+
+      // CTA button
+      if (data.call_to_action) {
+        const ctaY = pageH - 80;
+        const ctaW = pageW - 200;
+        doc.roundedRect(100, ctaY, ctaW, 40, 6).fill(theme.colors.accent_color);
+        doc.font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor('#FFFFFF')
+          .text(data.call_to_action, 100, ctaY + 12, {
+            width: ctaW,
+            align: 'center'
+          });
+      }
+    }
+  }
+
+  /**
+   * Two-column slide — 2 variants
+   * A: Header band + two white cards with icons
+   * B: Two colored-fill cards (primary/accent) with white text
+   */
+  renderPdfTwoColumnSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
+    const variant = variantIndex % 2;
+
+    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+
+    const cardY = 100;
+    const cardH = pageH - 130;
+    const gap = 16;
+    const cardW = (pageW - 100 - gap) / 2;
+    const leftX = 50;
+    const rightX = 50 + cardW + gap;
+
+    if (variant === 0) {
+      // Variant A: Two white cards with icons above titles
+      this.addPdfCardPanel(doc, leftX, cardY, cardW, cardH, theme);
+      this.addPdfCardPanel(doc, rightX, cardY, cardW, cardH, theme);
+
+      // Left icon + title
+      this.drawPdfIcon(doc, 'two_column', leftX, cardY + 15, 22, theme.colors.accent_color, { width: cardW, align: 'center' });
+      if (data.left_title) {
+        doc.font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(theme.colors.accent_color)
+          .text(data.left_title, leftX + 15, cardY + 50, { width: cardW - 30, align: 'center' });
+      }
+
+      // Right icon + title
+      this.drawPdfIcon(doc, 'two_column', rightX, cardY + 15, 22, theme.colors.primary_color, { width: cardW, align: 'center' });
+      if (data.right_title) {
+        doc.font('Helvetica-Bold')
+          .fontSize(14)
+          .fillColor(theme.colors.primary_color)
+          .text(data.right_title, rightX + 15, cardY + 50, { width: cardW - 30, align: 'center' });
+      }
+
+      // Left items
+      let leftY = cardY + 80;
+      for (const item of (data.left_items || [])) {
+        doc.circle(leftX + 22, leftY + 7, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor(theme.colors.text_dark)
+          .text(item, leftX + 34, leftY, { width: cardW - 50 });
+        leftY += doc.heightOfString(item, { width: cardW - 50 }) + 8;
+      }
+
+      // Right items
+      let rightY = cardY + 80;
+      for (const item of (data.right_items || [])) {
+        doc.circle(rightX + 22, rightY + 7, 3).fill(theme.colors.primary_color);
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor(theme.colors.text_dark)
+          .text(item, rightX + 34, rightY, { width: cardW - 50 });
+        rightY += doc.heightOfString(item, { width: cardW - 50 }) + 8;
+      }
+
+    } else {
+      // Variant B: Two colored-fill cards
+      doc.roundedRect(leftX, cardY, cardW, cardH, 6).fill(theme.colors.primary_color);
+      doc.roundedRect(rightX, cardY, cardW, cardH, 6).fill(theme.colors.accent_color);
+
+      // Left title
+      if (data.left_title) {
+        doc.font('Helvetica-Bold')
+          .fontSize(15)
+          .fillColor('#FFFFFF')
+          .text(data.left_title, leftX + 15, cardY + 20, { width: cardW - 30, align: 'center' });
+      }
+      // Right title
+      if (data.right_title) {
+        doc.font('Helvetica-Bold')
+          .fontSize(15)
+          .fillColor('#FFFFFF')
+          .text(data.right_title, rightX + 15, cardY + 20, { width: cardW - 30, align: 'center' });
+      }
+
+      // Left items (white text)
+      let leftY = cardY + 55;
+      for (const item of (data.left_items || [])) {
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor('#FFFFFF')
+          .text(item, leftX + 20, leftY, { width: cardW - 40, align: 'center' });
+        leftY += doc.heightOfString(item, { width: cardW - 40 }) + 8;
+      }
+
+      // Right items (white text)
+      let rightY = cardY + 55;
+      for (const item of (data.right_items || [])) {
+        doc.font('Helvetica')
+          .fontSize(12)
+          .fillColor('#FFFFFF')
+          .text(item, rightX + 20, rightY, { width: cardW - 40, align: 'center' });
+        rightY += doc.heightOfString(item, { width: cardW - 40 }) + 8;
+      }
+    }
+  }
+
+  /**
+   * Table slide — header band + table with dark header row, alternating row colors
+   */
+  renderPdfTableSlide(doc, data, theme, pageW, pageH) {
+    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+
+    const headers = data.headers || [];
+    const rows = data.rows || [];
+    if (headers.length === 0) return;
+
+    const tableX = 50;
+    const tableW = pageW - 100;
+    const colW = tableW / headers.length;
+    const rowH = 32;
+    let yPos = 105;
+
+    // Header row — dark bg
+    doc.rect(tableX, yPos, tableW, rowH).fill(theme.colors.dark_bg);
+    for (let i = 0; i < headers.length; i++) {
+      doc.font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor('#FFFFFF')
+        .text(headers[i], tableX + i * colW + 6, yPos + 8, {
+          width: colW - 12,
+          align: 'center'
+        });
+    }
+    yPos += rowH;
+
+    // Data rows with alternating colors
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      const fillColor = r % 2 === 0 ? theme.colors.light_bg : theme.colors.card_bg;
+      doc.rect(tableX, yPos, tableW, rowH).fill(fillColor);
+
+      // Cell borders
+      doc.save();
+      doc.lineWidth(0.5).strokeColor('#CBD5E0');
+      doc.rect(tableX, yPos, tableW, rowH).stroke();
+      for (let i = 1; i < headers.length; i++) {
+        doc.moveTo(tableX + i * colW, yPos).lineTo(tableX + i * colW, yPos + rowH).stroke();
+      }
+      doc.restore();
+
+      for (let i = 0; i < headers.length; i++) {
+        doc.font('Helvetica')
+          .fontSize(10)
+          .fillColor(theme.colors.text_dark)
+          .text((row[i] || ''), tableX + i * colW + 6, yPos + 8, {
+            width: colW - 12,
+            align: 'center'
+          });
+      }
+      yPos += rowH;
+      if (yPos > pageH - 40) break; // Prevent overflow
+    }
+  }
+
+  /**
+   * Image placeholder slide — header band + white card + dashed accent border + icon
+   */
+  renderPdfImagePlaceholderSlide(doc, data, theme, pageW, pageH) {
+    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+
+    // White card panel
+    this.addPdfCardPanel(doc, 100, 110, pageW - 200, pageH - 190, theme);
+
+    // Dashed border inner area
+    doc.roundedRect(130, 140, pageW - 260, pageH - 260, 6)
+      .lineWidth(1.5)
+      .dash(6, { space: 4 })
+      .stroke(theme.colors.accent_color);
+    doc.undash();
+
+    // Placeholder icon
+    doc.save();
+    doc.opacity(0.4);
+    this.drawPdfIcon(doc, 'image_placeholder', 0, pageH * 0.3, 48, theme.colors.text_muted, { width: pageW, align: 'center' });
+    doc.restore();
+
+    // Description text
+    doc.font('Helvetica')
+      .fontSize(13)
+      .fillColor(theme.colors.text_muted)
+      .text(data.image_description || '[Image Placeholder]', 150, pageH * 0.52, {
+        width: pageW - 300,
         align: 'center'
       });
 
-    // Attribution
-    if (data.attribution) {
-      doc.font('Helvetica')
-        .fontSize(12)
-        .fillColor(theme.secondary_color)
-        .text(`\u2014 ${data.attribution}`, 100, pageH * 0.65, {
-          width: pageW - 200,
-          align: 'right'
-        });
-    }
-  }
-
-  renderPdfStatisticsSlide(doc, data, theme, pageW) {
-    // Heading
-    doc.font('Helvetica-Bold')
-      .fontSize(22)
-      .fillColor(theme.primary_color)
-      .text(data.heading || 'Key Statistics', 60, 40, { width: pageW - 120 });
-
-    doc.rect(60, 72, 100, 3).fill(theme.accent_color);
-
-    const stats = data.stats || [];
-    const count = Math.min(stats.length, 4);
-    const colWidth = (pageW - 120) / count;
-
-    for (let i = 0; i < count; i++) {
-      const stat = stats[i];
-      const xPos = 60 + (i * colWidth);
-
-      doc.font('Helvetica-Bold')
-        .fontSize(34)
-        .fillColor(theme.accent_color)
-        .text(stat.value || '', xPos, 120, {
-          width: colWidth - 20,
-          align: 'center'
-        });
-
-      doc.font('Helvetica')
-        .fontSize(12)
-        .fillColor(theme.text_color)
-        .text(stat.label || '', xPos, 170, {
-          width: colWidth - 20,
-          align: 'center'
-        });
-    }
-  }
-
-  renderPdfSummarySlide(doc, data, theme, pageW, pageH) {
-    // Heading
-    doc.font('Helvetica-Bold')
-      .fontSize(22)
-      .fillColor(theme.primary_color)
-      .text(data.heading || 'Key Takeaways', 60, 40, { width: pageW - 120 });
-
-    doc.rect(60, 72, 100, 3).fill(theme.accent_color);
-
-    // Takeaways
-    const takeaways = data.takeaways || [];
-    let yPos = 95;
-
-    for (const takeaway of takeaways) {
-      doc.font('Helvetica')
-        .fontSize(14)
-        .fillColor(theme.text_color)
-        .text(`\u2713  ${takeaway}`, 70, yPos, { width: pageW - 160 });
-
-      yPos += doc.heightOfString(`\u2713  ${takeaway}`, { width: pageW - 160 }) + 10;
-    }
-
-    // Call to action bar
-    if (data.call_to_action) {
-      const ctaY = pageH - 100;
-      doc.roundedRect(100, ctaY, pageW - 200, 40, 4).fill(theme.accent_color);
-
-      doc.font('Helvetica-Bold')
-        .fontSize(14)
-        .fillColor('#FFFFFF')
-        .text(data.call_to_action, 100, ctaY + 12, {
-          width: pageW - 200,
+    // Caption
+    if (data.caption) {
+      doc.font('Helvetica-Oblique')
+        .fontSize(11)
+        .fillColor(theme.colors.text_muted)
+        .text(data.caption, 130, pageH - 100, {
+          width: pageW - 260,
           align: 'center'
         });
     }

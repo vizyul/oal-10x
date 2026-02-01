@@ -594,11 +594,11 @@ class ProcessingStatusManager {
 
   async viewContent(videoId, contentType, contentLabel) {
     try {
-      // Slide deck: show theme picker, then download PPTX
+      // Slide deck: show theme picker, then open PDF in new browser tab
       if (contentType === 'slide_deck_text') {
         const selectedTheme = await this.showThemePickerModal(videoId);
         if (selectedTheme) {
-          return this.downloadSlideDeckPptx(videoId, selectedTheme);
+          window.open(`/api/content/videos/${videoId}/slide_deck_text/download/slide-pdf?theme=${encodeURIComponent(selectedTheme)}`, '_blank');
         }
         return;
       }
