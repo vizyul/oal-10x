@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const contentController = require('../controllers/content.controller');
 const { authMiddleware } = require('../middleware');
-const { aiGenerationLimit } = require('../middleware/rate-limiting.middleware');
+// Rate limiting for AI generation removed - handled by Cloudflare at the edge.
 const { body, param, query } = require('express-validator');
 const slideDeckGenerationService = require('../services/slide-deck-generation.service');
 
@@ -95,11 +95,10 @@ router.get('/statistics',
 
 /**
  * POST /api/content/videos/:videoId/generate
- * Trigger AI content generation for specific content types (BILLABLE OPERATION - rate limited)
+ * Trigger AI content generation for specific content types (BILLABLE OPERATION)
  */
 router.post('/videos/:videoId/generate',
   authMiddleware,
-  aiGenerationLimit,
   param('videoId').isInt().withMessage('Video ID must be an integer'),
   body('contentTypes').isArray({ min: 1 }).withMessage('Content types array is required'),
   body('contentTypes.*').isLength({ min: 1 }).withMessage('Each content type must be non-empty string'),
