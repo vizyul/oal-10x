@@ -634,35 +634,17 @@ class ContentGenerationService {
 
   /**
    * Update video record with generated content
-   * @param {string} videoRecordId - PostgreSQL video record ID (or Airtable ID for backward compatibility)
+   * @param {string|number} videoRecordId - PostgreSQL video record ID
    * @param {Object} generatedContent - Generated content by type
    * @returns {Promise<void>}
    */
   async updateVideoWithGeneratedContent(videoRecordId, generatedContent) {
     try {
-      // First, resolve the actual video ID (handle backward compatibility with Airtable IDs)
-      let actualVideoId = videoRecordId;
-      let video = null;
-
-      // Try to find video by direct ID first
-      try {
-        video = await videoModel.findById(videoRecordId);
-        actualVideoId = video.id;
-      } catch {
-        // If not found by direct ID, try by airtable_id (backward compatibility)
-        try {
-          video = await videoModel.findByAirtableId(videoRecordId);
-          if (video) {
-            actualVideoId = video.id;
-          } else {
-            logger.error(`Video record not found with ID or airtable_id: ${videoRecordId}`);
-            throw new Error(`Video record not found: ${videoRecordId}`);
-          }
-        } catch (fallbackError) {
-          logger.error(`Failed to find video record ${videoRecordId}:`, fallbackError.message);
-          throw fallbackError;
-        }
+      const video = await videoModel.findById(videoRecordId);
+      if (!video) {
+        throw new Error(`Video record not found: ${videoRecordId}`);
       }
+      const actualVideoId = video.id;
 
       // Process each content type and save to video_content table
       const processedTypes = [];
