@@ -106,10 +106,7 @@ class AIChatService {
         systemMessage = '',
         temperature = 0.7,
         maxTokens = 2000,
-        //model = 'gemini-1.5-flash'
-        //model = 'gemini-flash-lite-latest'
-        model = 'gemini-flash-latest',
-        //model = 'gemini-2.5-pro'
+        model = process.env.GEMINI_MODEL || 'gemini-2.5-flash',
         contentType = 'unknown'
       } = options;
 
@@ -141,6 +138,10 @@ class AIChatService {
         topK: 40,
         topP: 0.95,
         maxOutputTokens: maxTokens,
+        // Disable thinking for content generation to prevent thinking tokens
+        // from consuming the maxOutputTokens budget (they share the same pool).
+        // See: https://ai.google.dev/gemini-api/docs/thinking
+        thinkingConfig: { thinkingBudget: 0 },
       };
 
       const startTime = Date.now();
@@ -747,7 +748,7 @@ Requirements: No text or watermarks in the image. Professional quality suitable 
       }
 
       const {
-        model = 'gemini-2.0-flash-exp',
+        model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation',
         aspectRatio = '16:9'
       } = options;
 

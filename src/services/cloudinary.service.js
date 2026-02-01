@@ -476,6 +476,85 @@ class CloudinaryService {
             throw error;
         }
     }
+
+    /**
+     * Upload a raw (non-image) file to Cloudinary (e.g., PPTX, PDF)
+     * @param {Buffer} buffer - File buffer
+     * @param {Object} options - Upload options
+     * @param {number} options.userId - User ID
+     * @param {number} options.videoId - Video ID
+     * @param {string} options.filename - Original filename
+     * @param {string[]} [options.tags] - Additional tags
+     * @returns {Promise<Object>} Upload result with publicId, secureUrl, bytes
+     */
+    async uploadRawFile(buffer, options = {}) {
+        this.checkConfiguration();
+
+        const { userId, videoId, filename, tags = [] } = options;
+
+        try {
+            const folderPath = `slide_decks/user_${userId}/video_${videoId}`;
+
+            await this.ensureFolderExists(folderPath);
+
+            // Convert buffer to base64 data URI for upload
+            const base64 = buffer.toString('base64');
+            // Determine MIME type from filename extension
+            const ext = (filename || '').split('.').pop().toLowerCase();
+            const mimeTypes = {
+                pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                pdf: 'application/pdf'
+            };
+            const mimeType = mimeTypes[ext] || 'application/octet-stream';
+            const dataUri = `data:${mimeType};base64,${base64}`;
+
+            const uploadOptions = {
+                folder: folderPath,
+                asset_folder: folderPath,
+                resource_type: 'raw',
+                tags: ['slide_deck', `user_${userId}`, `video_${videoId}`, ...tags],
+                use_filename: true,
+                unique_filename: true
+            };
+
+            if (filename) {
+                uploadOptions.public_id = `${folderPath}/${filename.replace(/\.[^.]+$/, '')}`;
+                delete uploadOptions.folder;
+                uploadOptions.overwrite = true;
+            }
+
+            const result = await cloudinary.uploader.upload(dataUri, uploadOptions);
+
+            logger.info(`Raw file uploaded to Cloudinary: ${result.public_id} (${result.bytes} bytes)`);
+
+            return {
+                publicId: result.public_id,
+                secureUrl: result.secure_url,
+                bytes: result.bytes
+            };
+        } catch (error) {
+            logger.error('Cloudinary raw file upload failed:', error);
+            throw new Error(`Failed to upload raw file: ${error.message}`);
+        }
+    }
+
+    /**
+     * Delete a raw file from Cloudinary
+     * @param {string} publicId - The public ID of the raw file
+     * @returns {Promise<Object>} Deletion result
+     */
+    async deleteRawFile(publicId) {
+        this.checkConfiguration();
+
+        try {
+            const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+            logger.info(`Raw file deleted from Cloudinary: ${publicId}, result: ${result.result}`);
+            return result;
+        } catch (error) {
+            logger.error(`Failed to delete raw file ${publicId}:`, error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new CloudinaryService();

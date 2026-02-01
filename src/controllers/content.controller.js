@@ -1,5 +1,6 @@
 const contentService = require('../services/content.service');
 const documentGenerationService = require('../services/document-generation.service');
+const slideDeckGenerationService = require('../services/slide-deck-generation.service');
 const { logger } = require('../utils');
 const { validationResult } = require('express-validator');
 
@@ -798,6 +799,203 @@ class ContentController {
       res.status(500).json({
         success: false,
         message: 'Failed to generate PDF document',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Download slide deck as PPTX with Cloudinary caching
+   * GET /api/content/videos/:videoId/slide_deck_text/download/pptx
+   */
+  async downloadPptx(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+      }
+
+      const { videoId } = req.params;
+      const userId = req.user.id;
+
+      // Verify video ownership (handle both integer ID and YouTube videoid)
+      const database = require('../services/database.service');
+      const isNumeric = /^\d+$/.test(videoId);
+      const videoCheck = await database.query(
+        `SELECT id, video_title FROM videos WHERE ${isNumeric ? 'id' : 'videoid'} = $1 AND users_id = $2`,
+        [videoId, userId]
+      );
+
+      if (videoCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found or access denied'
+        });
+      }
+
+      const dbVideoId = videoCheck.rows[0].id;
+      const videoTitle = videoCheck.rows[0].video_title;
+      const themeId = req.query.theme || 'auto';
+
+      // Get slide_deck_text content
+      const content = await contentService.getVideoContentByType(
+        dbVideoId,
+        'slide_deck_text',
+        { publishedOnly: false }
+      );
+
+      if (!content || !content.content_text) {
+        return res.status(404).json({
+          success: false,
+          message: 'No slide deck content found for this video'
+        });
+      }
+
+      // Check for cached Cloudinary URL (only for auto theme since it's deterministic from content)
+      if (themeId === 'auto' && content.content_url) {
+        logger.info(`User ${userId} downloading cached PPTX for video ${videoId}`);
+        return res.redirect(content.content_url);
+      }
+
+      // Generate PPTX with selected theme
+      let pptxBuffer;
+      try {
+        pptxBuffer = await slideDeckGenerationService.generatePptx(content.content_text, videoTitle, themeId);
+      } catch (parseError) {
+        logger.error(`PPTX generation failed for video ${videoId}:`, parseError.message);
+        return res.status(422).json({
+          success: false,
+          message: 'Slide deck content is not in the expected JSON format. This video may need content regeneration.'
+        });
+      }
+
+      const filename = slideDeckGenerationService.generateFilename(videoTitle, 'pptx');
+
+      logger.info(`User ${userId} downloading PPTX for video ${videoId}, theme ${themeId} (${pptxBuffer.length} bytes)`);
+
+      // Upload to Cloudinary in background (only cache auto theme)
+      if (themeId === 'auto') {
+        const cloudinaryService = require('../services/cloudinary.service');
+        if (cloudinaryService.isConfigured) {
+          cloudinaryService.uploadRawFile(pptxBuffer, {
+            userId,
+            videoId: dbVideoId,
+            filename,
+            tags: ['pptx']
+          }).then(async (uploadResult) => {
+            // Save URL to video_content for future cache hits
+            try {
+              await database.query(
+                `UPDATE video_content SET content_url = $1, updated_at = CURRENT_TIMESTAMP
+                 WHERE video_id = $2 AND content_type_id = (SELECT id FROM content_types WHERE key = 'slide_deck_text')`,
+                [uploadResult.secureUrl, dbVideoId]
+              );
+              logger.info(`Cached PPTX URL for video ${dbVideoId}: ${uploadResult.secureUrl}`);
+            } catch (dbErr) {
+              logger.warn(`Failed to cache PPTX URL for video ${dbVideoId}:`, dbErr.message);
+            }
+          }).catch(err => {
+            logger.warn(`Cloudinary PPTX upload failed for video ${dbVideoId}:`, err.message);
+          });
+        }
+      }
+
+      // Send PPTX buffer to user immediately
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pptxBuffer.length);
+      res.send(pptxBuffer);
+
+    } catch (error) {
+      logger.error('Error downloading PPTX:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate PPTX presentation',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Download slide deck as presentation-style PDF
+   * GET /api/content/videos/:videoId/slide_deck_text/download/slide-pdf
+   */
+  async downloadSlidePdf(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation errors',
+          errors: errors.array()
+        });
+      }
+
+      const { videoId } = req.params;
+      const userId = req.user.id;
+
+      // Verify video ownership
+      const database = require('../services/database.service');
+      const isNumeric = /^\d+$/.test(videoId);
+      const videoCheck = await database.query(
+        `SELECT id, video_title FROM videos WHERE ${isNumeric ? 'id' : 'videoid'} = $1 AND users_id = $2`,
+        [videoId, userId]
+      );
+
+      if (videoCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Video not found or access denied'
+        });
+      }
+
+      const dbVideoId = videoCheck.rows[0].id;
+      const videoTitle = videoCheck.rows[0].video_title;
+
+      // Get slide_deck_text content
+      const content = await contentService.getVideoContentByType(
+        dbVideoId,
+        'slide_deck_text',
+        { publishedOnly: false }
+      );
+
+      if (!content || !content.content_text) {
+        return res.status(404).json({
+          success: false,
+          message: 'No slide deck content found for this video'
+        });
+      }
+
+      // Generate slide-style PDF
+      let pdfBuffer;
+      try {
+        pdfBuffer = await slideDeckGenerationService.generateSlidePdf(content.content_text, videoTitle);
+      } catch (parseError) {
+        logger.error(`Slide PDF generation failed for video ${videoId}:`, parseError.message);
+        return res.status(422).json({
+          success: false,
+          message: 'Slide deck content is not in the expected JSON format. This video may need content regeneration.'
+        });
+      }
+
+      const filename = slideDeckGenerationService.generateFilename(videoTitle, 'pdf');
+
+      logger.info(`User ${userId} downloading slide PDF for video ${videoId} (${pdfBuffer.length} bytes)`);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.send(pdfBuffer);
+
+    } catch (error) {
+      logger.error('Error downloading slide PDF:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate slide PDF',
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }

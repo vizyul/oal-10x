@@ -594,16 +594,25 @@ class ProcessingStatusManager {
 
   async viewContent(videoId, contentType, contentLabel) {
     try {
+      // Slide deck: show theme picker, then download PPTX
+      if (contentType === 'slide_deck_text') {
+        const selectedTheme = await this.showThemePickerModal(videoId);
+        if (selectedTheme) {
+          return this.downloadSlideDeckPptx(videoId, selectedTheme);
+        }
+        return;
+      }
+
       // Show loading state
       const loadingModal = this.showLoadingModal(`Loading ${contentLabel}...`);
-      
+
       // Fetch content from API
       const response = await fetch(`/api/videos/${videoId}/content/${contentType}`);
       const result = await response.json();
-      
+
       // Hide loading modal
       loadingModal.remove();
-      
+
       if (result.success && result.data) {
         this.showContentModal(contentLabel, result.data.content, contentType, videoId);
       } else {
@@ -622,6 +631,131 @@ class ProcessingStatusManager {
       console.error(`Error loading content ${contentType}:`, error);
       this.showError(`Failed to load ${contentLabel}. Please try again.`);
     }
+  }
+
+  async downloadSlideDeckPptx(videoId, themeId = 'auto') {
+    const loadingModal = this.showLoadingModal('Generating Slide Deck...');
+
+    try {
+      const response = await fetch(`/api/content/videos/${videoId}/slide_deck_text/download/pptx?theme=${encodeURIComponent(themeId)}`);
+
+      loadingModal.remove();
+
+      if (response.redirected) {
+        // Cloudinary cached URL
+        const a = document.createElement('a');
+        a.href = response.url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else if (response.ok) {
+        const blob = await response.blob();
+        const filename = response.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'slide-deck.pptx';
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate presentation');
+      }
+    } catch (error) {
+      loadingModal.remove();
+      console.error('Slide deck download error:', error);
+      this.showError('Failed to download slide deck: ' + error.message);
+    }
+  }
+
+  showThemePickerModal(videoId) {
+    const themes = [
+      { id: 'auto', name: 'Auto', description: 'AI-selected colors', swatches: ['#3182ce', '#2d3748', '#1a365d'] },
+      { id: 'executive_dark', name: 'Executive Dark', description: 'Navy & gold corporate', swatches: ['#1B2A4A', '#E8B931', '#F5F1EB'] },
+      { id: 'modern_warm', name: 'Modern Warm', description: 'Brown & amber elegance', swatches: ['#3E2723', '#C8A415', '#F5F0EB'] },
+      { id: 'ocean_blue', name: 'Ocean Blue', description: 'Deep navy & teal', swatches: ['#0D1B2A', '#00BCD4', '#EEF5F9'] },
+      { id: 'forest_green', name: 'Forest Green', description: 'Natural & earthy', swatches: ['#1B3A2D', '#66BB6A', '#F0F7F0'] },
+      { id: 'sunset_bold', name: 'Sunset Bold', description: 'Warm purple & orange', swatches: ['#2D1B2E', '#FF6B35', '#FFF5F0'] },
+      { id: 'royal_purple', name: 'Royal Purple', description: 'Deep purple & lavender', swatches: ['#1A0933', '#CE93D8', '#F5F0FF'] },
+      { id: 'minimalist', name: 'Minimalist', description: 'Clean black & teal', swatches: ['#1A1A1A', '#00ACC1', '#FAFAFA'] },
+      { id: 'classic_crimson', name: 'Classic Crimson', description: 'Dark red scholarly', swatches: ['#2D0A0A', '#C62828', '#FFF5F5'] },
+      { id: 'slate_pro', name: 'Slate Professional', description: 'Blue-gray & teal', swatches: ['#263238', '#26A69A', '#ECEFF1'] },
+      { id: 'midnight_gold', name: 'Midnight Gold', description: 'Deep navy & gold', swatches: ['#0A0A23', '#FFD700', '#FFFFF0'] }
+    ];
+
+    return new Promise((resolve) => {
+      let selectedThemeId = 'auto';
+
+      const modalBackdrop = document.createElement('div');
+      modalBackdrop.className = 'theme-picker-backdrop';
+
+      const cardsHtml = themes.map(t => `
+        <div class="theme-card ${t.id === 'auto' ? 'selected' : ''}" data-theme-id="${t.id}">
+          <div class="theme-swatches">
+            ${t.swatches.map(c => `<span class="theme-swatch" style="background:${c}"></span>`).join('')}
+          </div>
+          <div class="theme-card-name">${t.name}</div>
+          <div class="theme-card-desc">${t.description}</div>
+        </div>
+      `).join('');
+
+      modalBackdrop.innerHTML = `
+        <div class="theme-picker-modal">
+          <div class="theme-picker-header">
+            <h3>Choose a Presentation Theme</h3>
+          </div>
+          <div class="theme-picker-body">
+            <div class="theme-grid">${cardsHtml}</div>
+          </div>
+          <div class="theme-picker-footer">
+            <button class="btn btn-secondary theme-cancel">Cancel</button>
+            <button class="btn btn-primary theme-download">Download</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modalBackdrop);
+
+      // Card selection
+      const cards = modalBackdrop.querySelectorAll('.theme-card');
+      cards.forEach(card => {
+        card.addEventListener('click', () => {
+          cards.forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          selectedThemeId = card.dataset.themeId;
+        });
+      });
+
+      const cleanup = (result) => {
+        modalBackdrop.remove();
+        document.removeEventListener('keydown', handleEscape);
+        resolve(result);
+      };
+
+      // Download button
+      modalBackdrop.querySelector('.theme-download').addEventListener('click', () => cleanup(selectedThemeId));
+
+      // Cancel button
+      modalBackdrop.querySelector('.theme-cancel').addEventListener('click', () => cleanup(null));
+
+      // Backdrop click
+      modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) cleanup(null);
+      });
+
+      // ESC key
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') cleanup(null);
+      };
+      document.addEventListener('keydown', handleEscape);
+
+      // Animate in
+      setTimeout(() => modalBackdrop.classList.add('show'), 10);
+    });
   }
 
   showContentModal(title, content, contentType, videoId) {
@@ -801,7 +935,7 @@ class ProcessingStatusManager {
         this.showError('Failed to download PDF: ' + error.message);
       }
     });
-    
+
     // Handle backdrop click
     modalBackdrop.addEventListener('click', (e) => {
       if (e.target === modalBackdrop) {
@@ -2508,6 +2642,175 @@ async function populateProcessingTable() {
   }
   
   .confirmation-modal-footer .btn {
+    width: 100%;
+  }
+}
+
+/* Theme Picker Modal */
+.theme-picker-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  padding: 20px;
+}
+
+.theme-picker-backdrop.show {
+  opacity: 1;
+}
+
+.theme-picker-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 620px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.theme-picker-backdrop.show .theme-picker-modal {
+  transform: scale(1);
+}
+
+.theme-picker-header {
+  padding: 24px 24px 0 24px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 16px;
+}
+
+.theme-picker-header h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: center;
+}
+
+.theme-picker-body {
+  padding: 0 24px 16px 24px;
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.theme-card {
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.theme-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #f1f5f9;
+}
+
+.theme-card.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.theme-swatches {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.theme-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.theme-card-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.theme-card-desc {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.theme-picker-footer {
+  padding: 16px 24px 24px 24px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.theme-picker-footer .btn {
+  min-width: 100px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.theme-picker-footer .btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.theme-picker-footer .btn-primary:hover {
+  background: #2563eb;
+}
+
+.theme-picker-footer .btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.theme-picker-footer .btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-picker-modal {
+    margin: 10px;
+    max-width: none;
+    width: calc(100% - 20px);
+  }
+
+  .theme-picker-header,
+  .theme-picker-body,
+  .theme-picker-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .theme-picker-footer {
+    flex-direction: column;
+  }
+
+  .theme-picker-footer .btn {
     width: 100%;
   }
 }

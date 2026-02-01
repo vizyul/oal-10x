@@ -4,6 +4,7 @@ const contentController = require('../controllers/content.controller');
 const { authMiddleware } = require('../middleware');
 const { aiGenerationLimit } = require('../middleware/rate-limiting.middleware');
 const { body, param, query } = require('express-validator');
+const slideDeckGenerationService = require('../services/slide-deck-generation.service');
 
 // Apply authentication individually to routes instead of using router.use
 
@@ -136,6 +137,27 @@ router.get('/videos/:videoId/:contentType/download/pdf',
   param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
   param('contentType').isLength({ min: 1 }).withMessage('Content type is required'),
   contentController.downloadPdf
+);
+
+/**
+ * GET /api/content/videos/:videoId/slide_deck_text/download/pptx
+ * Download slide deck as PPTX presentation
+ */
+router.get('/videos/:videoId/slide_deck_text/download/pptx',
+  authMiddleware,
+  param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
+  query('theme').optional().isIn(slideDeckGenerationService.VALID_THEME_IDS).withMessage('Invalid theme ID'),
+  contentController.downloadPptx
+);
+
+/**
+ * GET /api/content/videos/:videoId/slide_deck_text/download/slide-pdf
+ * Download slide deck as presentation-style PDF
+ */
+router.get('/videos/:videoId/slide_deck_text/download/slide-pdf',
+  authMiddleware,
+  param('videoId').isLength({ min: 1 }).withMessage('Video ID is required'),
+  contentController.downloadSlidePdf
 );
 
 module.exports = router;

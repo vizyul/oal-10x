@@ -266,6 +266,17 @@ class ContentGenerationService {
         generatedContent = await this.processEbookImages(videoId, generatedContent);
       }
 
+      // Post-processing for slide_deck_text: Validate JSON structure
+      if (prompt.content_type === 'slide_deck_text') {
+        try {
+          const slideDeckService = require('./slide-deck-generation.service');
+          slideDeckService.parseSlideJSON(generatedContent);
+          logger.info(`Slide deck JSON validated successfully for video ${videoId}`);
+        } catch (jsonError) {
+          logger.warn(`Slide deck JSON validation failed for video ${videoId}: ${jsonError.message}. Content stored as-is.`);
+        }
+      }
+
       // Calculate generation duration
       const generationEndTime = new Date();
       const generationDuration = (generationEndTime - generationStartTime) / 1000;
@@ -713,7 +724,8 @@ class ContentGenerationService {
                 tokens_used = $7,
                 updated_at = $4,
                 is_published = true,
-                version = COALESCE(version, 0) + 1
+                version = COALESCE(version, 0) + 1,
+                content_url = NULL
               WHERE id = $8
             `;
 

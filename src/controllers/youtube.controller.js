@@ -319,41 +319,27 @@ class YouTubeController {
         actualUserId = parseInt(userId);
       }
 
-      // Check if user can process videos and handle free tier limitations
-      const database = require('../services/database.service');
-      const userResult = await database.query('SELECT subscription_tier, free_video_used FROM users WHERE id = $1', [actualUserId]);
-      const user = userResult.rows[0];
-      const userTier = user?.subscription_tier || 'free';
-      const freeVideoUsed = user?.free_video_used;
+      // Check if user can process videos (grants, free tier, and paid limits)
+      const canProcessCheck = await subscriptionService.canProcessVideoEnhanced(actualUserId);
+      if (!canProcessCheck.canProcess) {
+        return res.status(canProcessCheck.requiresUpgrade ? 403 : 429).json({
+          success: false,
+          message: canProcessCheck.reason,
+          requiresUpgrade: canProcessCheck.requiresUpgrade,
+          upgradeUrl: '/subscription/upgrade'
+        });
+      }
 
-      // Special handling for free tier users
-      if (userTier === 'free') {
-        if (freeVideoUsed) {
-          return res.status(403).json({
-            success: false,
-            message: 'Free video credit has been used. Upgrade to continue processing videos.',
-            requiresUpgrade: true,
-            upgradeUrl: '/subscription/upgrade'
-          });
-        }
-
-        // Free users can only import 1 video at a time
-        if (videoIds.length > 1) {
+      // Free users can only import 1 video at a time (unless they have an admin grant)
+      if (!canProcessCheck.grantInfo) {
+        const database = require('../services/database.service');
+        const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
+        const userTier = userResult.rows[0]?.subscription_tier || 'free';
+        if (userTier === 'free' && videoIds.length > 1) {
           return res.status(400).json({
             success: false,
             message: 'Free tier users can only import 1 video. Please select a single video or upgrade your subscription.',
             requiresUpgrade: true,
-            upgradeUrl: '/subscription/upgrade'
-          });
-        }
-      } else {
-        // For paid users, check regular subscription limits
-        const canProcessCheck = await subscriptionService.canProcessVideoEnhanced(actualUserId);
-        if (!canProcessCheck.canProcess) {
-          return res.status(canProcessCheck.requiresUpgrade ? 403 : 429).json({
-            success: false,
-            message: canProcessCheck.reason,
-            requiresUpgrade: canProcessCheck.requiresUpgrade,
             upgradeUrl: '/subscription/upgrade'
           });
         }
