@@ -923,29 +923,40 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
       }
 
       // Wait for processing to complete before redirecting
-      Promise.all(processingPromises).then(responses => {
+      Promise.all(processingPromises).then(async (responses) => {
         // Process responses
         let createdCount = 0;
         let hasErrors = false;
 
-        responses.forEach(async (response) => {
-          if (response.ok) {
-            const result = await response.json();
-            if (result.success) {
-              if (result.data?.imported !== undefined) {
-                createdCount += result.data.imported;
-              } else if (result.data?.processedVideos) {
-                createdCount += result.data.processedVideos.length;
-              } else if (result.data?.summary?.successful) {
-                createdCount += result.data.summary.successful;
-              } else {
-                createdCount += 1;
+        for (const response of responses) {
+          try {
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success) {
+                if (result.data?.imported !== undefined) {
+                  createdCount += result.data.imported;
+                } else if (result.data?.processedVideos) {
+                  createdCount += result.data.processedVideos.length;
+                } else if (result.data?.summary?.successful) {
+                  createdCount += result.data.summary.successful;
+                } else {
+                  createdCount += 1;
+                }
+              }
+            } else {
+              hasErrors = true;
+              try {
+                const errResult = await response.json();
+                console.error('Import response error:', errResult.message || response.statusText);
+              } catch (_e) {
+                console.error('Import response error:', response.statusText);
               }
             }
-          } else {
+          } catch (parseError) {
+            console.error('Error parsing import response:', parseError);
             hasErrors = true;
           }
-        });
+        }
 
         // Only redirect if no errors
         if (!hasErrors) {
@@ -954,7 +965,7 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
             window.location.href = `/videos?processing=true&count=${totalSelected}&contentTypes=${contentTypes.join(',')}`;
           }, 1000);
         } else {
-          console.error('Import had errors, not redirecting');
+          showError('Some videos failed to import. Please check and try again.');
           hideProgress();
           importSelectedBtn.disabled = false;
         }
