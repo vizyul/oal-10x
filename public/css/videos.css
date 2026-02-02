@@ -98,6 +98,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
@@ -105,6 +107,7 @@
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--text-primary, #1e293b);
+  white-space: nowrap;
 }
 
 .view-all-link {
@@ -169,6 +172,91 @@
 .status-processing { background-color: #f0f9ff; color: var(--accent-color, #C39D43); }
 .status-completed { background-color: #dcfce7; color: #166534; }
 .status-error { background-color: #fecaca; color: #dc2626; }
+
+/* Video card meta row (status + source badge) */
+.video-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Import source badges */
+.import-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.import-source-badge svg {
+  flex-shrink: 0;
+}
+
+.source-youtube {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.source-url {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+/* Library controls layout */
+.library-controls {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.library-controls .form-input {
+  min-width: 0;
+  width: auto;
+  flex: 1 1 140px;
+  max-width: 180px;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Tablet: keep filters in a row */
+@media (max-width: 768px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .library-controls {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .library-controls .form-input {
+    flex: 1 1 0;
+    max-width: none;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.5rem;
+  }
+}
+
+/* Small mobile: stack filters vertically */
+@media (max-width: 480px) {
+  .library-controls {
+    flex-wrap: wrap;
+  }
+
+  .library-controls .form-input {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+}
 
 /* Empty/Loading States */
 .loading-placeholder,

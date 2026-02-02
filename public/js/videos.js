@@ -124,19 +124,25 @@ function initializeVideoActions() {
 
 /**
  * Initialize filtering functionality
+ * Skip on the dashboard page — it uses its own AJAX-based filtering
  */
 function initializeFiltering() {
+  // The dashboard (recent-videos-grid) handles filtering via AJAX in inline JS
+  if (document.getElementById('recent-videos-grid')) {
+    return;
+  }
+
   const statusFilter = document.getElementById('status-filter');
   const categoryFilter = document.getElementById('category-filter');
   const searchInput = document.getElementById('search-input');
-  
+
   // Apply filters when changed
   [statusFilter, categoryFilter].forEach(filter => {
     if (filter) {
       filter.addEventListener('change', applyFilters);
     }
   });
-  
+
   // Search with debounce
   if (searchInput) {
     let searchTimeout;

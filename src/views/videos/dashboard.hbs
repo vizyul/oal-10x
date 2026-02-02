@@ -18,7 +18,7 @@
 
       <div class="dashboard-actions">
         {{#if (gt subscription.remainingVideos 0)}}
-        <a href="/videos/upload" class="btn btn-primary" id="amplify-videos-btn">Amplify Videos</a>
+        <a href="/videos/upload" class="btn btn-primary" id="amplify-videos-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="8 5 14 12 8 19"/><line x1="2" y1="12" x2="14" y2="12"/><polyline points="19 4 22 4 22 20 19 20"/></svg>Amplify Content</a>
         {{else if (gt subscription.limits.videos 0)}}
         <a href="/subscription/upgrade" class="btn btn-primary">Upgrade Plan - Videos Used</a>
         {{else}}
@@ -54,12 +54,17 @@
     <div class="section-header">
       <h2>All Videos</h2>
       <div class="library-controls">
+        <select id="source-filter" class="form-input">
+          <option value="">All Sources</option>
+          <option value="youtube_oauth">YouTube Connected</option>
+          <option value="url">Pasted URL</option>
+        </select>
         <select id="status-filter" class="form-input">
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="processing">Processing</option>
           <option value="completed">Completed</option>
-          <option value="error">Error</option>
+          <option value="failed">Failed</option>
         </select>
         <select id="sort-order" class="form-input">
           <option value="newest">Newest First</option>
@@ -289,11 +294,28 @@ class ProcessingStatusManager {
       return;
     }
 
+    // Skip fully completed videos — remove from map if present
+    if (status) {
+      const transcriptDone = status.transcript && status.transcript.status !== 'pending';
+      const allContentDone = status.content && Object.values(status.content).every(c => c.status !== 'pending');
+      if ((status.completed || (transcriptDone && allContentDone)) && this.processingVideos.has(videoId)) {
+        this.processingVideos.delete(videoId);
+        if (this.processingVideos.size === 0) {
+          this.hideProcessingDashboard();
+        } else {
+          this.updateStatusTable();
+        }
+        if (typeof refreshCompletedVideos === 'function') {
+          refreshCompletedVideos();
+        }
+        return;
+      }
+    }
+
     // Log any content generation errors to browser console
     if (status && status.content) {
       Object.entries(status.content).forEach(([contentType, contentStatus]) => {
         if (contentStatus.status === 'failed') {
-          // Log error details to browser console for debugging
           console.error(`[CONTENT GENERATION ERROR] ${videoId}/${contentType}`, {
             errorCode: contentStatus.errorCode,
             errorType: contentStatus.errorType,
@@ -306,7 +328,6 @@ class ProcessingStatusManager {
             errorDetails: contentStatus.errorDetails
           });
 
-          // Also log a more prominent message for safety filter and token limit issues
           if (contentStatus.isContentFiltered) {
             console.warn(`🚫 [SAFETY FILTER] Content generation for ${contentType} was blocked by AI safety filters`);
           }
@@ -326,7 +347,16 @@ class ProcessingStatusManager {
   }
 
   handleStatusBatch(videos) {
-    videos.forEach(status => {
+    // Filter out fully completed videos — they belong in the video grid, not the processing panel
+    const activeVideos = videos.filter(status => {
+      if (status.completed) return false;
+      const transcriptDone = status.transcript.status !== 'pending';
+      const allContentDone = Object.values(status.content).every(c => c.status !== 'pending');
+      if (transcriptDone && allContentDone) return false;
+      return true;
+    });
+
+    activeVideos.forEach(status => {
       // Don't add cancelled videos back to processing
       if (!this.cancelledVideos.has(status.videoId)) {
         this.processingVideos.set(status.videoId, status);
@@ -349,12 +379,12 @@ class ProcessingStatusManager {
       }
     });
 
-    if (videos.length > 0) {
+    if (activeVideos.length > 0) {
       this.updateStatusTable();
       this.showProcessingDashboard();
     }
 
-    // Refresh completed videos to remove any that are now processing
+    // Refresh completed videos list
     if (typeof refreshCompletedVideos === 'function') {
       refreshCompletedVideos();
     }
@@ -418,19 +448,29 @@ class ProcessingStatusManager {
       // New videos start collapsed - user can expand manually if needed
     }
 
-    // Keep the processing dashboard visible even when completed
-    // Users can manually collapse it using the collapse button if desired
-    
-    // Refresh completed videos to show newly completed ones
-    const hasActiveProcessing = videos.some(video => 
-      !video.completed && (
-        video.transcript.status === 'pending' ||
-        Object.values(video.content).some(content => content.status === 'pending')
-      )
-    );
+    // Find fully completed videos (no pending content items)
+    const completedVideoIds = videos
+      .filter(video => {
+        const transcriptDone = video.transcript.status !== 'pending';
+        const allContentDone = Object.values(video.content).every(c => c.status !== 'pending');
+        return transcriptDone && allContentDone;
+      })
+      .map(video => video.videoId);
 
-    if (!hasActiveProcessing && typeof refreshCompletedVideos === 'function') {
-      refreshCompletedVideos();
+    // Remove completed videos from the processing map after a brief delay
+    if (completedVideoIds.length > 0) {
+      setTimeout(() => {
+        completedVideoIds.forEach(id => this.processingVideos.delete(id));
+        if (this.processingVideos.size === 0) {
+          this.hideProcessingDashboard();
+        } else {
+          this.updateStatusTable();
+        }
+      }, 3000);
+
+      if (typeof refreshCompletedVideos === 'function') {
+        refreshCompletedVideos();
+      }
     }
   }
 
@@ -1660,7 +1700,7 @@ async function loadCompletedVideos() {
       limit: 12,
       ...currentFilters
     });
-    
+
     const videosResponse = await fetch(`/api/videos?${params}`);
     
     if (!videosResponse.ok) {
@@ -1724,12 +1764,20 @@ async function loadCompletedVideos() {
             return false;
           });
 
+          const isYouTubeOAuth = video.imported_via_youtube_oauth === true;
+          const sourceBadgeHTML = isYouTubeOAuth
+            ? `<span class="import-source-badge source-youtube" title="Imported via YouTube Connected"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2c-.3-1-1-1.8-2-2.1C19.6 3.5 12 3.5 12 3.5s-7.6 0-9.5.6c-1 .3-1.7 1.1-2 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8c.3 1 1 1.8 2 2.1 1.9.6 9.5.6 9.5.6s7.6 0 9.5-.6c1-.3 1.7-1.1 2-2.1.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg> YouTube</span>`
+            : `<span class="import-source-badge source-url" title="Imported via pasted URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> URL</span>`;
+
           return `
             <div class="video-card" data-video-id="${videoId}">
               <div class="video-info">
                 <h4 class="video-title">${video.video_title || 'Untitled Video'}</h4>
                 <p class="video-channel">${video.channel_name || 'Unknown Channel'}</p>
-                <div class="video-status status-${status}">${status.toUpperCase()}</div>
+                <div class="video-meta-row">
+                  <div class="video-status status-${status}">${status.toUpperCase()}</div>
+                  ${sourceBadgeHTML}
+                </div>
                 ${availableContent.length > 0 ? `
                   <div class="video-content-summary">
                     <span class="content-count">${availableContent.length} content item(s) available</span>
@@ -1804,16 +1852,10 @@ async function loadCompletedVideos() {
 }
 
 function showEmptyState(gridElement) {
-  const videoLimit = {{{subscription.limits.videos}}};
-  const uploadAction = videoLimit > 0 
-    ? `<a href="/videos/upload" class="btn btn-primary">Amplify Videos</a>`
-    : `<a href="/subscription/upgrade" class="btn btn-primary">Upgrade to Upload Videos</a>`;
-    
   gridElement.innerHTML = `
     <div class="empty-state">
       <h3>No videos yet</h3>
-      <p>${videoLimit > 0 ? 'Upload your first video to get started.' : 'Upgrade your plan to start uploading videos.'}</p>
-      ${uploadAction}
+      <p>Upload your first video to get started.</p>
     </div>
   `;
 }
@@ -1870,25 +1912,39 @@ function goToPage(page) {
 
 // Setup filtering and pagination event listeners
 function setupFilteringEventListeners() {
+  const sourceFilter = document.getElementById('source-filter');
   const statusFilter = document.getElementById('status-filter');
   const sortOrder = document.getElementById('sort-order');
   const prevPageBtn = document.getElementById('prev-page');
   const nextPageBtn = document.getElementById('next-page');
-  
+
+  // Helper to set or remove a filter key
+  function setFilter(key, value) {
+    if (value) {
+      currentFilters[key] = value;
+    } else {
+      delete currentFilters[key];
+    }
+    currentPage = 1;
+    loadCompletedVideos();
+  }
+
   // Filter event listeners
-  if (statusFilter) {
-    statusFilter.addEventListener('change', function() {
-      currentFilters.status = this.value;
-      currentPage = 1;
-      loadCompletedVideos();
+  if (sourceFilter) {
+    sourceFilter.addEventListener('change', function() {
+      setFilter('source', this.value);
     });
   }
-  
+
+  if (statusFilter) {
+    statusFilter.addEventListener('change', function() {
+      setFilter('status', this.value);
+    });
+  }
+
   if (sortOrder) {
     sortOrder.addEventListener('change', function() {
-      currentFilters.sort = this.value;
-      currentPage = 1;
-      loadCompletedVideos();
+      setFilter('sort', this.value);
     });
   }
   

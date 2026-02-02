@@ -46,6 +46,8 @@ class Video extends BaseModel {
         status,
         search,
         category,
+        sort,
+        source,
         includeContent = false
       } = options;
 
@@ -113,6 +115,21 @@ class Video extends BaseModel {
           paramIndex++;
         }
 
+        if (source === 'youtube_oauth') {
+          whereClause += ` AND v.imported_via_youtube_oauth = true`;
+        } else if (source === 'url') {
+          whereClause += ` AND (v.imported_via_youtube_oauth IS NULL OR v.imported_via_youtube_oauth = false)`;
+        }
+
+        // Determine sort order
+        const sortMapping = {
+          newest: 'v.created_at DESC',
+          oldest: 'v.created_at ASC',
+          title: 'v.video_title ASC',
+          status: 'v.status ASC, v.created_at DESC'
+        };
+        const orderByClause = sortMapping[sort] || 'v.created_at DESC';
+
         // Calculate offset and add pagination
         const offset = (page - 1) * limit;
 
@@ -121,7 +138,7 @@ class Video extends BaseModel {
         const videosQuery = `
           SELECT v.id, v.videoid, v.video_title, v.channel_name, v.channel_handle,
                  v.description, v.duration, v.upload_date, v.thumbnail, v.youtube_url,
-                 v.status, v.category, v.privacy_setting,
+                 v.status, v.category, v.privacy_setting, v.imported_via_youtube_oauth,
                  v.created_at, v.updated_at, v.users_id, v.transcript_text,
             COALESCE(
               json_object_agg(
@@ -137,7 +154,7 @@ class Video extends BaseModel {
           LEFT JOIN content_types ct ON vc.content_type_id = ct.id
           WHERE ${whereClause}
           GROUP BY v.id
-          ORDER BY v.created_at DESC
+          ORDER BY ${orderByClause}
           LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
         `;
 

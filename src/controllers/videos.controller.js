@@ -38,7 +38,7 @@ class VideosController {
    */
   async getVideos(req, res) {
     try {
-      const { page = 1, limit = 10, status, search, category } = req.query;
+      const { page = 1, limit = 10, status, search, category, sort, source } = req.query;
       const userId = req.user.id;
 
       logger.debug(`GET /api/videos userId=${userId} page=${page}`, null, req.requestId);
@@ -52,6 +52,8 @@ class VideosController {
         status,
         search,
         category,
+        sort,
+        source,
         includeContent: true  // Include content from video_content table
       });
 

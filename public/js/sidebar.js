@@ -61,22 +61,26 @@ document.addEventListener('DOMContentLoaded', function() {
     function highlightActiveLink() {
         const currentPath = window.location.pathname;
         const links = sidebar.querySelectorAll('.sidebar-link');
+        let bestMatch = null;
+        let bestMatchLength = 0;
 
+        // Find the most specific (longest) matching href
         links.forEach(link => {
             link.classList.remove('active');
             const href = link.getAttribute('href');
 
-            // Check for exact match or if current path starts with href
             if (href === currentPath ||
                 (href !== '/' && currentPath.startsWith(href))) {
-                link.classList.add('active');
-            }
-
-            // Special case for /videos (content page)
-            if (href === '/videos' && currentPath === '/videos') {
-                link.classList.add('active');
+                if (href.length > bestMatchLength) {
+                    bestMatch = link;
+                    bestMatchLength = href.length;
+                }
             }
         });
+
+        if (bestMatch) {
+            bestMatch.classList.add('active');
+        }
     }
 
     /**

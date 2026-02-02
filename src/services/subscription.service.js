@@ -420,17 +420,22 @@ class SubscriptionService {
       const currentUsage = await subscriptionUsage.getCurrentByUserId(userId);
       let videosProcessed = currentUsage ? (currentUsage.videos_processed || 0) : 0;
 
-      // For free tier users, also check free_video_used flag
-      if (videosProcessed === 0) {
-        const database = require('./database.service');
-        const userResult = await database.query(
-          'SELECT free_video_used, subscription_tier FROM users WHERE id = $1', [userId]
-        );
-        if (userResult.rows.length > 0) {
-          const user = userResult.rows[0];
-          if (user.subscription_tier === 'free' && user.free_video_used) {
-            videosProcessed = 1;
-          }
+      const database = require('./database.service');
+      const userResult = await database.query(
+        'SELECT free_video_used, subscription_tier FROM users WHERE id = $1', [userId]
+      );
+
+      if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+
+        // For free tier users, check free_video_used flag as fallback
+        if (user.subscription_tier === 'free' && user.free_video_used && videosProcessed === 0) {
+          videosProcessed = 1;
+        }
+
+        // For paid users, don't count the free video against their paid limit
+        if (user.subscription_tier !== 'free' && user.free_video_used && videosProcessed > 0) {
+          videosProcessed = Math.max(0, videosProcessed - 1);
         }
       }
 
@@ -461,16 +466,22 @@ class SubscriptionService {
 
       let videosProcessed = currentUsage ? (currentUsage.videos_processed || 0) : 0;
 
-      // For free tier users, also check free_video_used flag on the users table
-      // This ensures the display is accurate even when subscription_usage doesn't track the free video
+      // Check free_video_used flag to adjust counts
       const database = require('./database.service');
       const userResult = await database.query(
         'SELECT free_video_used, subscription_tier FROM users WHERE id = $1', [pgUserId]
       );
       if (userResult.rows.length > 0) {
         const user = userResult.rows[0];
+
+        // For free tier users, check free_video_used flag as fallback
         if (user.subscription_tier === 'free' && user.free_video_used && videosProcessed === 0) {
           videosProcessed = 1;
+        }
+
+        // For paid users, don't count the free video against their paid limit
+        if (user.subscription_tier !== 'free' && user.free_video_used && videosProcessed > 0) {
+          videosProcessed = Math.max(0, videosProcessed - 1);
         }
       }
 
