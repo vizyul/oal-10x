@@ -3,9 +3,13 @@
  * Generates PPTX presentations and slide-style PDFs from AI-structured JSON content
  */
 
+const path = require('path');
 const PptxGenJS = require('pptxgenjs');
 const PDFDocument = require('pdfkit');
 const { logger } = require('../utils');
+
+/** Path to Noto Sans Symbols 2 font for rendering Unicode icons in PDFs */
+const NOTO_SYMBOLS_FONT = path.join(__dirname, '..', 'assets', 'fonts', 'NotoSansSymbols2-Regular.ttf');
 
 /**
  * 10 predefined visual theme presets for PPTX generation.
@@ -228,7 +232,13 @@ class SlideDeckGenerationService {
     try {
       parsed = JSON.parse(jsonContent);
     } catch (parseError) {
-      throw new Error(`Invalid slide deck JSON: ${parseError.message}`);
+      // Attempt to repair common AI JSON issues (unescaped quotes inside strings)
+      try {
+        const repaired = this._repairJSON(jsonContent);
+        parsed = JSON.parse(repaired);
+      } catch (_repairError) {
+        throw new Error(`Invalid slide deck JSON: ${parseError.message}`);
+      }
     }
 
     // Validate required structure
@@ -259,6 +269,65 @@ class SlideDeckGenerationService {
   }
 
   /**
+   * Attempt to repair common AI-generated JSON issues.
+   * Fixes unescaped double quotes inside string values (e.g. "he said "hello" to them")
+   * by walking the string character-by-character with state tracking.
+   * @param {string} json - Malformed JSON string
+   * @returns {string} Repaired JSON string
+   */
+  _repairJSON(json) {
+    const chars = [...json];
+    const result = [];
+    let inString = false;
+    let i = 0;
+
+    while (i < chars.length) {
+      const ch = chars[i];
+
+      if (ch === '\\' && inString) {
+        // Escaped character — pass through as-is
+        result.push(ch, chars[i + 1] || '');
+        i += 2;
+        continue;
+      }
+
+      if (ch === '"') {
+        if (!inString) {
+          // Opening a string
+          inString = true;
+          result.push(ch);
+          i++;
+          continue;
+        }
+
+        // We're inside a string and hit a quote — is it the real closing quote?
+        // Look ahead: if the next non-whitespace char is a structural JSON character
+        // ( : , ] } ) then this is the real closing quote.
+        let lookAhead = i + 1;
+        while (lookAhead < chars.length && (chars[lookAhead] === ' ' || chars[lookAhead] === '\t' || chars[lookAhead] === '\n' || chars[lookAhead] === '\r')) {
+          lookAhead++;
+        }
+        const nextSignificant = chars[lookAhead];
+        if (nextSignificant === ':' || nextSignificant === ',' || nextSignificant === ']' || nextSignificant === '}' || nextSignificant === undefined) {
+          // Real closing quote
+          inString = false;
+          result.push(ch);
+        } else {
+          // Unescaped quote inside a string — escape it
+          result.push('\\"');
+        }
+        i++;
+        continue;
+      }
+
+      result.push(ch);
+      i++;
+    }
+
+    return result.join('');
+  }
+
+  /**
    * Strip leading # from hex color (pptxgenjs expects no #)
    */
   stripHash(color) {
@@ -284,7 +353,9 @@ class SlideDeckGenerationService {
     const bg = aiTheme.background_color || '#ffffff';
     const text = aiTheme.text_color || '#1a202c';
 
-    // Derive dark_bg from primary, light_bg from background
+    // Derive dark_bg from the darkest of the 5 AI colors (lowest luminance)
+    const darkBg = this._pickDarkest([primary, secondary, accent, bg, text]);
+
     return {
       id: 'auto',
       name: 'Auto',
@@ -292,7 +363,7 @@ class SlideDeckGenerationService {
         primary_color: primary,
         secondary_color: secondary,
         accent_color: accent,
-        dark_bg: primary,
+        dark_bg: darkBg,
         light_bg: bg,
         card_bg: '#FFFFFF',
         text_dark: text,
@@ -320,7 +391,35 @@ class SlideDeckGenerationService {
   }
 
   /**
-   * Get a unicode icon for a slide type
+   * Calculate relative luminance of a hex color (0 = black, 1 = white)
+   */
+  _luminance(hex) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16) / 255;
+    const g = parseInt(h.substring(2, 4), 16) / 255;
+    const b = parseInt(h.substring(4, 6), 16) / 255;
+    const toLinear = (c) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  }
+
+  /**
+   * Pick the darkest color from an array of hex colors (lowest luminance)
+   */
+  _pickDarkest(colors) {
+    let darkest = colors[0];
+    let minLum = this._luminance(colors[0]);
+    for (let i = 1; i < colors.length; i++) {
+      const lum = this._luminance(colors[i]);
+      if (lum < minLum) {
+        minLum = lum;
+        darkest = colors[i];
+      }
+    }
+    return darkest;
+  }
+
+  /**
+   * Get a unicode icon for a slide type (fallback for legacy content without icon field)
    */
   getSlideIcon(slideType) {
     const icons = {
@@ -329,7 +428,7 @@ class SlideDeckGenerationService {
       bullets: '\u2022',         // bullet
       quote: '\u201C',           // left double quotation
       two_column: '\u2637',      // trigram
-      statistics: '\u2191',      // upwards arrow
+      statistics: '\u2605',      // black star
       table: '\u2630',           // trigram for heaven
       image_placeholder: '\u25A1', // white square
       summary: '\u2713'          // checkmark
@@ -1244,117 +1343,76 @@ class SlideDeckGenerationService {
     }
   }
 
+  // ─── PDF CONTENT EXTRACTION HELPERS ──────────────────────────────────
+  // Generic helpers that extract content from any slide type for layout templates
+
+  /** Get the slide title regardless of slide type */
+  _getSlideTitle(data) {
+    return data.title || data.heading || data.topic || '';
+  }
+
+  /** Get the slide items (bullets, takeaways, stats, column items) as string array */
+  _getSlideItems(data) {
+    if (data.bullets) return data.bullets;
+    if (data.takeaways) return data.takeaways;
+    if (data.stats) return data.stats.map(s => `${s.value} — ${s.label}`);
+    if (data.left_items && data.right_items) return [...data.left_items, ...data.right_items];
+    if (data.left_items) return data.left_items;
+    if (data.right_items) return data.right_items;
+    if (data.rows) return data.rows.map(r => r.join(' | '));
+    if (data.image_description) return [data.image_description, data.caption].filter(Boolean);
+    return [];
+  }
+
+  /** Get a subtitle/attribution/CTA string */
+  _getSlideSubtitle(data) {
+    return data.subtitle || data.attribution || data.call_to_action || data.caption || '';
+  }
+
+  /** Get the icon character: prefer data.icon, fall back to type-based */
+  _getSlideIconChar(data) {
+    return data.icon || this.getSlideIcon(data.slide_type);
+  }
+
+  /** Get a quote string if available */
+  _getSlideQuote(data) {
+    return data.quote || null;
+  }
+
+  /** Split an array into N roughly-equal groups */
+  _splitIntoGroups(arr, n) {
+    const groups = Array.from({ length: n }, () => []);
+    arr.forEach((item, i) => groups[i % n].push(item));
+    return groups;
+  }
+
   // ─── PDF HELPERS ────────────────────────────────────────────────────
 
   /**
-   * Draw a PDF icon as a vector shape at a position.
-   * Uses PDFKit path primitives — no special fonts needed.
+   * Draw a PDF icon using the Noto Sans Symbols 2 font.
+   * Renders the icon character from slideData.icon or falls back to type-based icon.
    * @param {object} doc - PDFKit document
-   * @param {string} slideType - one of: title, section_divider, bullets, quote, two_column, statistics, table, image_placeholder, summary
+   * @param {string} iconChar - Unicode character to render
    * @param {number} x - left edge (or area left for centered alignment)
    * @param {number} y - top edge
-   * @param {number} size - logical size (matches font-size scale)
-   * @param {string} color - fill/stroke color
+   * @param {number} size - font size
+   * @param {string} color - fill color
    * @param {object} opts - { width, align }
    */
-  drawPdfIcon(doc, slideType, x, y, size, color, opts = {}) {
-    doc.save();
-
+  drawPdfIcon(doc, iconChar, x, y, size, color, opts = {}) {
     const width = opts.width || size * 2;
     const align = opts.align || 'left';
-    // Center of the drawing area
-    let cx = align === 'center' ? x + width / 2 : x + size * 0.4;
-    const cy = y + size * 0.45;
-    const r = size * 0.3; // base radius
-
-    switch (slideType) {
-      case 'title': {
-        // 4-pointed star (tall diamond)
-        doc.path(
-          `M ${cx} ${cy - r * 1.4} ` +
-          `L ${cx + r * 0.55} ${cy} ` +
-          `L ${cx} ${cy + r * 1.4} ` +
-          `L ${cx - r * 0.55} ${cy} Z`
-        ).fill(color);
-        break;
-      }
-      case 'section_divider': {
-        // Thick vertical bar
-        const bw = r * 0.5;
-        const bh = r * 3;
-        doc.rect(cx - bw / 2, cy - bh / 2, bw, bh).fill(color);
-        break;
-      }
-      case 'bullets': {
-        // Filled circle
-        doc.circle(cx, cy, r * 0.6).fill(color);
-        break;
-      }
-      case 'quote': {
-        // Use Times-Bold curly double-quote (U+201C is WinAnsi char 147, renders fine)
-        doc.font('Times-Bold')
-          .fontSize(size)
-          .fillColor(color)
-          .text('\u201C', x, y, { width, align });
-        doc.restore();
-        return; // early return — text handled by PDFKit
-      }
-      case 'two_column': {
-        // Two vertical bars
-        const bw2 = r * 0.35;
-        const bh2 = r * 2.5;
-        const gap = r * 0.8;
-        doc.rect(cx - gap / 2 - bw2, cy - bh2 / 2, bw2, bh2).fill(color);
-        doc.rect(cx + gap / 2, cy - bh2 / 2, bw2, bh2).fill(color);
-        break;
-      }
-      case 'statistics': {
-        // Right-pointing triangle
-        doc.path(
-          `M ${cx - r * 0.6} ${cy - r} ` +
-          `L ${cx + r} ${cy} ` +
-          `L ${cx - r * 0.6} ${cy + r} Z`
-        ).fill(color);
-        break;
-      }
-      case 'table': {
-        // Grid: square outline with center cross
-        const gs = r * 1.1;
-        const lw = Math.max(1, size * 0.05);
-        doc.rect(cx - gs, cy - gs, gs * 2, gs * 2).lineWidth(lw).stroke(color);
-        doc.moveTo(cx, cy - gs).lineTo(cx, cy + gs).lineWidth(lw).stroke(color);
-        doc.moveTo(cx - gs, cy).lineTo(cx + gs, cy).lineWidth(lw).stroke(color);
-        break;
-      }
-      case 'image_placeholder': {
-        // Circle outline with small mountain triangle inside
-        const cr = r * 1.2;
-        const lw2 = Math.max(1, size * 0.05);
-        doc.circle(cx, cy, cr).lineWidth(lw2).stroke(color);
-        const mr = r * 0.55;
-        doc.path(
-          `M ${cx - mr} ${cy + mr * 0.5} ` +
-          `L ${cx} ${cy - mr * 0.5} ` +
-          `L ${cx + mr} ${cy + mr * 0.5} Z`
-        ).fill(color);
-        break;
-      }
-      case 'summary': {
-        // Checkmark stroke
-        const lw3 = Math.max(1.5, size * 0.1);
-        doc.path(
-          `M ${cx - r * 0.7} ${cy + r * 0.05} ` +
-          `L ${cx - r * 0.1} ${cy + r * 0.65} ` +
-          `L ${cx + r * 0.8} ${cy - r * 0.55}`
-        ).lineWidth(lw3).lineJoin('round').lineCap('round').stroke(color);
-        break;
-      }
-      default: {
-        doc.circle(cx, cy, r * 0.6).fill(color);
-      }
+    try {
+      doc.font(NOTO_SYMBOLS_FONT)
+        .fontSize(size)
+        .fillColor(color)
+        .text(iconChar, x, y, { width, align, lineBreak: false });
+    } catch (_err) {
+      doc.font('Helvetica')
+        .fontSize(size)
+        .fillColor(color)
+        .text(iconChar, x, y, { width, align, lineBreak: false });
     }
-
-    doc.restore();
   }
 
   /**
@@ -1365,7 +1423,7 @@ class SlideDeckGenerationService {
     doc.rect(0, 0, pageW, bandH).fill(theme.colors.dark_bg);
     doc.rect(0, bandH, pageW, 3).fill(theme.colors.accent_color);
     doc.font('Times-Bold')
-      .fontSize(26)
+      .fontSize(28)
       .fillColor(theme.colors.text_light)
       .text(text, 40, 22, { width: pageW - 80 });
   }
@@ -1400,6 +1458,7 @@ class SlideDeckGenerationService {
 
   /**
    * Generate a presentation-style PDF (landscape pages mimicking slides)
+   * Uses 10 distinct layout templates cycled for maximum visual variety.
    * @param {string} contentText - AI-generated JSON content
    * @param {string} videoTitle - Video title
    * @param {string} themeId - Theme preset ID or 'auto' (backward-compatible)
@@ -1424,22 +1483,25 @@ class SlideDeckGenerationService {
         }
       });
 
+      // Register Noto Sans Symbols 2 font for icon rendering
+      try {
+        doc.registerFont('NotoSymbols', NOTO_SYMBOLS_FONT);
+      } catch (fontErr) {
+        logger.warn(`Could not register NotoSymbols font: ${fontErr.message}`);
+      }
+
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Track variant cycling per slide type
-      const slideTypeCounts = {};
+      const totalSlides = slides.length;
+      let contentSlideCounter = 0;
 
-      for (let i = 0; i < slides.length; i++) {
+      for (let i = 0; i < totalSlides; i++) {
         if (i > 0) doc.addPage();
-
-        const slideData = slides[i];
-        const type = slideData.slide_type;
-        const variantIndex = slideTypeCounts[type] || 0;
-        slideTypeCounts[type] = variantIndex + 1;
-
-        this.renderPdfSlide(doc, slideData, theme, pageW, pageH, variantIndex);
+        this.renderPdfSlide(doc, slides[i], theme, pageW, pageH, i, totalSlides, contentSlideCounter);
+        // Count non-bookend slides for layout cycling
+        if (i > 0 && i < totalSlides - 1) contentSlideCounter++;
       }
 
       doc.end();
@@ -1447,675 +1509,472 @@ class SlideDeckGenerationService {
   }
 
   /**
-   * Render a single slide to PDF with theme-aware backgrounds and variant dispatch
+   * Render a single slide to PDF using layout-index-based dispatch.
+   * First slide → layout 1 (hero-centered), last → layout 10 (primary-bg-card).
+   * Quote slides alternate between layouts 5 and 7. All others cycle layouts 2-9.
    */
-  renderPdfSlide(doc, slideData, theme, pageW, pageH, variantIndex = 0) {
-    const type = slideData.slide_type;
-    const isDark = this.isDarkSlide(type, theme);
+  renderPdfSlide(doc, slideData, theme, pageW, pageH, slideIndex, totalSlides, contentSlideCounter) {
+    let layoutNum;
 
-    // Background — dark slides override handled per-variant for bullets
-    doc.rect(0, 0, pageW, pageH).fill(isDark ? theme.colors.dark_bg : theme.colors.light_bg);
+    if (slideIndex === 0) {
+      layoutNum = 1; // hero-centered (title)
+    } else if (slideIndex === totalSlides - 1) {
+      layoutNum = 10; // closing-dark-card (summary)
+    } else if (slideData.slide_type === 'section_divider') {
+      layoutNum = 9; // centered-dark-icon (only layout for section dividers)
+    } else if (slideData.slide_type === 'quote') {
+      // Alternate quote layouts between 5 (dark-quote-banner) and 7 (quote-accent-bar)
+      layoutNum = contentSlideCounter % 2 === 0 ? 5 : 7;
+    } else if (slideData.slide_type === 'two_column') {
+      layoutNum = 4; // two-column-comparison (requires left/right data)
+    } else if (slideData.slide_type === 'statistics') {
+      layoutNum = 8; // three-column-filled (requires stats data)
+    } else {
+      // Cycle through general content layouts (safe for any bullet/text slide)
+      const contentLayouts = [2, 6, 8, 2, 6, 8];
+      layoutNum = contentLayouts[contentSlideCounter % contentLayouts.length];
+    }
 
-    switch (type) {
-      case 'title':
-        this.renderPdfTitleSlide(doc, slideData, theme, pageW, pageH);
-        break;
-      case 'section_divider':
-        this.renderPdfSectionDivider(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      case 'bullets':
-        this.renderPdfBulletsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      case 'quote':
-        this.renderPdfQuoteSlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      case 'two_column':
-        this.renderPdfTwoColumnSlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      case 'statistics':
-        this.renderPdfStatisticsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      case 'table':
-        this.renderPdfTableSlide(doc, slideData, theme, pageW, pageH);
-        break;
-      case 'image_placeholder':
-        this.renderPdfImagePlaceholderSlide(doc, slideData, theme, pageW, pageH);
-        break;
-      case 'summary':
-        this.renderPdfSummarySlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
-      default:
-        this.renderPdfBulletsSlide(doc, slideData, theme, pageW, pageH, variantIndex);
-        break;
+    try {
+      switch (layoutNum) {
+        case 1: this._pdfLayout1_heroCentered(doc, slideData, theme, pageW, pageH); break;
+        case 2: this._pdfLayout2_headerIconBullets(doc, slideData, theme, pageW, pageH); break;
+        case 3: this._pdfLayout3_threeColumnCards(doc, slideData, theme, pageW, pageH); break;
+        case 4: this._pdfLayout4_twoColumnIconCards(doc, slideData, theme, pageW, pageH); break;
+        case 5: this._pdfLayout5_darkQuoteBanner(doc, slideData, theme, pageW, pageH); break;
+        case 6: this._pdfLayout6_iconSubheadingBullets(doc, slideData, theme, pageW, pageH); break;
+        case 7: this._pdfLayout7_quoteAccentBar(doc, slideData, theme, pageW, pageH); break;
+        case 8: this._pdfLayout8_threeColumnFilled(doc, slideData, theme, pageW, pageH); break;
+        case 9: this._pdfLayout9_centeredDarkIcon(doc, slideData, theme, pageW, pageH); break;
+        case 10: this._pdfLayout10_primaryBgCard(doc, slideData, theme, pageW, pageH); break;
+        default: this._pdfLayout2_headerIconBullets(doc, slideData, theme, pageW, pageH); break;
+      }
+    } catch (err) {
+      logger.warn(`Error rendering PDF layout ${layoutNum}: ${err.message}, falling back to layout 2`);
+      doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+      this._pdfLayout2_headerIconBullets(doc, slideData, theme, pageW, pageH);
     }
   }
 
-  // ─── PDF SLIDE RENDERERS ──────────────────────────────────────────
+  // ─── PDF LAYOUT TEMPLATES (10 distinct layouts) ─────────────────────
 
   /**
-   * Title slide — dark bg, left accent bar, centered icon, serif title, accent subtitle
+   * Layout 1: hero-centered — Dark bg, large centered icon, huge title, accent italic subtitle, small footer
+   * Used for: first slide (title)
    */
-  renderPdfTitleSlide(doc, data, theme, pageW, pageH) {
-    // Left accent bar
-    this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
+  _pdfLayout1_heroCentered(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
 
-    // Centered icon
-    this.drawPdfIcon(doc, 'title', 0, 60, 44, theme.colors.accent_color, { width: pageW, align: 'center' });
+    // Left accent bar — 40px wide, full height
+    doc.rect(0, 0, 40, pageH).fill(theme.colors.accent_color);
 
-    // Title — large serif
-    doc.font('Times-Bold')
-      .fontSize(38)
-      .fillColor(theme.colors.text_light)
-      .text(data.title || 'Presentation', 60, pageH * 0.28, {
-        width: pageW - 120,
-        align: 'center'
-      });
+    const icon = this._getSlideIconChar(data);
+    this.drawPdfIcon(doc, icon, 0, 50, 56, theme.colors.accent_color, { width: pageW, align: 'center' });
 
-    // Subtitle — accent italic
-    if (data.subtitle) {
+    const title = this._getSlideTitle(data);
+    const titleY = pageH * 0.28;
+    const titleW = pageW - 120;
+    doc.font('Times-Bold').fontSize(42);
+    const titleH = doc.heightOfString(title, { width: titleW });
+    doc.fillColor(theme.colors.text_light)
+      .text(title, 60, titleY, { width: titleW, align: 'center' });
+
+    const subtitle = this._getSlideSubtitle(data);
+    if (subtitle) {
       doc.font('Times-Italic')
-        .fontSize(18)
+        .fontSize(26)
         .fillColor(theme.colors.accent_color)
-        .text(data.subtitle, 100, pageH * 0.28 + 70, {
-          width: pageW - 200,
-          align: 'center'
-        });
+        .text(subtitle, 100, titleY + titleH + 50, { width: pageW - 200, align: 'center' });
     }
 
-    // Footer
     if (data.footer) {
       doc.font('Helvetica')
-        .fontSize(12)
+        .fontSize(14)
         .fillColor(theme.colors.text_light)
-        .text(data.footer, 60, pageH * 0.75, {
-          width: pageW - 120,
-          align: 'center'
-        });
+        .text(data.footer, 60, pageH * 0.75, { width: pageW - 120, align: 'center' });
     }
   }
 
-  /**
-   * Section divider — 2 variants
-   * A: Centered icon + centered title + accent subtitle
-   * B: Left-aligned + large decorative icon at 50% opacity
-   */
-  renderPdfSectionDivider(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 2;
 
-    if (variant === 0) {
-      // Variant A: centered icon + centered title
-      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
+  /** Layout 2: header-icon-bullets — Light bg, primary header band, white card + accent left bar + large icon, bullets */
+  _pdfLayout2_headerIconBullets(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+    this.addPdfHeaderBand(doc, this._getSlideTitle(data), theme, pageW);
 
-      this.drawPdfIcon(doc, 'section_divider', 0, 60, 44, theme.colors.accent_color, { width: pageW, align: 'center' });
+    // Card panel with left accent bar
+    this.addPdfCardPanel(doc, 36, 100, pageW - 72, pageH - 130, theme);
+    this.addPdfLeftAccentBar(doc, 36, 100, pageH - 130, theme.colors.accent_color);
 
-      doc.font('Times-Bold')
-        .fontSize(34)
-        .fillColor(theme.colors.text_light)
-        .text(data.heading || 'Section', 60, pageH * 0.35, {
-          width: pageW - 120,
-          align: 'center'
-        });
+    // Large icon beside accent bar
+    const icon = this._getSlideIconChar(data);
+    this.drawPdfIcon(doc, icon, 50, 112, 32, theme.colors.primary_color, { width: 44 });
 
-      if (data.subtitle) {
-        doc.font('Times-Italic')
-          .fontSize(16)
-          .fillColor(theme.colors.accent_color)
-          .text(data.subtitle, 100, pageH * 0.35 + 55, {
-            width: pageW - 200,
-            align: 'center'
-          });
-      }
-    } else {
-      // Variant B: left-aligned heading + decorative icon right
-      this.addPdfLeftAccentBar(doc, 44, 60, pageH - 120, theme.colors.accent_color);
-
-      // Large decorative icon at right, 50% opacity
-      doc.save();
-      doc.opacity(0.5);
-      this.drawPdfIcon(doc, 'section_divider', pageW - 200, pageH * 0.2, 100, theme.colors.accent_color, { width: 160, align: 'center' });
-      doc.restore();
-
-      doc.font('Times-Bold')
-        .fontSize(30)
-        .fillColor(theme.colors.text_light)
-        .text(data.heading || 'Section', 70, pageH * 0.40, {
-          width: pageW - 280
-        });
-
-      // Accent underline
-      doc.rect(70, pageH * 0.40 + 50, 140, 4).fill(theme.colors.accent_color);
+    const items = this._getSlideItems(data).slice(0, 6);
+    const bulletAreaTop = 118;
+    const bulletAreaBottom = pageH - 40;
+    const bulletAreaH = bulletAreaBottom - bulletAreaTop;
+    const bulletSpacing = bulletAreaH / Math.max(items.length, 1);
+    let yPos = bulletAreaTop;
+    for (const item of items) {
+      doc.circle(110, yPos + 12, 4).fill(theme.colors.accent_color);
+      doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_dark)
+        .text(item, 126, yPos, { width: pageW - 200 });
+      yPos += bulletSpacing;
     }
   }
 
-  /**
-   * Bullets slide — 3 variants
-   * A: Light bg, header band, white card + accent bar, bullets
-   * B: Dark bg override, muted banner + white bullets
-   * C: Light bg, header band, icon + subtitle emphasis, bullets
-   */
-  renderPdfBulletsSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 3;
-    const bullets = data.bullets || [];
+  /** Layout 3: three-column-cards — Light bg, dark header + accent underline, 3 white cards with bold topic header + summary text */
+  _pdfLayout3_threeColumnCards(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+    this.addPdfHeaderBand(doc, this._getSlideTitle(data), theme, pageW);
 
-    if (variant === 0) {
-      // Variant A: Light bg + dark header band + card with accent bar
-      this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
-
-      // Card panel with left accent bar
-      this.addPdfCardPanel(doc, 36, 100, pageW - 72, pageH - 130, theme);
-      this.addPdfLeftAccentBar(doc, 36, 100, pageH - 130, theme.colors.accent_color);
-
-      // Icon beside accent bar
-      this.drawPdfIcon(doc, 'bullets', 50, 112, 22, theme.colors.primary_color, { width: 40 });
-
-      let yPos = 115;
-      for (const bullet of bullets) {
-        doc.circle(110, yPos + 8, 3).fill(theme.colors.accent_color);
-        doc.font('Helvetica')
-          .fontSize(14)
-          .fillColor(theme.colors.text_dark)
-          .text(bullet, 122, yPos, { width: pageW - 190 });
-        yPos += doc.heightOfString(bullet, { width: pageW - 190 }) + 12;
-      }
-
-    } else if (variant === 1) {
-      // Variant B: Dark bg override + heading + muted banner + white bullets
-      doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
-      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
-
-      doc.font('Times-Bold')
-        .fontSize(26)
-        .fillColor(theme.colors.text_light)
-        .text(data.heading || '', 52, 26, { width: pageW - 110 });
-
-      // Muted banner for subtitle
-      const subtitle = data.subtitle || '';
-      let bulletsY = 85;
-      if (subtitle) {
-        doc.roundedRect(36, 72, pageW - 72, 55, 4).fill(theme.colors.secondary_color);
-        doc.font('Times-Italic')
-          .fontSize(15)
-          .fillColor(theme.colors.accent_color)
-          .text(subtitle, 52, 82, { width: pageW - 110 });
-        bulletsY = 145;
-      }
-
-      for (const bullet of bullets) {
-        doc.circle(60, bulletsY + 8, 3).fill(theme.colors.accent_color);
-        doc.font('Helvetica')
-          .fontSize(14)
-          .fillColor(theme.colors.text_light)
-          .text(bullet, 74, bulletsY, { width: pageW - 140 });
-        bulletsY += doc.heightOfString(bullet, { width: pageW - 140 }) + 12;
-      }
-
-    } else {
-      // Variant C: Light bg + header band + icon + subtitle emphasis + bullets
-      this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
-
-      const subtitle = data.subtitle || '';
-      let bulletsY = 100;
-      if (subtitle) {
-        this.drawPdfIcon(doc, 'bullets', 40, 96, 20, theme.colors.accent_color, { width: 30 });
-        doc.font('Helvetica-Bold')
-          .fontSize(15)
-          .fillColor(theme.colors.primary_color)
-          .text(subtitle, 80, 98, { width: pageW - 140 });
-        doc.rect(80, 120, pageW - 140, 3).fill(theme.colors.accent_color);
-        bulletsY = 138;
-      }
-
-      for (const bullet of bullets) {
-        doc.circle(60, bulletsY + 8, 3).fill(theme.colors.accent_color);
-        doc.font('Helvetica')
-          .fontSize(14)
-          .fillColor(theme.colors.text_dark)
-          .text(bullet, 74, bulletsY, { width: pageW - 140 });
-        bulletsY += doc.heightOfString(bullet, { width: pageW - 140 }) + 12;
-      }
-    }
-  }
-
-  /**
-   * Quote slide — 2 variants
-   * A: Dark bg, accent-bordered panel, large translucent quote mark
-   * B: Light bg, header band, white card with accent bar
-   */
-  renderPdfQuoteSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 2;
-
-    if (variant === 0) {
-      // Variant A: Dark bg + accent-bordered panel + large quote mark
-      this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
-
-      // Bordered panel
-      doc.roundedRect(80, 70, pageW - 160, pageH - 160, 8)
-        .lineWidth(1.5)
-        .stroke(theme.colors.accent_color);
-
-      // Large translucent quote mark
-      doc.save();
-      doc.opacity(0.25);
-      this.drawPdfIcon(doc, 'quote', 90, 40, 120, theme.colors.accent_color, { width: 200 });
-      doc.restore();
-
-      // Quote text
-      doc.font('Times-Italic')
-        .fontSize(20)
-        .fillColor(theme.colors.text_light)
-        .text(data.quote || '', 130, pageH * 0.25, {
-          width: pageW - 260,
-          align: 'center'
-        });
-
-      // Separator
-      doc.rect(pageW / 2 - 60, pageH * 0.62, 120, 3).fill(theme.colors.accent_color);
-
-      // Attribution
-      if (data.attribution) {
-        doc.font('Helvetica')
-          .fontSize(13)
-          .fillColor(theme.colors.accent_color)
-          .text(`\u2014 ${data.attribution}`, 130, pageH * 0.66, {
-            width: pageW - 260,
-            align: 'right'
-          });
-      }
-
-    } else {
-      // Variant B: Light bg + header band + white card with accent bar
-      const heading = data.heading || data.attribution || 'Notable Quote';
-      // Redraw light bg since quote is normally dark
-      doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
-      this.addPdfHeaderBand(doc, heading, theme, pageW);
-
-      // White card with accent bar
-      this.addPdfCardPanel(doc, 36, 100, pageW - 72, 220, theme);
-      this.addPdfLeftAccentBar(doc, 36, 100, 220, theme.colors.accent_color);
-
-      // Quote text inside card
-      doc.font('Times-Italic')
-        .fontSize(18)
-        .fillColor(theme.colors.text_dark)
-        .text(data.quote || '', 70, 130, {
-          width: pageW - 150
-        });
-
-      // Attribution below card
-      if (data.attribution) {
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor(theme.colors.text_muted)
-          .text(`\u2014 ${data.attribution}`, 70, 340, {
-            width: pageW - 150,
-            align: 'right'
-          });
-      }
-    }
-  }
-
-  /**
-   * Statistics slide — 2 variants
-   * A: Header band + white cards with accent top borders
-   * B: Colored-fill cards alternating primary/accent
-   */
-  renderPdfStatisticsSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 2;
-    const stats = data.stats || [];
-    const count = Math.min(stats.length, 4);
-    if (count === 0) return;
-
-    this.addPdfHeaderBand(doc, data.heading || 'Key Statistics', theme, pageW);
-
-    const totalWidth = pageW - 100;
+    const items = this._getSlideItems(data).slice(0, 3);
     const gap = 16;
-    const cardW = (totalWidth - gap * (count - 1)) / count;
-    const cardY = 110;
-    const cardH = pageH - 140;
-
-    if (variant === 0) {
-      // Variant A: White cards with accent top border
-      for (let i = 0; i < count; i++) {
-        const stat = stats[i];
-        const xPos = 50 + i * (cardW + gap);
-
-        this.addPdfCardPanel(doc, xPos, cardY, cardW, cardH, theme);
-
-        doc.font('Times-Bold')
-          .fontSize(34)
-          .fillColor(theme.colors.accent_color)
-          .text(stat.value || '', xPos + 10, cardY + 60, {
-            width: cardW - 20,
-            align: 'center'
-          });
-
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor(theme.colors.text_dark)
-          .text(stat.label || '', xPos + 10, cardY + 120, {
-            width: cardW - 20,
-            align: 'center'
-          });
-      }
-    } else {
-      // Variant B: Colored-fill cards alternating primary/accent
-      for (let i = 0; i < count; i++) {
-        const stat = stats[i];
-        const xPos = 50 + i * (cardW + gap);
-        const fillColor = i % 2 === 1 ? theme.colors.accent_color : theme.colors.primary_color;
-
-        doc.roundedRect(xPos, cardY, cardW, cardH, 6).fill(fillColor);
-
-        doc.font('Times-Bold')
-          .fontSize(34)
-          .fillColor('#FFFFFF')
-          .text(stat.value || '', xPos + 10, cardY + 60, {
-            width: cardW - 20,
-            align: 'center'
-          });
-
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor('#FFFFFF')
-          .text(stat.label || '', xPos + 10, cardY + 120, {
-            width: cardW - 20,
-            align: 'center'
-          });
-      }
-    }
-  }
-
-  /**
-   * Summary slide — 2 variants
-   * A: Dark bg, centered icon + title, white card with checkmarks, CTA footer
-   * B: Dark bg, accent bar + heading, white bullets, accent CTA button
-   */
-  renderPdfSummarySlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 2;
-    const takeaways = data.takeaways || [];
-
-    if (variant === 0) {
-      // Variant A: Centered icon + large title + white card panel
-      this.drawPdfIcon(doc, 'summary', 0, 20, 30, theme.colors.text_light, { width: pageW, align: 'center' });
-
-      doc.font('Times-Bold')
-        .fontSize(30)
-        .fillColor(theme.colors.text_light)
-        .text(data.heading || 'Key Takeaways', 60, 65, {
-          width: pageW - 120,
-          align: 'center'
-        });
-
-      // White card panel
-      const cardY = 120;
-      const cardH = pageH - 200;
-      this.addPdfCardPanel(doc, 60, cardY, pageW - 120, cardH, theme);
-
-      let yPos = cardY + 20;
-      for (const takeaway of takeaways) {
-        // Draw checkmark icon, then text in Helvetica
-        this.drawPdfIcon(doc, 'summary', 85, yPos, 14, theme.colors.accent_color, { width: 20 });
-        doc.font('Helvetica')
-          .fontSize(14)
-          .fillColor(theme.colors.text_dark)
-          .text(takeaway, 108, yPos, { width: pageW - 200 });
-        yPos += doc.heightOfString(takeaway, { width: pageW - 200 }) + 10;
-      }
-
-      // CTA as italic accent footer
-      if (data.call_to_action) {
-        doc.font('Times-Italic')
-          .fontSize(14)
-          .fillColor(theme.colors.accent_color)
-          .text(data.call_to_action, 60, pageH - 60, {
-            width: pageW - 120,
-            align: 'center'
-          });
-      }
-
-    } else {
-      // Variant B: Left accent bar + heading + takeaways + accent CTA button
-      this.addPdfLeftAccentBar(doc, 44, 30, pageH - 60, theme.colors.accent_color);
-
-      doc.font('Times-Bold')
-        .fontSize(24)
-        .fillColor(theme.colors.text_light)
-        .text(data.heading || 'Key Takeaways', 70, 35, {
-          width: pageW - 140
-        });
-
-      doc.rect(70, 70, 100, 4).fill(theme.colors.accent_color);
-
-      let yPos = 95;
-      for (const takeaway of takeaways) {
-        doc.circle(80, yPos + 8, 3).fill(theme.colors.accent_color);
-        doc.font('Helvetica')
-          .fontSize(14)
-          .fillColor(theme.colors.text_light)
-          .text(takeaway, 94, yPos, { width: pageW - 170 });
-        yPos += doc.heightOfString(takeaway, { width: pageW - 170 }) + 10;
-      }
-
-      // CTA button
-      if (data.call_to_action) {
-        const ctaY = pageH - 80;
-        const ctaW = pageW - 200;
-        doc.roundedRect(100, ctaY, ctaW, 40, 6).fill(theme.colors.accent_color);
-        doc.font('Helvetica-Bold')
-          .fontSize(14)
-          .fillColor('#FFFFFF')
-          .text(data.call_to_action, 100, ctaY + 12, {
-            width: ctaW,
-            align: 'center'
-          });
-      }
-    }
-  }
-
-  /**
-   * Two-column slide — 2 variants
-   * A: Header band + two white cards with icons
-   * B: Two colored-fill cards (primary/accent) with white text
-   */
-  renderPdfTwoColumnSlide(doc, data, theme, pageW, pageH, variantIndex = 0) {
-    const variant = variantIndex % 2;
-
-    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
-
-    const cardY = 100;
+    const cardW = (pageW - 100 - gap * 2) / 3;
+    const cardY = 105;
     const cardH = pageH - 130;
-    const gap = 16;
+    const borderColors = [theme.colors.primary_color, theme.colors.accent_color, theme.colors.secondary_color];
+
+    // Parse items into topic/summary pairs
+    const cards = items.map(raw => {
+      const pipeIdx = raw.indexOf('|');
+      return {
+        topic: pipeIdx > -1 ? raw.substring(0, pipeIdx) : '',
+        summary: pipeIdx > -1 ? raw.substring(pipeIdx + 1) : raw
+      };
+    });
+
+    // First pass: measure tallest header to align summary text across all cards
+    const topicY = cardY + 20;
+    let maxTopicH = 0;
+    doc.font('Helvetica-Bold').fontSize(26);
+    for (const card of cards) {
+      if (card.topic) {
+        const h = doc.heightOfString(card.topic, { width: cardW - 36 });
+        if (h > maxTopicH) maxTopicH = h;
+      }
+    }
+    const summaryY = topicY + maxTopicH + 16;
+
+    // Second pass: render cards with aligned summary text
+    for (let col = 0; col < cards.length; col++) {
+      const xPos = 50 + col * (cardW + gap);
+      this.addPdfCardPanel(doc, xPos, cardY, cardW, cardH, theme, { borderColor: borderColors[col] });
+
+      // Bold topic header (H2 size)
+      if (cards[col].topic) {
+        doc.font('Helvetica-Bold').fontSize(26).fillColor(borderColors[col])
+          .text(cards[col].topic, xPos + 18, topicY, { width: cardW - 36 });
+      }
+
+      // Summary text aligned to same Y across all cards
+      doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_dark)
+        .text(cards[col].summary, xPos + 18, summaryY, { width: cardW - 36 });
+    }
+
+    const subtitle = this._getSlideSubtitle(data);
+    if (subtitle) {
+      doc.font('Times-Italic').fontSize(13).fillColor(theme.colors.text_muted)
+        .text(subtitle, 50, pageH - 40, { width: pageW - 100, align: 'center' });
+    }
+  }
+
+  /** Layout 4: two-column-comparison — Light bg, dark header + accent underline, 2 white cards with bold H2 header + bulleted list (max 3) */
+  _pdfLayout4_twoColumnIconCards(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+    this.addPdfHeaderBand(doc, this._getSlideTitle(data), theme, pageW);
+
+    const leftItems = (data.left_items || []).slice(0, 3);
+    const rightItems = (data.right_items || []).slice(0, 3);
+    const leftTitle = data.left_title || '';
+    const rightTitle = data.right_title || '';
+    const gap = 20;
     const cardW = (pageW - 100 - gap) / 2;
+    const cardY = 105;
+    const cardH = pageH - 130;
     const leftX = 50;
     const rightX = 50 + cardW + gap;
+    const cardColors = [theme.colors.accent_color, theme.colors.primary_color];
 
-    if (variant === 0) {
-      // Variant A: Two white cards with icons above titles
-      this.addPdfCardPanel(doc, leftX, cardY, cardW, cardH, theme);
-      this.addPdfCardPanel(doc, rightX, cardY, cardW, cardH, theme);
-
-      // Left icon + title
-      this.drawPdfIcon(doc, 'two_column', leftX, cardY + 15, 22, theme.colors.accent_color, { width: cardW, align: 'center' });
-      if (data.left_title) {
-        doc.font('Helvetica-Bold')
-          .fontSize(14)
-          .fillColor(theme.colors.accent_color)
-          .text(data.left_title, leftX + 15, cardY + 50, { width: cardW - 30, align: 'center' });
-      }
-
-      // Right icon + title
-      this.drawPdfIcon(doc, 'two_column', rightX, cardY + 15, 22, theme.colors.primary_color, { width: cardW, align: 'center' });
-      if (data.right_title) {
-        doc.font('Helvetica-Bold')
-          .fontSize(14)
-          .fillColor(theme.colors.primary_color)
-          .text(data.right_title, rightX + 15, cardY + 50, { width: cardW - 30, align: 'center' });
-      }
-
-      // Left items
-      let leftY = cardY + 80;
-      for (const item of (data.left_items || [])) {
-        doc.circle(leftX + 22, leftY + 7, 3).fill(theme.colors.accent_color);
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor(theme.colors.text_dark)
-          .text(item, leftX + 34, leftY, { width: cardW - 50 });
-        leftY += doc.heightOfString(item, { width: cardW - 50 }) + 8;
-      }
-
-      // Right items
-      let rightY = cardY + 80;
-      for (const item of (data.right_items || [])) {
-        doc.circle(rightX + 22, rightY + 7, 3).fill(theme.colors.primary_color);
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor(theme.colors.text_dark)
-          .text(item, rightX + 34, rightY, { width: cardW - 50 });
-        rightY += doc.heightOfString(item, { width: cardW - 50 }) + 8;
-      }
-
-    } else {
-      // Variant B: Two colored-fill cards
-      doc.roundedRect(leftX, cardY, cardW, cardH, 6).fill(theme.colors.primary_color);
-      doc.roundedRect(rightX, cardY, cardW, cardH, 6).fill(theme.colors.accent_color);
-
-      // Left title
-      if (data.left_title) {
-        doc.font('Helvetica-Bold')
-          .fontSize(15)
-          .fillColor('#FFFFFF')
-          .text(data.left_title, leftX + 15, cardY + 20, { width: cardW - 30, align: 'center' });
-      }
-      // Right title
-      if (data.right_title) {
-        doc.font('Helvetica-Bold')
-          .fontSize(15)
-          .fillColor('#FFFFFF')
-          .text(data.right_title, rightX + 15, cardY + 20, { width: cardW - 30, align: 'center' });
-      }
-
-      // Left items (white text)
-      let leftY = cardY + 55;
-      for (const item of (data.left_items || [])) {
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor('#FFFFFF')
-          .text(item, leftX + 20, leftY, { width: cardW - 40, align: 'center' });
-        leftY += doc.heightOfString(item, { width: cardW - 40 }) + 8;
-      }
-
-      // Right items (white text)
-      let rightY = cardY + 55;
-      for (const item of (data.right_items || [])) {
-        doc.font('Helvetica')
-          .fontSize(12)
-          .fillColor('#FFFFFF')
-          .text(item, rightX + 20, rightY, { width: cardW - 40, align: 'center' });
-        rightY += doc.heightOfString(item, { width: cardW - 40 }) + 8;
+    // Measure tallest header to align bullets across both cards
+    const topicY = cardY + 20;
+    let maxTopicH = 0;
+    doc.font('Helvetica-Bold').fontSize(26);
+    for (const title of [leftTitle, rightTitle]) {
+      if (title) {
+        const h = doc.heightOfString(title, { width: cardW - 36 });
+        if (h > maxTopicH) maxTopicH = h;
       }
     }
+    const bulletsY = topicY + maxTopicH + 36;
+
+    // Render a card with header + bullets
+    const renderCard = (xPos, title, items, color) => {
+      this.addPdfCardPanel(doc, xPos, cardY, cardW, cardH, theme, { borderColor: color });
+
+      // Bold topic header (H2 size)
+      if (title) {
+        doc.font('Helvetica-Bold').fontSize(26).fillColor(color)
+          .text(title, xPos + 18, topicY, { width: cardW - 36 });
+      }
+
+      // Bulleted list aligned to same Y across both cards
+      let yPos = bulletsY;
+      for (const item of items) {
+        doc.circle(xPos + 30, yPos + 12, 4).fill(color);
+        doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_dark)
+          .text(item, xPos + 46, yPos, { width: cardW - 64 });
+        yPos += doc.heightOfString(item, { width: cardW - 64, fontSize: 22 }) + 18;
+      }
+    };
+
+    renderCard(leftX, leftTitle, leftItems, cardColors[0]);
+    renderCard(rightX, rightTitle, rightItems, cardColors[1]);
   }
 
-  /**
-   * Table slide — header band + table with dark header row, alternating row colors
-   */
-  renderPdfTableSlide(doc, data, theme, pageW, pageH) {
-    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+  /** Layout 5: dark-quote-banner — Dark bg, title top-left, semi-transparent banner with accent italic quote, white bullets below */
+  _pdfLayout5_darkQuoteBanner(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
+    this.addPdfLeftAccentBar(doc, 26, 0, pageH, theme.colors.accent_color);
 
-    const headers = data.headers || [];
-    const rows = data.rows || [];
-    if (headers.length === 0) return;
+    const title = this._getSlideTitle(data);
+    doc.font('Times-Bold').fontSize(28).fillColor(theme.colors.text_light)
+      .text(title, 52, 26, { width: pageW - 110 });
 
-    const tableX = 50;
-    const tableW = pageW - 100;
-    const colW = tableW / headers.length;
-    const rowH = 32;
-    let yPos = 105;
+    // Quote/subtitle banner — only uses quote or subtitle, never a bullet
+    const bannerText = this._getSlideQuote(data) || this._getSlideSubtitle(data);
+    let bulletsY = 90;
 
-    // Header row — dark bg
-    doc.rect(tableX, yPos, tableW, rowH).fill(theme.colors.dark_bg);
-    for (let i = 0; i < headers.length; i++) {
-      doc.font('Helvetica-Bold')
-        .fontSize(11)
-        .fillColor('#FFFFFF')
-        .text(headers[i], tableX + i * colW + 6, yPos + 8, {
-          width: colW - 12,
-          align: 'center'
-        });
-    }
-    yPos += rowH;
-
-    // Data rows with alternating colors
-    for (let r = 0; r < rows.length; r++) {
-      const row = rows[r];
-      const fillColor = r % 2 === 0 ? theme.colors.light_bg : theme.colors.card_bg;
-      doc.rect(tableX, yPos, tableW, rowH).fill(fillColor);
-
-      // Cell borders
+    if (bannerText) {
       doc.save();
-      doc.lineWidth(0.5).strokeColor('#CBD5E0');
-      doc.rect(tableX, yPos, tableW, rowH).stroke();
-      for (let i = 1; i < headers.length; i++) {
-        doc.moveTo(tableX + i * colW, yPos).lineTo(tableX + i * colW, yPos + rowH).stroke();
-      }
+      doc.opacity(0.15);
+      doc.roundedRect(36, 75, pageW - 72, 60, 4).fill(theme.colors.accent_color);
       doc.restore();
+      doc.font('Times-Italic').fontSize(17).fillColor(theme.colors.accent_color)
+        .text(bannerText, 52, 85, { width: pageW - 110 });
+      bulletsY = 150;
+    }
 
-      for (let i = 0; i < headers.length; i++) {
-        doc.font('Helvetica')
-          .fontSize(10)
-          .fillColor(theme.colors.text_dark)
-          .text((row[i] || ''), tableX + i * colW + 6, yPos + 8, {
-            width: colW - 12,
-            align: 'center'
-          });
+    // All bullets rendered below the banner — none placed inside it
+    const bulletItems = this._getSlideItems(data).slice(0, 6);
+    for (const item of bulletItems) {
+      doc.circle(60, bulletsY + 12, 4).fill(theme.colors.accent_color);
+      doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_light)
+        .text(item, 76, bulletsY, { width: pageW - 140 });
+      bulletsY += doc.heightOfString(item, { width: pageW - 140, fontSize: 22 }) + 18;
+      if (bulletsY > pageH - 30) break;
+    }
+  }
+
+  /** Layout 6: icon-subheading-bullets — Dark bg, light header band, icon + bold accent subheading + accent underline, light bullets */
+  _pdfLayout6_iconSubheadingBullets(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
+
+    // Light header band (inverted from layout 2)
+    const bandH = 80;
+    doc.rect(0, 0, pageW, bandH).fill(theme.colors.light_bg);
+    doc.rect(0, bandH, pageW, 3).fill(theme.colors.accent_color);
+    doc.font('Times-Bold').fontSize(28).fillColor(theme.colors.text_dark)
+      .text(this._getSlideTitle(data), 40, 22, { width: pageW - 80 });
+
+    const icon = this._getSlideIconChar(data);
+    const subtitle = this._getSlideSubtitle(data);
+    let bulletsY = 100;
+
+    if (subtitle) {
+      this.drawPdfIcon(doc, icon, 40, 96, 28, theme.colors.accent_color, { width: 34 });
+      doc.font('Helvetica-Bold').fontSize(20).fillColor(theme.colors.accent_color)
+        .text(subtitle, 82, 98, { width: pageW - 140 });
+      doc.rect(82, 126, pageW - 140, 3).fill(theme.colors.accent_color);
+      bulletsY = 165;
+    } else {
+      this.drawPdfIcon(doc, icon, 40, 96, 28, theme.colors.accent_color, { width: 34 });
+      bulletsY = 128;
+    }
+
+    const items = this._getSlideItems(data).slice(0, 6);
+    for (const item of items) {
+      doc.circle(60, bulletsY + 12, 4).fill(theme.colors.accent_color);
+      doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_light)
+        .text(item, 76, bulletsY, { width: pageW - 140 });
+      bulletsY += doc.heightOfString(item, { width: pageW - 140, fontSize: 22 }) + 18;
+      if (bulletsY > pageH - 30) break;
+    }
+  }
+
+  /** Layout 7: quote-accent-bar — Light bg, dark header + accent underline, white card with thick accent left bar + italic text, bullets below */
+  _pdfLayout7_quoteAccentBar(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
+    const heading = this._getSlideTitle(data);
+    this.addPdfHeaderBand(doc, heading, theme, pageW);
+
+    // White card with accent bar for quote
+    const quote = this._getSlideQuote(data);
+    const quoteText = quote || this._getSlideSubtitle(data);
+    let contentY = 100;
+
+    if (quoteText) {
+      const cardH = 110;
+      const cardTop = 100;
+      this.addPdfCardPanel(doc, 36, cardTop, pageW - 72, cardH, theme);
+      this.addPdfLeftAccentBar(doc, 36, cardTop, cardH, theme.colors.accent_color);
+
+      // Measure text height to vertically center in card
+      doc.font('Times-Italic').fontSize(22);
+      const textH = doc.heightOfString(quoteText, { width: pageW - 130 });
+      const textY = cardTop + (cardH - textH) / 2;
+      doc.fillColor(theme.colors.text_dark)
+        .text(quoteText, 56, textY, { width: pageW - 130 });
+
+      if (data.attribution) {
+        doc.font('Helvetica').fontSize(13).fillColor(theme.colors.text_muted)
+          .text(`\u2014 ${data.attribution}`, 56, cardTop + cardH + 6, { width: pageW - 110, align: 'right' });
       }
-      yPos += rowH;
-      if (yPos > pageH - 40) break; // Prevent overflow
+      contentY = cardTop + cardH + 30;
+    }
+
+    const items = this._getSlideItems(data).slice(0, 6);
+    for (const item of items) {
+      doc.circle(60, contentY + 12, 4).fill(theme.colors.accent_color);
+      doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_dark)
+        .text(item, 76, contentY, { width: pageW - 140 });
+      contentY += doc.heightOfString(item, { width: pageW - 140, fontSize: 22 }) + 18;
+      if (contentY > pageH - 30) break;
     }
   }
 
-  /**
-   * Image placeholder slide — header band + white card + dashed accent border + icon
-   */
-  renderPdfImagePlaceholderSlide(doc, data, theme, pageW, pageH) {
-    this.addPdfHeaderBand(doc, data.heading || '', theme, pageW);
+  /** Layout 8: three-column-filled — Light bg, dark header with inline icon, 3 tall cards with colored backgrounds (primary/accent/secondary), white text */
+  _pdfLayout8_threeColumnFilled(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.light_bg);
 
-    // White card panel
-    this.addPdfCardPanel(doc, 100, 110, pageW - 200, pageH - 190, theme);
+    // Dark header band with inline icon
+    const bandH = 80;
+    doc.rect(0, 0, pageW, bandH).fill(theme.colors.dark_bg);
+    doc.rect(0, bandH, pageW, 3).fill(theme.colors.accent_color);
+    const icon = this._getSlideIconChar(data);
+    this.drawPdfIcon(doc, icon, 30, 24, 26, theme.colors.accent_color, { width: 34 });
+    doc.font('Times-Bold').fontSize(26).fillColor(theme.colors.text_light)
+      .text(this._getSlideTitle(data), 70, 28, { width: pageW - 110 });
 
-    // Dashed border inner area
-    doc.roundedRect(130, 140, pageW - 260, pageH - 260, 6)
-      .lineWidth(1.5)
-      .dash(6, { space: 4 })
-      .stroke(theme.colors.accent_color);
-    doc.undash();
+    const items = this._getSlideItems(data);
+    const groups = this._splitIntoGroups(items, 3);
+    const gap = 16;
+    const cardW = (pageW - 100 - gap * 2) / 3;
+    const cardY = 100;
+    const cardH = pageH - 120;
+    const fillColors = [theme.colors.primary_color, theme.colors.accent_color, theme.colors.primary_color];
 
-    // Placeholder icon
-    doc.save();
-    doc.opacity(0.4);
-    this.drawPdfIcon(doc, 'image_placeholder', 0, pageH * 0.3, 48, theme.colors.text_muted, { width: pageW, align: 'center' });
-    doc.restore();
+    for (let col = 0; col < 3; col++) {
+      const xPos = 50 + col * (cardW + gap);
+      doc.roundedRect(xPos, cardY, cardW, cardH, 6).fill(fillColors[col]);
 
-    // Description text
-    doc.font('Helvetica')
-      .fontSize(13)
-      .fillColor(theme.colors.text_muted)
-      .text(data.image_description || '[Image Placeholder]', 150, pageH * 0.52, {
-        width: pageW - 300,
-        align: 'center'
-      });
+      // Use dark text on light backgrounds (accent), white text on dark backgrounds (primary)
+      const textColor = this._luminance(fillColors[col]) > 0.3 ? theme.colors.text_dark : '#FFFFFF';
 
-    // Caption
-    if (data.caption) {
-      doc.font('Helvetica-Oblique')
-        .fontSize(11)
-        .fillColor(theme.colors.text_muted)
-        .text(data.caption, 130, pageH - 100, {
-          width: pageW - 260,
-          align: 'center'
-        });
+      let yPos = cardY + 20;
+      for (const item of groups[col]) {
+        doc.font('Helvetica').fontSize(22).fillColor(textColor)
+          .text(item, xPos + 15, yPos, { width: cardW - 30 });
+        yPos += doc.heightOfString(item, { width: cardW - 30, fontSize: 22 }) + 12;
+        if (yPos > cardY + cardH - 10) break;
+      }
     }
   }
+
+  /** Layout 9: centered-dark-icon — Dark bg, centered large icon, centered title (section divider) */
+  _pdfLayout9_centeredDarkIcon(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
+
+    // Center icon and title vertically on the slide
+    const icon = this._getSlideIconChar(data);
+    const title = this._getSlideTitle(data);
+
+    // Measure title height to calculate total content block
+    doc.font('Times-Bold').fontSize(38);
+    const titleH = doc.heightOfString(title, { width: pageW - 200 });
+    const iconH = 60;
+    const gap = 40;
+    const totalH = iconH + gap + titleH;
+    const startY = (pageH - totalH) / 2;
+
+    this.drawPdfIcon(doc, icon, 0, startY, 48, theme.colors.accent_color, { width: pageW, align: 'center' });
+
+    doc.font('Times-Bold').fontSize(38).fillColor(theme.colors.text_light)
+      .text(title, 100, startY + iconH + gap, { width: pageW - 200, align: 'center' });
+  }
+
+  /** Layout 10: closing-dark-card — Dark bg (matches opening), circled icon, white title, white card with accent top bar + bullets, accent italic footer */
+  _pdfLayout10_primaryBgCard(doc, data, theme, pageW, pageH) {
+    doc.rect(0, 0, pageW, pageH).fill(theme.colors.dark_bg);
+
+    // Circled icon with accent ring and white background
+    const cx = pageW / 2;
+    doc.circle(cx, 48, 32).fill(theme.colors.accent_color);
+    doc.circle(cx, 48, 28).fill('#FFFFFF');
+    const icon = this._getSlideIconChar(data);
+    this.drawPdfIcon(doc, icon, cx - 28, 30, 34, theme.colors.primary_color, { width: 56, align: 'center' });
+
+    // White title
+    const title = this._getSlideTitle(data);
+    doc.font('Times-Bold').fontSize(32).fillColor(theme.colors.text_light)
+      .text(title, 60, 92, { width: pageW - 120, align: 'center' });
+
+    // White card with accent top bar
+    const cardY = 145;
+    const cardH = pageH - 210;
+    this.addPdfCardPanel(doc, 60, cardY, pageW - 120, cardH, theme);
+
+    const items = this._getSlideItems(data).slice(0, 12);
+    const cardLeft = 60;
+    const cardRight = pageW - 60;
+    const cardInner = 25;
+    const bulletStartY = cardY + 32;
+
+    if (items.length <= 6) {
+      // Single column
+      let yPos = bulletStartY;
+      for (const item of items) {
+        doc.circle(cardLeft + cardInner, yPos + 12, 4).fill(theme.colors.accent_color);
+        doc.font('Helvetica').fontSize(22).fillColor(theme.colors.text_dark)
+          .text(item, cardLeft + cardInner + 16, yPos, { width: cardRight - cardLeft - cardInner - 40 });
+        yPos += doc.heightOfString(item, { width: cardRight - cardLeft - cardInner - 40, fontSize: 22 }) + 14;
+        if (yPos > cardY + cardH - 10) break;
+      }
+    } else {
+      // Two columns
+      const colW = (cardRight - cardLeft - cardInner * 2) / 2 - 10;
+      const leftX = cardLeft + cardInner;
+      const rightX = cardLeft + (cardRight - cardLeft) / 2 + 10;
+      const leftItems = items.slice(0, Math.ceil(items.length / 2));
+      const rightItems = items.slice(Math.ceil(items.length / 2));
+
+      let yPos = bulletStartY;
+      for (const item of leftItems) {
+        doc.circle(leftX, yPos + 10, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica').fontSize(18).fillColor(theme.colors.text_dark)
+          .text(item, leftX + 14, yPos, { width: colW - 14 });
+        yPos += doc.heightOfString(item, { width: colW - 14, fontSize: 18 }) + 10;
+        if (yPos > cardY + cardH - 10) break;
+      }
+
+      yPos = bulletStartY;
+      for (const item of rightItems) {
+        doc.circle(rightX, yPos + 10, 3).fill(theme.colors.accent_color);
+        doc.font('Helvetica').fontSize(18).fillColor(theme.colors.text_dark)
+          .text(item, rightX + 14, yPos, { width: colW - 14 });
+        yPos += doc.heightOfString(item, { width: colW - 14, fontSize: 18 }) + 10;
+        if (yPos > cardY + cardH - 10) break;
+      }
+    }
+
+    // Accent italic footer
+    const subtitle = this._getSlideSubtitle(data);
+    if (subtitle) {
+      doc.font('Times-Italic').fontSize(20).fillColor(theme.colors.accent_color)
+        .text(subtitle, 60, pageH - 55, { width: pageW - 120, align: 'center' });
+    }
+  }
+
 
   /**
    * Generate sanitized filename
