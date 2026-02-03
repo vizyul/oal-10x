@@ -128,7 +128,8 @@ class ThumbnailController {
             try {
                 // Get the video's channel info, video type, and saved topic/subtopic
                 const videoResult = await database.query(
-                    `SELECT v.channel_handle, v.videoid, v.video_type, v.thumbnail_topic, v.thumbnail_subtopic
+                    `SELECT v.channel_handle, v.videoid, v.video_type, v.thumbnail_topic, v.thumbnail_subtopic,
+                            v.imported_via_youtube_oauth
                      FROM videos v
                      WHERE v.id = $1 AND v.users_id = $2`,
                     [req.params.videoId, req.user.id]
@@ -139,7 +140,7 @@ class ThumbnailController {
                     thumbnailTopic = videoResult.rows[0].thumbnail_topic || '';
                     thumbnailSubtopic = videoResult.rows[0].thumbnail_subtopic || '';
 
-                    if (videoResult.rows[0].channel_handle) {
+                    if (videoResult.rows[0].imported_via_youtube_oauth && videoResult.rows[0].channel_handle) {
                         const videoChannelHandle = videoResult.rows[0].channel_handle;
 
                         // Check if user has a connected YouTube channel matching this handle
