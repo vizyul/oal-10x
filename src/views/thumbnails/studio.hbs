@@ -48,11 +48,11 @@
                 <h3>THUMBNAIL WORDING</h3>
                 <div class="form-group">
                     <label for="thumbnail-topic">Main Topic *</label>
-                    <input type="text" id="thumbnail-topic" class="form-input" placeholder="e.g., The Truth About AI" value="{{videoTitle}}">
+                    <input type="text" id="thumbnail-topic" class="form-input" placeholder="e.g., The Truth About AI" value="{{#if thumbnailTopic}}{{thumbnailTopic}}{{else}}{{videoTitle}}{{/if}}">
                 </div>
                 <div class="form-group">
                     <label for="thumbnail-subtopic">Sub-Topic (Optional)</label>
-                    <input type="text" id="thumbnail-subtopic" class="form-input" placeholder="e.g., What They Don't Tell You">
+                    <input type="text" id="thumbnail-subtopic" class="form-input" placeholder="e.g., What They Don't Tell You" value="{{thumbnailSubtopic}}">
                 </div>
                 <div class="form-group checkbox-group">
                     <label class="checkbox-label">
@@ -181,7 +181,9 @@
 <script>
     window.thumbnailStudioConfig = {
         videoId: '{{videoId}}' || null,
-        videoTitle: '{{videoTitle}}' || ''
+        videoTitle: '{{videoTitle}}' || '',
+        thumbnailTopic: '{{thumbnailTopic}}' || '',
+        thumbnailSubtopic: '{{thumbnailSubtopic}}' || ''
     };
 </script>
 

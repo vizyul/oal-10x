@@ -123,10 +123,12 @@ class ThumbnailController {
             // (video must be from a connected YouTube channel)
             let canUploadToYouTube = false;
             let videoType = 'video'; // default
+            let thumbnailTopic = '';
+            let thumbnailSubtopic = '';
             try {
-                // Get the video's channel info and video type
+                // Get the video's channel info, video type, and saved topic/subtopic
                 const videoResult = await database.query(
-                    `SELECT v.channel_handle, v.videoid, v.video_type
+                    `SELECT v.channel_handle, v.videoid, v.video_type, v.thumbnail_topic, v.thumbnail_subtopic
                      FROM videos v
                      WHERE v.id = $1 AND v.users_id = $2`,
                     [req.params.videoId, req.user.id]
@@ -134,6 +136,8 @@ class ThumbnailController {
 
                 if (videoResult.rows.length > 0) {
                     videoType = videoResult.rows[0].video_type || 'video';
+                    thumbnailTopic = videoResult.rows[0].thumbnail_topic || '';
+                    thumbnailSubtopic = videoResult.rows[0].thumbnail_subtopic || '';
 
                     if (videoResult.rows[0].channel_handle) {
                         const videoChannelHandle = videoResult.rows[0].channel_handle;
@@ -156,7 +160,9 @@ class ThumbnailController {
                 success: true,
                 data: thumbnails,
                 canUploadToYouTube,
-                videoType  // 'video', 'short', or 'live'
+                videoType,  // 'video', 'short', or 'live'
+                thumbnailTopic,
+                thumbnailSubtopic
             });
         } catch (error) {
             logger.error('Failed to get video thumbnails:', error);
@@ -247,6 +253,17 @@ class ThumbnailController {
                     [error.message, jobId]
                 );
             });
+
+            // Save topic/subtopic to the videos table for persistence
+            try {
+                await database.query(
+                    `UPDATE videos SET thumbnail_topic = $1, thumbnail_subtopic = $2, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $3 AND users_id = $4`,
+                    [topic, subTopic || null, req.params.videoId, req.user.id]
+                );
+            } catch (saveError) {
+                logger.warn('Failed to save thumbnail topic/subtopic to video:', saveError.message);
+            }
 
             res.json({
                 success: true,

@@ -406,6 +406,9 @@ describe('SubscriptionService', () => {
       subscriptionUsage.getCurrentByUserId.mockResolvedValue({
         videos_processed: 7
       });
+      database.query.mockResolvedValue({
+        rows: [{ subscription_tier: 'basic', free_video_used: false }]
+      });
 
       const result = await subscriptionService.getCurrentPeriodUsage(1);
 
@@ -437,6 +440,9 @@ describe('SubscriptionService', () => {
         api_calls_made: 100,
         storage_used_mb: 50,
         ai_summaries_generated: 10
+      });
+      database.query.mockResolvedValue({
+        rows: [{ subscription_tier: 'basic', free_video_used: false }]
       });
 
       const result = await subscriptionService.getCurrentPeriodUsageBreakdown(1);

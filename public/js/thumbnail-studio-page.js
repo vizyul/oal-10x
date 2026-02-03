@@ -7,6 +7,8 @@ class ThumbnailStudioPage {
     constructor() {
         this.videoId = window.thumbnailStudioConfig?.videoId || null;
         this.videoTitle = window.thumbnailStudioConfig?.videoTitle || '';
+        this.thumbnailTopic = window.thumbnailStudioConfig?.thumbnailTopic || '';
+        this.thumbnailSubtopic = window.thumbnailStudioConfig?.thumbnailSubtopic || '';
         this.options = null;
         this.referenceImages = [];
         this.selectedExpression = null;
@@ -150,18 +152,26 @@ class ThumbnailStudioPage {
         this.videoId = videoId;
         this.canUploadToYouTube = false; // Reset until we check
         this.videoType = 'video'; // Reset until we check
+        this.thumbnailTopic = ''; // Reset until loaded
+        this.thumbnailSubtopic = ''; // Reset until loaded
         const selector = document.getElementById('video-selector');
         const selectedOption = selector.options[selector.selectedIndex];
         this.videoTitle = selectedOption.text;
 
-        // Update topic input
+        // Load existing thumbnails for this video (also loads saved topic/subtopic)
+        await this.loadExistingThumbnails();
+
+        // Populate topic input with saved topic or fall back to video title
         const topicInput = document.getElementById('thumbnail-topic');
         if (topicInput) {
-            topicInput.value = this.videoTitle;
+            topicInput.value = this.thumbnailTopic || this.videoTitle;
         }
 
-        // Load existing thumbnails for this video
-        await this.loadExistingThumbnails();
+        // Populate subtopic input with saved subtopic
+        const subtopicInput = document.getElementById('thumbnail-subtopic');
+        if (subtopicInput) {
+            subtopicInput.value = this.thumbnailSubtopic || '';
+        }
     }
 
     /**
@@ -358,6 +368,10 @@ class ThumbnailStudioPage {
             // Store whether user can upload to YouTube for this video
             this.canUploadToYouTube = data.canUploadToYouTube || false;
             this.videoType = data.videoType || 'video';
+
+            // Store saved topic/subtopic from API
+            this.thumbnailTopic = data.thumbnailTopic || '';
+            this.thumbnailSubtopic = data.thumbnailSubtopic || '';
 
             if (data.success && data.data.length > 0) {
                 // Store ALL thumbnails (up to 8: 4 for 16:9 + 4 for 9:16)

@@ -539,10 +539,23 @@ async function generateSingleThumbnail(prompt, referenceImages, aspectRatio, ret
  * Edit/refine an existing thumbnail
  * Uses @google/genai SDK with imageConfig for proper image editing
  */
-async function editThumbnail(baseImageData, instruction, retries = 3) {
+async function editThumbnail(baseImageData, instruction, topic = null, subTopic = null, retries = 3) {
     logger.info(`Using Gemini model: ${GEMINI_IMAGE_MODEL} for thumbnail editing`);
 
+    // Build text requirements section if topic is provided
+    let textRequirements = '';
+    if (topic) {
+        textRequirements = `
+CRITICAL TEXT REQUIREMENTS:
+- Main Topic text MUST read exactly: "${topic}"
+${subTopic ? `- Sub-Topic text MUST read exactly: "${subTopic}"` : '- Do NOT add any subtitle text unless one already exists'}
+- Spell every word EXACTLY as shown above - do not paraphrase or abbreviate
+- If you cannot render the text correctly, omit it rather than misspell it
+`;
+    }
+
     const editPrompt = `Edit this thumbnail. INSTRUCTION: ${instruction}.
+${textRequirements}
 Maintain the current aspect ratio and consistent character likeness.
 Boost saturation and contrast where necessary to make it look 'viral'.
 Keep the typographic layout and horizontal separation if applicable.
@@ -853,45 +866,73 @@ class ThumbnailGeneratorService {
         // Fetch the original image
         const base64 = await fetchImageAsBase64(original.cloudinary_secure_url);
 
-        // Edit with Gemini
-        const editedImageData = await editThumbnail(base64, instruction);
+        // Edit with Gemini - pass topic/subTopic to ensure correct text rendering
+        const editedImageData = await editThumbnail(base64, instruction, original.topic, original.sub_topic);
 
         // Generate meaningful public ID: thumb_v{videoId}_{style}_refined_v{version}_{timestamp}
         const newVersion = (original.version || 0) + 1;
         const timestamp = Date.now();
         const publicId = `thumb_v${original.video_id}_${original.style_name}_refined_v${newVersion}_${timestamp}`;
 
-        // Upload edited version (pass aspectRatio from original for per-ratio limit enforcement)
-        const uploadResult = await cloudinaryService.uploadThumbnail(
+        // Store the old Cloudinary public ID before uploading new version
+        const oldCloudinaryPublicId = original.cloudinary_public_id;
+
+        // Upload edited version using uploadImage directly (NOT uploadThumbnail)
+        // This skips the limit enforcement logic since we're REPLACING, not adding
+        const aspectRatioTag = original.aspect_ratio ? `ratio_${original.aspect_ratio.replace(':', 'x')}` : 'ratio_16x9';
+        const uploadResult = await cloudinaryService.uploadImage(
             editedImageData,
-            { userId, videoId: original.video_id, publicId, aspectRatio: original.aspect_ratio },
-            database
+            {
+                userId,
+                videoId: original.video_id,
+                publicId,
+                tags: ['thumbnail', `video_${original.video_id}`, aspectRatioTag]
+            }
         );
 
-        // Save as new thumbnail with reference to parent
-        // Use original.id to ensure we have the correct database ID
-        const insertResult = await database.query(
-            `INSERT INTO video_thumbnails (
-                video_id, users_id, cloudinary_public_id, cloudinary_url,
-                cloudinary_secure_url, topic, sub_topic, expression_category,
-                aspect_ratio, style_name, content_category, file_size_bytes,
-                width, height, format, generation_order, version,
-                refinement_instruction, parent_thumbnail_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        // Update the existing thumbnail record instead of creating a new one
+        // This replaces the thumbnail in-place, preserving the same ID
+        const updateResult = await database.query(
+            `UPDATE video_thumbnails SET
+                cloudinary_public_id = $1,
+                cloudinary_url = $2,
+                cloudinary_secure_url = $3,
+                file_size_bytes = $4,
+                width = $5,
+                height = $6,
+                format = $7,
+                version = $8,
+                refinement_instruction = $9,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $10 AND users_id = $11
             RETURNING *`,
             [
-                original.video_id, userId, uploadResult.publicId, uploadResult.url,
-                uploadResult.secureUrl, original.topic, original.sub_topic,
-                original.expression_category, original.aspect_ratio, original.style_name,
-                original.content_category, uploadResult.bytes, uploadResult.width,
-                uploadResult.height, uploadResult.format, original.generation_order,
-                (original.version || 0) + 1, instruction, original.id
+                uploadResult.publicId,
+                uploadResult.url,
+                uploadResult.secureUrl,
+                uploadResult.bytes,
+                uploadResult.width,
+                uploadResult.height,
+                uploadResult.format,
+                newVersion,
+                instruction,
+                thumbId,
+                userId
             ]
         );
 
-        logger.info(`Thumbnail refined successfully: ${uploadResult.publicId}`);
+        // Delete the old Cloudinary image after successful update
+        try {
+            await cloudinaryService.deleteImage(oldCloudinaryPublicId);
+            logger.info(`Deleted old Cloudinary image: ${oldCloudinaryPublicId}`);
+        } catch (deleteError) {
+            // Log but don't fail - the new image is already in place
+            logger.warn(`Failed to delete old Cloudinary image ${oldCloudinaryPublicId}:`, deleteError.message);
+        }
 
-        return insertResult.rows[0];
+        logger.info(`Thumbnail refined successfully (replaced in-place): ${uploadResult.publicId}`);
+
+        return updateResult.rows[0];
     }
 
     /**

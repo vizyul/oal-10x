@@ -41,13 +41,17 @@ router.get('/studio/:videoId', authMiddleware, async (req, res) => {
 
         // Get video details
         let videoTitle = '';
+        let thumbnailTopic = '';
+        let thumbnailSubtopic = '';
         try {
             const videoResult = await database.query(
-                'SELECT video_title FROM videos WHERE id = $1 AND users_id = $2',
+                'SELECT video_title, thumbnail_topic, thumbnail_subtopic FROM videos WHERE id = $1 AND users_id = $2',
                 [videoId, req.user.id]
             );
             if (videoResult.rows.length > 0) {
                 videoTitle = videoResult.rows[0].video_title || '';
+                thumbnailTopic = videoResult.rows[0].thumbnail_topic || '';
+                thumbnailSubtopic = videoResult.rows[0].thumbnail_subtopic || '';
             }
         } catch (dbError) {
             console.error('Error fetching video:', dbError);
@@ -60,6 +64,8 @@ router.get('/studio/:videoId', authMiddleware, async (req, res) => {
             subscription: req.subscriptionInfo,
             videoId: videoId,
             videoTitle: videoTitle,
+            thumbnailTopic: thumbnailTopic,
+            thumbnailSubtopic: thumbnailSubtopic,
             showHeader: true,
             showFooter: true,
             showNav: true,

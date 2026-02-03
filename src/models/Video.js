@@ -26,7 +26,9 @@ class Video extends BaseModel {
       thumbnail: { required: false, type: 'string' },
       status: { required: false, type: 'string', default: 'pending' },
       category: { required: false, type: 'string', default: 'general' },
-      privacy_setting: { required: false, type: 'string', default: 'public' }
+      privacy_setting: { required: false, type: 'string', default: 'public' },
+      thumbnail_topic: { required: false, type: 'string' },
+      thumbnail_subtopic: { required: false, type: 'string' }
     };
 
     // Define allowed status values

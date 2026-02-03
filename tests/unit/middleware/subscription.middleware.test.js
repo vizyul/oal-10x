@@ -151,6 +151,7 @@ describe('Subscription Middleware', () => {
 
     it('should redirect web requests to upgrade page', async () => {
       mockReq.user.subscription_tier = 'free';
+      mockReq.path = '/dashboard';
 
       const middleware = subscriptionMiddleware.requireSubscription('basic');
       await middleware(mockReq, mockRes, mockNext);
@@ -160,6 +161,7 @@ describe('Subscription Middleware', () => {
 
     it('should redirect to sign-in on 401', async () => {
       mockReq.user = null;
+      mockReq.path = '/dashboard';
 
       const middleware = subscriptionMiddleware.requireSubscription('basic');
       await middleware(mockReq, mockRes, mockNext);
@@ -221,14 +223,14 @@ describe('Subscription Middleware', () => {
       expect(mockReq.usageInfo).toBeDefined();
     });
 
-    it('should return 429 when usage limit exceeded', async () => {
+    it('should return 403 when usage limit exceeded', async () => {
       subscriptionService.getCurrentPeriodUsage.mockResolvedValue(10);
       mockReq.xhr = true;
 
       const middleware = subscriptionMiddleware.checkUsageLimit('videos');
       await middleware(mockReq, mockRes, mockNext);
 
-      expect(mockRes.status).toHaveBeenCalledWith(429);
+      expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         message: 'videos limit exceeded'
       }));
@@ -276,7 +278,7 @@ describe('Subscription Middleware', () => {
       const middleware = subscriptionMiddleware.checkUsageLimit('videos');
       await middleware(mockReq, mockRes, mockNext);
 
-      expect(mockRes.status).toHaveBeenCalledWith(429);
+      expect(mockRes.status).toHaveBeenCalledWith(403);
       expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
         free_credit_used: true
       }));

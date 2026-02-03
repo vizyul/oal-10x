@@ -236,7 +236,7 @@ class SlideDeckGenerationService {
       try {
         const repaired = this._repairJSON(jsonContent);
         parsed = JSON.parse(repaired);
-      } catch (_repairError) {
+      } catch {
         throw new Error(`Invalid slide deck JSON: ${parseError.message}`);
       }
     }
@@ -1407,7 +1407,7 @@ class SlideDeckGenerationService {
         .fontSize(size)
         .fillColor(color)
         .text(iconChar, x, y, { width, align, lineBreak: false });
-    } catch (_err) {
+    } catch {
       doc.font('Helvetica')
         .fontSize(size)
         .fillColor(color)
