@@ -341,19 +341,47 @@ ${!creativeTitles ? '- USE THIS EXACT TITLE - do not modify or rewrite it' : '- 
 
     // Build typography section based on whether subtopic exists
     // Typography STYLE is now chosen by AI based on topic - this section covers placement and spelling
+    // For 9:16 portrait thumbnails, enforce TikTok/Reels safe zone constraints
+    const isPortrait = aspectRatio === '9:16';
+
+    // Portrait 9:16: text goes in the center safe zone; Landscape 16:9: text at top as before
+    const textPlacement = isPortrait
+        ? 'Main Topic text positioned in the VERTICAL CENTER of the image (between the upper-third and mid-section)'
+        : 'Main Topic text positioned at TOP of image';
+
     const typographySection = hasSubTopic
         ? `TYPOGRAPHY PLACEMENT & SPELLING:
-- Main Topic text positioned at TOP of image
-- Sub-Topic text placed below the main topic
+- ${textPlacement}
+- Sub-Topic text placed directly below the main topic
 - TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly
 - Text should NOT overlap with the character's face
 - YOU CHOOSE the typography STYLE (bold, chrome, neon, distressed, etc.) based on what fits the topic's tone`
         : `TYPOGRAPHY PLACEMENT & SPELLING:
-- Main Topic text positioned at TOP of image
+- ${textPlacement}
 - NO SUBTITLE: There is no sub-topic, so DO NOT add any subtitle, tagline, or secondary text
 - TEXT MUST BE SPELLED CORRECTLY - double-check every letter matches the provided topic exactly
 - Text should NOT overlap with the character's face
 - YOU CHOOSE the typography STYLE (bold, chrome, neon, distressed, etc.) based on what fits the topic's tone`;
+
+    // Build a standalone safe zone block that goes near the top of the prompt for 9:16
+    const safeZoneBlock = isPortrait
+        ? `
+=== MANDATORY: TIKTOK / REELS SAFE ZONE (9:16 PORTRAIT) ===
+
+This is a 1080×1920 portrait thumbnail designed for TikTok, Reels, and Shorts.
+These platforms overlay UI elements (username, captions, like/comment buttons) on the top and bottom of the image.
+
+*** ABSOLUTE RULE — NO EXCEPTIONS ***:
+- The TOP 8% of the canvas (top ~150 pixels) must contain NO text whatsoever
+- The BOTTOM 25% of the canvas (bottom ~480 pixels) must contain NO text whatsoever
+- ALL text (titles, subtitles, any words) MUST be placed in the CENTER SAFE ZONE only
+- The safe zone is roughly the middle 67% of the image height
+- Think of it as: leave the top eighth and bottom quarter completely empty of any text or lettering
+- Place text in the vertical middle band of the image, roughly between the upper-third and lower-third lines
+- The person/character can extend into the top and bottom areas, but TEXT CANNOT
+`
+        : '';
+
 
     // Log variation for debugging
     logger.info(`Thumbnail variation ${variationNumber}: Generating with principle-based approach`, {
@@ -366,7 +394,7 @@ ${!creativeTitles ? '- USE THIS EXACT TITLE - do not modify or rewrite it' : '- 
 SYSTEM ROLE: Expert YouTube Thumbnail Designer creating PHOTOREALISTIC viral thumbnails.
 TASK: Generate a high-CTR, viral-style thumbnail in ${orientation} orientation.
 VARIATION: ${variationNumber} of 4 - Each variation MUST look dramatically different!
-
+${safeZoneBlock}
 ${creativeTitles ? `TEXT RULES (CREATIVE MODE):
 - You have creative license to generate viral title variations (see CREATIVE TITLE MODE section below)
 - Text must be clearly readable and professionally styled
@@ -468,6 +496,7 @@ ${creativeTitles ? `6. *** CRITICAL ***: Did you create a NEW VIRAL TITLE? (You 
 ${hasSubTopic ? '7. Is the Sub-Topic text spelled exactly as provided?' : '7. Is there ANY subtitle or secondary text? (If yes, REMOVE IT - only Main Topic allowed)'}`}
 8. Are the visual elements DIRECTLY RELEVANT to the topic?
 9. Does this variation look DISTINCTLY DIFFERENT from the other 3 (not a template)?
+${isPortrait ? `10. *** SAFE ZONE CHECK ***: Is ALL text placed in the vertical center of the image? (NO text in the top 8% or bottom 25% of the canvas — this is mandatory for TikTok/Reels)` : ''}
 `.trim();
 }
 

@@ -398,7 +398,49 @@
 
 .pricing-card.current-plan {
   border-color: #10b981;
+  border-width: 3px;
   background-color: #f0fdf4;
+  padding-top: 3.5rem;
+  overflow: hidden;
+}
+
+/* Override colors specifically for current plan premium cards */
+.pricing-card.current-plan.pricing-card-premium {
+  background: var(--accent-color);
+  border-color: #10b981;
+}
+
+.pricing-card.current-plan.pricing-card-premium .card-header h3 {
+  color: #FEFEFE;
+}
+
+.pricing-card.current-plan.pricing-card-premium .price {
+  color: #1a1a1a;
+}
+
+.pricing-card.current-plan.pricing-card-premium .period {
+  color: #4a4a4a;
+}
+
+.pricing-card.current-plan.pricing-card-premium .monthly-equivalent {
+  color: #4a4a4a;
+}
+
+.pricing-card.current-plan.pricing-card-premium .feature-item {
+  color: #FEFEFE;
+}
+
+.pricing-card.current-plan.pricing-card-premium .check-icon {
+  color: #1a1a1a;
+}
+
+.pricing-card.current-plan.pricing-card-premium .crossed-out {
+  color: #666666;
+}
+
+.pricing-card.current-plan.pricing-card-premium .savings-text {
+  background-color: #1a1a1a;
+  color: var(--brand-white);
 }
 
 /* Override colors specifically for current plan enterprise cards */
@@ -455,15 +497,16 @@
 .pricing-card.current-plan::before {
   content: "Current Plan";
   position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 0;
+  left: 0;
+  right: 0;
   background-color: #10b981;
   color: white;
   padding: 0.5rem 1rem;
-  border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.025em;
 }
 
 /* Tier-specific background colors */
@@ -648,6 +691,13 @@
 .btn-current {
   background-color: #10b981;
   color: white;
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: default;
 }
 
 /* Only override system dialog and alert buttons */
