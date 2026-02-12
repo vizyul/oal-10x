@@ -30,7 +30,8 @@ class ThumbnailController {
      */
     async getUsageSummary(req, res) {
         try {
-            const summary = await thumbnailService.getThumbnailUsageSummary(req.user.id);
+            const videoId = req.query.videoId ? parseInt(req.query.videoId) : null;
+            const summary = await thumbnailService.getThumbnailUsageSummary(req.user.id, videoId);
             if (!summary) {
                 return res.status(404).json({ success: false, error: 'Usage data not found' });
             }
@@ -198,7 +199,7 @@ class ThumbnailController {
 
             // Check thumbnail generation limits based on subscription tier
             const selectedAspectRatio = aspectRatio || '16:9';
-            const limitCheck = await thumbnailService.checkThumbnailLimit(req.user.id, selectedAspectRatio);
+            const limitCheck = await thumbnailService.checkThumbnailLimit(req.user.id, selectedAspectRatio, parseInt(req.params.videoId));
 
             if (!limitCheck.canGenerate) {
                 logger.info(`Thumbnail generation blocked for user ${req.user.id}: ${limitCheck.reason}`);
@@ -290,7 +291,7 @@ class ThumbnailController {
             const aspectRatio = req.body.aspectRatio || '16:9';
 
             // Check thumbnail generation limits BEFORE deleting existing thumbnails
-            const limitCheck = await thumbnailService.checkThumbnailLimit(userId, aspectRatio);
+            const limitCheck = await thumbnailService.checkThumbnailLimit(userId, aspectRatio, videoId);
 
             if (!limitCheck.canGenerate) {
                 logger.info(`Thumbnail regeneration blocked for user ${userId}: ${limitCheck.reason}`);

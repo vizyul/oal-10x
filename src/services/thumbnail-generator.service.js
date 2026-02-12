@@ -843,7 +843,7 @@ class ThumbnailGeneratorService {
 
             // Track usage for successful generations (at least one thumbnail created)
             if (finalStatus === 'completed' && results.length > 0) {
-                await this.trackThumbnailUsage(userId, aspectRatio, results.length);
+                await this.trackThumbnailUsage(userId, aspectRatio, results.length, videoId);
             }
         }
 
@@ -1365,9 +1365,10 @@ class ThumbnailGeneratorService {
      * Check if user can generate thumbnails based on subscription tier limits
      * @param {number} userId - User ID
      * @param {string} aspectRatio - '16:9' or '9:16'
+     * @param {number} videoId - Video ID (limits are per-video)
      * @returns {Promise<{canGenerate: boolean, reason?: string, usage?: object, limit?: object}>}
      */
-    async checkThumbnailLimit(userId, aspectRatio = '16:9') {
+    async checkThumbnailLimit(userId, aspectRatio = '16:9', videoId = null) {
         try {
             // Get user's subscription tier
             const userResult = await database.query(
@@ -1395,21 +1396,21 @@ class ThumbnailGeneratorService {
             if (grantResult.rows.length > 0) {
                 const grant = grantResult.rows[0];
 
-                // Any active grant gives 10 iterations per aspect ratio
+                // Any active grant gives 10 iterations per aspect ratio per video
                 const GRANT_ITERATIONS_LIMIT = 10;
 
-                // Get current usage for this user/aspect ratio (monthly reset for grants)
-                const usage = await this.getThumbnailUsage(userId, aspectRatio, true);
+                // Get current usage for this user/aspect ratio/video
+                const usage = await this.getThumbnailUsage(userId, aspectRatio, videoId);
 
                 if (usage.iterations_used >= GRANT_ITERATIONS_LIMIT) {
                     return {
                         canGenerate: false,
-                        reason: `You've reached your grant limit of ${GRANT_ITERATIONS_LIMIT} ${aspectRatio} thumbnail generations this month. Contact support for more.`,
+                        reason: `You've reached your grant limit of ${GRANT_ITERATIONS_LIMIT} ${aspectRatio} thumbnail generations for this video. Contact support for more.`,
                         requiresUpgrade: false,
                         hasGrant: true,
                         grantType: grant.grant_type,
                         usage,
-                        limit: { iterations: GRANT_ITERATIONS_LIMIT, reset_monthly: true }
+                        limit: { iterations: GRANT_ITERATIONS_LIMIT }
                     };
                 }
 
@@ -1419,7 +1420,7 @@ class ThumbnailGeneratorService {
                     hasGrant: true,
                     grantType: grant.grant_type,
                     usage,
-                    limit: { iterations: GRANT_ITERATIONS_LIMIT, reset_monthly: true },
+                    limit: { iterations: GRANT_ITERATIONS_LIMIT },
                     remaining: GRANT_ITERATIONS_LIMIT - usage.iterations_used
                 };
             }
@@ -1452,14 +1453,14 @@ class ThumbnailGeneratorService {
                 ? limits.iterations_9_16
                 : limits.iterations_16_9;
 
-            // Get current usage for this user/aspect ratio
-            const usage = await this.getThumbnailUsage(userId, aspectRatio, limits.reset_monthly);
+            // Get current usage for this user/aspect ratio/video
+            const usage = await this.getThumbnailUsage(userId, aspectRatio, videoId);
 
             if (usage.iterations_used >= maxIterations) {
                 const tierName = subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1);
                 return {
                     canGenerate: false,
-                    reason: `You've reached your ${tierName} plan limit of ${maxIterations} ${aspectRatio} thumbnail generation${maxIterations === 1 ? '' : 's'}. Upgrade your subscription for more.`,
+                    reason: `You've reached your ${tierName} plan limit of ${maxIterations} ${aspectRatio} thumbnail generation${maxIterations === 1 ? '' : 's'} for this video. Upgrade your subscription for more.`,
                     requiresUpgrade: true,
                     usage,
                     limit: limits
@@ -1482,41 +1483,21 @@ class ThumbnailGeneratorService {
     }
 
     /**
-     * Get thumbnail usage for a user and aspect ratio
+     * Get thumbnail usage for a user, aspect ratio, and video
      * @param {number} userId - User ID
      * @param {string} aspectRatio - '16:9' or '9:16'
-     * @param {boolean} resetMonthly - Whether to filter by current month
+     * @param {number|null} videoId - Video ID (per-video tracking)
      * @returns {Promise<{iterations_used: number, thumbnails_generated: number}>}
      */
-    async getThumbnailUsage(userId, aspectRatio, resetMonthly = false) {
+    async getThumbnailUsage(userId, aspectRatio, videoId = null) {
         try {
-            let query, params;
-
-            if (resetMonthly) {
-                // Get usage for current billing period (current month)
-                const startOfMonth = new Date();
-                startOfMonth.setDate(1);
-                startOfMonth.setHours(0, 0, 0, 0);
-
-                query = `
-                    SELECT COALESCE(SUM(iterations_used), 0) as iterations_used,
-                           COALESCE(SUM(thumbnails_generated), 0) as thumbnails_generated
-                    FROM thumbnail_usage
-                    WHERE users_id = $1
-                      AND aspect_ratio = $2
-                      AND period_start >= $3
-                `;
-                params = [userId, aspectRatio, startOfMonth.toISOString()];
-            } else {
-                // Get lifetime usage (for free tier)
-                query = `
-                    SELECT COALESCE(SUM(iterations_used), 0) as iterations_used,
-                           COALESCE(SUM(thumbnails_generated), 0) as thumbnails_generated
-                    FROM thumbnail_usage
-                    WHERE users_id = $1 AND aspect_ratio = $2
-                `;
-                params = [userId, aspectRatio];
-            }
+            const query = `
+                SELECT COALESCE(SUM(iterations_used), 0) as iterations_used,
+                       COALESCE(SUM(thumbnails_generated), 0) as thumbnails_generated
+                FROM thumbnail_usage
+                WHERE users_id = $1 AND aspect_ratio = $2 AND video_id = $3
+            `;
+            const params = [userId, aspectRatio, videoId];
 
             const result = await database.query(query, params);
 
@@ -1536,28 +1517,22 @@ class ThumbnailGeneratorService {
      * @param {number} userId - User ID
      * @param {string} aspectRatio - '16:9' or '9:16'
      * @param {number} thumbnailCount - Number of thumbnails generated (usually 4)
+     * @param {number} videoId - Video ID (per-video tracking)
      */
-    async trackThumbnailUsage(userId, aspectRatio, thumbnailCount = 4) {
+    async trackThumbnailUsage(userId, aspectRatio, thumbnailCount = 4, videoId = null) {
         try {
-            const startOfMonth = new Date();
-            startOfMonth.setDate(1);
-            startOfMonth.setHours(0, 0, 0, 0);
-
-            const endOfMonth = new Date(startOfMonth);
-            endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-
-            // Upsert usage record
+            // Upsert usage record keyed by (users_id, video_id, aspect_ratio)
             await database.query(`
-                INSERT INTO thumbnail_usage (users_id, aspect_ratio, iterations_used, thumbnails_generated, period_start, period_end)
-                VALUES ($1, $2, 1, $3, $4, $5)
-                ON CONFLICT (users_id, aspect_ratio, period_start)
+                INSERT INTO thumbnail_usage (users_id, video_id, aspect_ratio, iterations_used, thumbnails_generated)
+                VALUES ($1, $2, $3, 1, $4)
+                ON CONFLICT (users_id, video_id, aspect_ratio)
                 DO UPDATE SET
                     iterations_used = thumbnail_usage.iterations_used + 1,
-                    thumbnails_generated = thumbnail_usage.thumbnails_generated + $3,
+                    thumbnails_generated = thumbnail_usage.thumbnails_generated + $4,
                     updated_at = CURRENT_TIMESTAMP
-            `, [userId, aspectRatio, thumbnailCount, startOfMonth.toISOString(), endOfMonth.toISOString()]);
+            `, [userId, videoId, aspectRatio, thumbnailCount]);
 
-            logger.info(`Tracked thumbnail usage for user ${userId}: +1 ${aspectRatio} iteration, +${thumbnailCount} thumbnails`);
+            logger.info(`Tracked thumbnail usage for user ${userId}, video ${videoId}: +1 ${aspectRatio} iteration, +${thumbnailCount} thumbnails`);
 
         } catch (error) {
             logger.error('Error tracking thumbnail usage:', { error: error.message });
@@ -1566,11 +1541,12 @@ class ThumbnailGeneratorService {
     }
 
     /**
-     * Get thumbnail usage summary for a user (both aspect ratios)
+     * Get thumbnail usage summary for a user and video (both aspect ratios)
      * @param {number} userId - User ID
+     * @param {number|null} videoId - Video ID (per-video tracking)
      * @returns {Promise<object>} Usage summary with limits
      */
-    async getThumbnailUsageSummary(userId) {
+    async getThumbnailUsageSummary(userId, videoId = null) {
         try {
             // Get user's subscription tier
             const userResult = await database.query(
@@ -1602,12 +1578,12 @@ class ThumbnailGeneratorService {
                 hasGrant = true;
                 grantType = grant.grant_type;
 
-                // Any active grant gives 10 iterations per aspect ratio (monthly reset)
+                // Any active grant gives 10 iterations per aspect ratio per video
                 const GRANT_ITERATIONS_LIMIT = 10;
 
                 const [usage16_9, usage9_16] = await Promise.all([
-                    this.getThumbnailUsage(userId, '16:9', true),  // Monthly reset for grants
-                    this.getThumbnailUsage(userId, '9:16', true)
+                    this.getThumbnailUsage(userId, '16:9', videoId),
+                    this.getThumbnailUsage(userId, '9:16', videoId)
                 ]);
 
                 return {
@@ -1616,7 +1592,7 @@ class ThumbnailGeneratorService {
                     hasGrant: true,
                     grantType: grant.grant_type,
                     isUnlimited: false,
-                    resetMonthly: true,
+                    videoId,
                     '16:9': {
                         used: usage16_9.iterations_used,
                         limit: GRANT_ITERATIONS_LIMIT,
@@ -1645,10 +1621,10 @@ class ThumbnailGeneratorService {
                 reset_monthly: false
             };
 
-            // Get usage for both aspect ratios
+            // Get usage for both aspect ratios (per-video)
             const [usage16_9, usage9_16] = await Promise.all([
-                this.getThumbnailUsage(userId, '16:9', limits.reset_monthly),
-                this.getThumbnailUsage(userId, '9:16', limits.reset_monthly)
+                this.getThumbnailUsage(userId, '16:9', videoId),
+                this.getThumbnailUsage(userId, '9:16', videoId)
             ]);
 
             return {
@@ -1657,7 +1633,7 @@ class ThumbnailGeneratorService {
                 hasGrant,
                 grantType,
                 isUnlimited: limits.is_unlimited,
-                resetMonthly: limits.reset_monthly,
+                videoId,
                 '16:9': {
                     used: usage16_9.iterations_used,
                     limit: limits.is_unlimited ? 'Unlimited' : limits.iterations_16_9,

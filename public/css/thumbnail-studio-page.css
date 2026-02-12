@@ -967,3 +967,71 @@
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(255, 0, 0, 0.3);
 }
+
+/* ==========================================
+   Thumbnail Usage Counter
+   ========================================== */
+
+.thumbnail-usage-counter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    background: var(--background-secondary, #f8f9fa);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 8px;
+    min-width: 280px;
+}
+
+.usage-ratio-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    min-width: 90px;
+}
+
+.usage-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border-color, #e2e8f0);
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 80px;
+}
+
+.usage-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.usage-fill.limit-reached {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.usage-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #64748b);
+    white-space: nowrap;
+}
+
+.usage-text.limit-reached {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .studio-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .thumbnail-usage-counter {
+        min-width: unset;
+        width: 100%;
+    }
+}

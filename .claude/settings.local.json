@@ -1,8 +1,11 @@
 {
-  "spinnerTipsEnabled": false,
   "permissions": {
     "allow": [
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebSearch",
+      "Bash(dir /s \"C:\\\\Apps\\\\our-ai-legacy-app\\\\public\\\\css\")",
+      "Bash(findstr:*)"
     ]
-  }
+  },
+  "spinnerTipsEnabled": false
 }

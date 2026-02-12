@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware');
 const database = require('../services/database.service');
+const thumbnailService = require('../services/thumbnail-generator.service');
 
 // Thumbnail Studio page - no video selected
 router.get('/studio', authMiddleware, async (req, res) => {
@@ -57,6 +58,14 @@ router.get('/studio/:videoId', authMiddleware, async (req, res) => {
             console.error('Error fetching video:', dbError);
         }
 
+        // Get thumbnail usage for this video
+        let thumbnailUsage = null;
+        try {
+            thumbnailUsage = await thumbnailService.getThumbnailUsageSummary(req.user.id, parseInt(videoId));
+        } catch (usageError) {
+            console.error('Error fetching thumbnail usage:', usageError);
+        }
+
         res.render('thumbnails/studio', {
             title: `Thumbnail Studio - ${videoTitle || 'AmplifyContent.ai'}`,
             description: 'Create AI-powered thumbnails for your videos',
@@ -66,6 +75,7 @@ router.get('/studio/:videoId', authMiddleware, async (req, res) => {
             videoTitle: videoTitle,
             thumbnailTopic: thumbnailTopic,
             thumbnailSubtopic: thumbnailSubtopic,
+            thumbnailUsage: JSON.stringify(thumbnailUsage),
             showHeader: true,
             showFooter: true,
             showNav: true,

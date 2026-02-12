@@ -13,6 +13,14 @@
             <span class="video-title">{{videoTitle}}</span>
         </div>
         {{/if}}
+
+        <div class="thumbnail-usage-counter" id="thumbnail-usage-counter" style="display:none;">
+            <div class="usage-ratio-label" id="usage-ratio-label">16:9 Iterations</div>
+            <div class="usage-bar">
+                <div class="usage-fill" id="usage-fill-active" style="width: 0%"></div>
+            </div>
+            <span class="usage-text" id="usage-text-active">Loading...</span>
+        </div>
     </div>
 
     <!-- Main Studio Layout -->
@@ -183,7 +191,8 @@
         videoId: '{{videoId}}' || null,
         videoTitle: '{{videoTitle}}' || '',
         thumbnailTopic: '{{thumbnailTopic}}' || '',
-        thumbnailSubtopic: '{{thumbnailSubtopic}}' || ''
+        thumbnailSubtopic: '{{thumbnailSubtopic}}' || '',
+        thumbnailUsage: {{#if thumbnailUsage}}{{{thumbnailUsage}}}{{else}}null{{/if}}
     };
 </script>
 

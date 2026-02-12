@@ -20,6 +20,7 @@ class ThumbnailStudioPage {
         this.thumbnailsData = [];
         this.canUploadToYouTube = false;
         this.videoType = 'video'; // 'video', 'short', or 'live'
+        this.usageData = window.thumbnailStudioConfig?.thumbnailUsage || null;
     }
 
     /**
@@ -35,6 +36,8 @@ class ThumbnailStudioPage {
             await this.loadVideoSelector();
         } else {
             await this.loadExistingThumbnails();
+            // Render usage counter from server-provided data
+            this.renderUsageCounter();
         }
     }
 
@@ -106,6 +109,9 @@ class ThumbnailStudioPage {
 
                 // Re-render thumbnails for the newly selected aspect ratio
                 this.renderThumbnailsForRatio(ratio);
+
+                // Update usage counter for the new ratio
+                this.renderUsageCounter();
             });
         });
 
@@ -160,6 +166,9 @@ class ThumbnailStudioPage {
 
         // Load existing thumbnails for this video (also loads saved topic/subtopic)
         await this.loadExistingThumbnails();
+
+        // Load and display usage counter for the newly selected video
+        await this.loadUsage(videoId);
 
         // Populate topic input with saved topic or fall back to video title
         const topicInput = document.getElementById('thumbnail-topic');
@@ -620,6 +629,8 @@ class ThumbnailStudioPage {
                     this.resetGenerateButton();
                     // Reload all thumbnails to get updated data for both aspect ratios
                     await this.loadExistingThumbnails();
+                    // Refresh usage counter after generation
+                    await this.loadUsage(this.videoId);
                     this.showToast('Thumbnails generated successfully!', 'success');
                 } else if (job.status === 'failed') {
                     this.stopPolling();
@@ -1101,6 +1112,70 @@ class ThumbnailStudioPage {
             console.error('Download failed:', error);
             this.showToast('Download failed', 'error');
         }
+    }
+
+    /**
+     * Load thumbnail usage data from API for a specific video
+     */
+    async loadUsage(videoId) {
+        if (!videoId) return;
+        try {
+            const response = await fetch(`/api/thumbnails/usage?videoId=${videoId}`);
+            const data = await response.json();
+            if (data.success) {
+                this.usageData = data.data;
+                this.renderUsageCounter();
+            }
+        } catch (error) {
+            console.error('Failed to load thumbnail usage:', error);
+        }
+    }
+
+    /**
+     * Render the usage counter in the header based on current aspect ratio
+     */
+    renderUsageCounter() {
+        const container = document.getElementById('thumbnail-usage-counter');
+        if (!container) return;
+
+        if (!this.usageData) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const ratio = this.getSelectedAspectRatio();
+        const ratioData = this.usageData[ratio];
+        if (!ratioData) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = '';
+
+        const label = document.getElementById('usage-ratio-label');
+        const fill = document.getElementById('usage-fill-active');
+        const text = document.getElementById('usage-text-active');
+
+        const ratioLabel = ratio === '16:9' ? '16:9' : '9:16';
+        label.textContent = `${ratioLabel} Iterations`;
+
+        if (this.usageData.isUnlimited) {
+            fill.style.width = '0%';
+            fill.classList.remove('limit-reached');
+            text.textContent = 'Unlimited';
+            text.classList.remove('limit-reached');
+            return;
+        }
+
+        const used = ratioData.used || 0;
+        const limit = ratioData.limit || 1;
+        const pct = Math.min(100, Math.round((used / limit) * 100));
+        const atLimit = used >= limit;
+
+        fill.style.width = `${pct}%`;
+        fill.classList.toggle('limit-reached', atLimit);
+        text.textContent = `${used}/${limit} iterations used for this video`;
+        text.classList.toggle('limit-reached', atLimit);
     }
 
     /**
