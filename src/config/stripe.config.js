@@ -97,7 +97,7 @@ const stripeConfig = {
         savings: 38,
         period: 'year'
       },
-      features: ['4 videos/month', '24 Thumbnails/video', 'Video Transcript', 'SEO Optimized Summary', 'Video Chapters', '20 Social Media Posts', 'Email Support'],
+      features: ['4 videos/month', '96 Thumbnails/month', 'Video Transcript', 'SEO Optimized Summary', 'Video Chapters', '20 Social Media Posts', 'Email Support'],
       videoLimit: 4,
       analyticsAccess: false,
       apiAccess: false
@@ -117,7 +117,7 @@ const stripeConfig = {
         savings: 78,
         period: 'year'
       },
-      features: ['8 videos/month', '80 Thumbnails/video', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
+      features: ['8 videos/month', '640 Thumbnails/month', 'All BASIC Content Types', 'Auto-update YouTube Video with Summary & Chapters', 'Slide Deck', 'E-Book', 'LinkedIn Article', 'Marketing Funnel Playbook', 'Newsletter'],
       videoLimit: 8,
       analyticsAccess: true,
       apiAccess: false
@@ -137,7 +137,7 @@ const stripeConfig = {
         savings: 158,
         period: 'year'
       },
-      features: ['16 videos/month', '200 Thumbnails/video', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
+      features: ['16 videos/month', '3,200 Thumbnails/month', 'All PREMIUM Content Types', 'Blog Post', 'Podcast Script', 'Study Guide', 'Discussion Guide', 'Quiz', 'Quotes', 'Social Carousel', 'Group Chat Guide'],
       videoLimit: 16,
       analyticsAccess: true,
       apiAccess: true
