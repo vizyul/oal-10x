@@ -264,7 +264,7 @@ async function handleSignupSubmit(e) {
     
     try {
         // Get referral code from localStorage if available
-        const referralCode = localStorage.getItem('referralCode');
+        const referralCode = localStorage.getItem('referral_code');
         const signupData = Object.fromEntries(formData);
 
         // Include referral code in signup data for affiliate tracking
@@ -285,8 +285,8 @@ async function handleSignupSubmit(e) {
         
         if (response.ok && result.success) {
             // Clear referral code after successful signup
-            localStorage.removeItem('referralCode');
-            localStorage.removeItem('referralCodeExpiry');
+            localStorage.removeItem('referral_code');
+            document.cookie = 'referral_code=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
 
             // Show success modal
             showSuccessModal(result.message, formData.get('email'));

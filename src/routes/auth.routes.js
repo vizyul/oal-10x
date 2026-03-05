@@ -15,6 +15,24 @@ const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
 
 const router = express.Router();
 
+// Helper: apply referral code from cookie to OAuth users
+async function applyReferralFromCookie(req, res, userId) {
+  try {
+    const referralCode = req.cookies?.referral_code;
+    if (!referralCode) return;
+    const user = await require('../services/database.service').findById('users', userId);
+    if (user && user.referred_by_code) {
+      res.clearCookie('referral_code', { path: '/' });
+      return;
+    }
+    await authService.updateUser(userId, { referred_by_code: referralCode });
+    logger.info('Referral code applied from cookie to OAuth user', { userId, referralCode });
+    res.clearCookie('referral_code', { path: '/' });
+  } catch (error) {
+    logger.error('Error applying referral code from cookie:', error);
+  }
+}
+
 // Note: Rate limiting now handled by centralized rate-limiting.middleware.js
 // This provides intelligent, context-aware rate limiting based on endpoint types and user tiers
 
@@ -226,6 +244,8 @@ router.get('/google/callback', (req, res, _next) => {
       // Record OAuth login session
       await sessionService.recordLogin(req.user, req, 'google');
 
+      await applyReferralFromCookie(req, res, req.user.id);
+
       return res.redirect(getPostAuthRedirectUrl(req.user));
     }
 
@@ -338,6 +358,8 @@ router.post('/apple/callback', async (req, res, _next) => {
         await sessionService.recordLogin(req.user, req, 'apple');
         logger.info('🍎 Session recorded successfully');
 
+        await applyReferralFromCookie(req, res, req.user.id);
+
         const redirectUrl = getPostAuthRedirectUrl(req.user);
         logger.info(`🍎 APPLE OAUTH LOGIN SUCCESSFUL - redirecting to: ${redirectUrl}`);
         return res.redirect(redirectUrl);
@@ -388,6 +410,8 @@ router.get('/microsoft/callback', (req, res, _next) => {
 
       // Record OAuth login session
       await sessionService.recordLogin(req.user, req, 'microsoft');
+
+      await applyReferralFromCookie(req, res, req.user.id);
 
       return res.redirect(getPostAuthRedirectUrl(req.user));
     }
@@ -443,6 +467,8 @@ router.post('/social-verify', async (req, res) => {
       // Determine login method from user's registration method or use generic 'social'
       const loginMethod = result.user.registrationMethod || 'social';
       await sessionService.recordLogin(result.user, req, loginMethod);
+
+      await applyReferralFromCookie(req, res, result.user.id);
 
       return res.json({
         success: true,

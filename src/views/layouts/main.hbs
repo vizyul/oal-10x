@@ -151,6 +151,10 @@
                 // Store referral code in localStorage for signup form
                 localStorage.setItem('referral_code', refCode);
 
+                // Set cookie so server can read it during OAuth callbacks
+                var expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
+                document.cookie = 'referral_code=' + encodeURIComponent(refCode) + '; expires=' + expires + '; path=/; SameSite=Lax';
+
                 // Track click via backend API
                 fetch('/affiliate/api/track-click', {
                     method: 'POST',

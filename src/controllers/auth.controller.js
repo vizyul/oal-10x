@@ -360,7 +360,7 @@ class AuthController {
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // Get referral code from request body (passed from frontend localStorage)
-      const referralCode = req.body.referralCode || null;
+      const referralCode = req.body.referralCode || req.cookies?.referral_code || null;
 
       // Complete user registration
       const updatedUser = await authService.updateUser(user.id, {
@@ -441,6 +441,9 @@ class AuthController {
       };
 
       res.cookie('auth_token', jwtToken, cookieOptions);
+
+      // Clear referral cookie after it's been used
+      res.clearCookie('referral_code', { path: '/' });
 
       // Record signup session
       await sessionService.recordSignup(updatedUser, req, 'email');

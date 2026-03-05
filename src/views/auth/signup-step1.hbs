@@ -89,13 +89,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Capture referral code from URL and store in localStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    const refCode = urlParams.get('ref');
-    if (refCode) {
-        localStorage.setItem('referral_code', refCode);
-    }
-
     const form = document.getElementById('emailForm');
     const submitBtn = document.getElementById('submitBtn');
     const btnText = document.querySelector('.btn-text');
