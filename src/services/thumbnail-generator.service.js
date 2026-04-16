@@ -544,7 +544,15 @@ async function generateSingleThumbnail(prompt, referenceImages, aspectRatio, ret
                 }
             }
 
-            throw new Error('No image data in response');
+            // Log full response details to diagnose why no image was returned
+            const finishReason = candidate?.finishReason || 'unknown';
+            const safetyRatings = candidate?.safetyRatings || [];
+            const textParts = candidate?.content?.parts?.filter(p => p.text)?.map(p => p.text) || [];
+            const promptFeedback = response.promptFeedback || response.prompt_feedback || null;
+            const responseKeys = Object.keys(response || {});
+            logger.error(`No image in Gemini response — finishReason: ${finishReason}, safetyRatings: ${JSON.stringify(safetyRatings)}, textParts: ${JSON.stringify(textParts)}, candidateCount: ${response.candidates?.length || 0}, promptFeedback: ${JSON.stringify(promptFeedback)}, responseKeys: ${JSON.stringify(responseKeys)}`);
+
+            throw new Error(`No image data in response (finishReason: ${finishReason})`);
         } catch (error) {
             const isTransient = error.message?.includes('500') ||
                                error.message?.includes('503') ||
@@ -554,10 +562,10 @@ async function generateSingleThumbnail(prompt, referenceImages, aspectRatio, ret
 
             if (attempt < retries && isTransient) {
                 const delay = Math.pow(2, attempt) * 1000;
-                logger.warn(`Thumbnail generation attempt ${attempt} failed, retrying in ${delay}ms...`);
+                logger.warn(`Thumbnail generation attempt ${attempt} failed, retrying in ${delay}ms: ${error.message}`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } else {
-                logger.error(`Thumbnail generation failed after ${attempt} attempts:`, error);
+                logger.error(`Thumbnail generation failed after ${attempt} attempts: ${error.message}`, { stack: error.stack, status: error.status, code: error.code });
                 throw error;
             }
         }
@@ -816,7 +824,7 @@ class ThumbnailGeneratorService {
                 logger.info(`Thumbnail ${i + 1}/4 generated and saved: ${uploadResult.publicId}`);
 
             } catch (error) {
-                logger.error(`Failed to generate thumbnail style ${style.name}:`, error);
+                logger.error(`Failed to generate thumbnail style ${style.name}: ${error.message}`);
                 errors.push({ style: style.name, error: error.message });
             }
         }

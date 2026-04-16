@@ -1399,19 +1399,22 @@ class VideosController {
           // Database write succeeded - handle usage tracking for both free and paid users
           try {
             const subscriptionService = require('../services/subscription.service');
+            const grantAccess = await subscriptionService.checkGrantAccess(actualUserId);
 
-            // Get user tier to determine usage tracking method
-            const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
-            const userTier = userResult.rows[0]?.subscription_tier || 'free';
-
-            if (userTier === 'free') {
-              // Mark free video as used
-              await subscriptionService.markFreeVideoAsUsed(actualUserId);
-              logger.debug(`Marked free video as used for userId=${actualUserId}`);
-            } else {
-              // Regular subscription usage tracking for paid users
+            if (grantAccess.hasGrant) {
               await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
-              logger.debug(`Incremented video usage for userId=${actualUserId}`);
+              logger.debug(`Incremented video usage for grant user ${actualUserId}`);
+            } else {
+              const userResult = await database.query('SELECT subscription_tier FROM users WHERE id = $1', [actualUserId]);
+              const userTier = userResult.rows[0]?.subscription_tier || 'free';
+
+              if (userTier === 'free') {
+                await subscriptionService.markFreeVideoAsUsed(actualUserId);
+                logger.debug(`Marked free video as used for userId=${actualUserId}`);
+              } else {
+                await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+                logger.debug(`Incremented video usage for userId=${actualUserId}`);
+              }
             }
           } catch (usageError) {
             logger.warn(`Failed to update usage for userId=${actualUserId}`, { error: usageError.message });
@@ -1593,6 +1596,168 @@ class VideosController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch available content types',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Upload a transcript file and trigger AI content generation.
+   * POST /api/videos/transcript-upload
+   */
+  async uploadTranscriptFile(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'Transcript file is required'
+        });
+      }
+
+      const title = (req.body.title || '').trim();
+      if (!title) {
+        return res.status(400).json({
+          success: false,
+          message: 'Title is required'
+        });
+      }
+
+      let contentTypes = req.body.contentTypes;
+      if (typeof contentTypes === 'string') {
+        try {
+          contentTypes = JSON.parse(contentTypes);
+        } catch {
+          contentTypes = contentTypes.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      }
+      if (!Array.isArray(contentTypes) || contentTypes.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'At least one content type must be selected'
+        });
+      }
+
+      const transcriptParser = require('../services/transcript-parser.service');
+      let parsed;
+      try {
+        parsed = await transcriptParser.parseTranscriptFile({
+          buffer: req.file.buffer,
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype
+        });
+      } catch (parseError) {
+        const status = parseError.code === 'UNSUPPORTED_TYPE' ? 415 : 400;
+        return res.status(status).json({
+          success: false,
+          message: parseError.message,
+          error: parseError.code
+        });
+      }
+
+      const actualUserId = await this.resolveUserId(req.user.id);
+
+      const { v4: uuidv4 } = require('uuid');
+      const uploadVideoId = `upload-${uuidv4()}`;
+
+      const videoData = {
+        videoid: uploadVideoId,
+        video_title: title.substring(0, 500),
+        users_id: actualUserId,
+        youtube_url: null,
+        channel_name: null,
+        channel_handle: null,
+        description: null,
+        duration: 0,
+        thumbnail: null,
+        video_type: 'upload',
+        status: 'pending',
+        category: 'general',
+        privacy_setting: 'private',
+        tags: null,
+        transcript_text: parsed.text,
+        imported_via_youtube_oauth: false,
+        created_at: new Date().toISOString()
+      };
+
+      logger.info(`Creating uploaded-transcript video for userId=${actualUserId}`, {
+        videoid: uploadVideoId,
+        transcriptLength: parsed.text.length,
+        contentTypes
+      });
+
+      const postgresRecord = await video.createVideo(videoData);
+
+      try {
+        const subscriptionService = require('../services/subscription.service');
+        const grantAccess = await subscriptionService.checkGrantAccess(actualUserId);
+
+        if (grantAccess.hasGrant) {
+          await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+          logger.debug(`Incremented video usage for grant user ${actualUserId}`);
+        } else {
+          const userResult = await database.query(
+            'SELECT subscription_tier FROM users WHERE id = $1',
+            [actualUserId]
+          );
+          const userTier = userResult.rows[0]?.subscription_tier || 'free';
+
+          if (userTier === 'free') {
+            await subscriptionService.markFreeVideoAsUsed(actualUserId);
+          } else {
+            await subscriptionService.incrementUsage(actualUserId, 'videos_processed', 1);
+          }
+        }
+      } catch (usageError) {
+        logger.warn(`Failed to update usage for userId=${actualUserId}`, { error: usageError.message });
+      }
+
+      try {
+        const processingStatusService = require('../services/processing-status.service');
+        await processingStatusService.initializeVideoProcessingAsync(
+          uploadVideoId,
+          postgresRecord.id,
+          videoData.video_title,
+          actualUserId,
+          contentTypes
+        );
+        processingStatusService.updateTranscriptStatus(uploadVideoId, 'completed');
+      } catch (statusError) {
+        logger.warn(`Could not initialize processing status for video ${uploadVideoId}:`, statusError.message);
+      }
+
+      try {
+        const contentGenerationService = require('../services/content-generation.service');
+        contentGenerationService.generateAllContentForVideo(
+          postgresRecord.id,
+          uploadVideoId,
+          parsed.text,
+          { contentTypes, userId: actualUserId }
+        ).then(result => {
+          logger.info(`Uploaded-transcript content generation complete for video ${uploadVideoId}`, {
+            successful: result.summary?.successful || 0,
+            failed: result.summary?.failed || 0
+          });
+        }).catch(err => {
+          logger.warn(`Uploaded-transcript content generation failed for video ${uploadVideoId}:`, err.message);
+        });
+      } catch (genError) {
+        logger.warn(`Could not start content generation for video ${uploadVideoId}:`, genError.message);
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Transcript uploaded; content generation started',
+        data: {
+          videoRecordId: postgresRecord.id,
+          videoid: uploadVideoId,
+          transcriptLength: parsed.text.length
+        }
+      });
+    } catch (error) {
+      logger.error('Error uploading transcript file:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload transcript',
         error: error.message
       });
     }

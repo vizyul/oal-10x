@@ -4,7 +4,9 @@
       "Bash(git commit:*)",
       "WebSearch",
       "Bash(dir /s \"C:\\\\Apps\\\\our-ai-legacy-app\\\\public\\\\css\")",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(grep -n \"multer\\\\|upload\\\\|file\" /c/Apps/our-ai-legacy-app/src/routes/*.js)",
+      "Bash(grep *)"
     ]
   },
   "spinnerTipsEnabled": false

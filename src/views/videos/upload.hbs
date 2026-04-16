@@ -7,7 +7,7 @@
       <div class="upload-header">
         <h1>Monthly Usage</h1>
         <p>Videos imported this month.</p>
-        
+
         {{#if subscription}}
         <div class="usage-status">
           <div class="usage-bar">
@@ -21,6 +21,34 @@
           </span>
         </div>
         {{/if}}
+      </div>
+
+      <div class="upload-method transcript-method">
+        <div class="method-header">
+          <h1>Upload Transcript</h1>
+          <p>Provide a transcript file directly. We'll generate content from its text.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="transcript-title" class="control-label">Title <span class="required-mark">*</span></label>
+          <input type="text" id="transcript-title" class="form-input" maxlength="200" placeholder="Give this content a name" />
+        </div>
+
+        <div class="form-group">
+          <label for="transcript-file" class="control-label">Transcript file <span class="required-mark">*</span></label>
+          <div class="transcript-file-picker">
+            <input type="file" id="transcript-file" accept=".txt,.srt,.vtt,.docx,.pdf" hidden />
+            <button type="button" class="btn btn-secondary" id="transcript-file-browse">Choose file</button>
+            <span class="transcript-file-name" id="transcript-file-name">No file selected</span>
+          </div>
+          <p class="form-help">Accepted: .txt, .srt, .vtt, .docx, .pdf (max 10&nbsp;MB)</p>
+        </div>
+
+        <div id="transcript-upload-error" class="error-message hidden" style="margin: 0 0 12px 0;"></div>
+
+        <button type="button" id="upload-transcript-btn" class="btn btn-primary btn-large" disabled>
+          Amplify Content
+        </button>
       </div>
     </div>
 
@@ -1325,6 +1353,118 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
   });
 
   // No longer need global function since we use proper event listeners
+
+  // Transcript file upload handler
+  (function setupTranscriptUpload() {
+    const titleInput = document.getElementById('transcript-title');
+    const fileInput = document.getElementById('transcript-file');
+    const browseBtn = document.getElementById('transcript-file-browse');
+    const fileNameEl = document.getElementById('transcript-file-name');
+    const submitBtn = document.getElementById('upload-transcript-btn');
+    const errorEl = document.getElementById('transcript-upload-error');
+
+    if (!titleInput || !fileInput || !browseBtn || !submitBtn) return;
+
+    function clearTranscriptError() {
+      if (!errorEl) return;
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+
+    function showTranscriptError(message) {
+      if (!errorEl) return;
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+    }
+
+    function updateSubmitState() {
+      const hasTitle = titleInput.value.trim().length > 0;
+      const hasFile = fileInput.files && fileInput.files.length > 0;
+      submitBtn.disabled = !(hasTitle && hasFile);
+    }
+
+    browseBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      clearTranscriptError();
+      if (fileInput.files && fileInput.files[0]) {
+        const f = fileInput.files[0];
+        fileNameEl.textContent = `${f.name} (${Math.round(f.size / 1024)} KB)`;
+      } else {
+        fileNameEl.textContent = 'No file selected';
+      }
+      updateSubmitState();
+    });
+
+    titleInput.addEventListener('input', () => {
+      clearTranscriptError();
+      updateSubmitState();
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      clearTranscriptError();
+
+      const title = titleInput.value.trim();
+      const file = fileInput.files && fileInput.files[0];
+      if (!title || !file) {
+        showTranscriptError('Please enter a title and choose a file.');
+        return;
+      }
+      if (selectedContentTypes.size === 0) {
+        showTranscriptError('Please select at least one content type above.');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showTranscriptError('File is too large. Maximum size is 10 MB.');
+        return;
+      }
+
+      const contentTypes = Array.from(selectedContentTypes);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', title);
+      formData.append('contentTypes', JSON.stringify(contentTypes));
+
+      submitBtn.disabled = true;
+      showProgress('Uploading Transcript...', 'Parsing your file and starting content generation...');
+
+      try {
+        const response = await fetch('/api/videos/transcript-upload', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        });
+
+        let payload = null;
+        try { payload = await response.json(); } catch (_e) { /* ignore */ }
+
+        if (!response.ok || !payload || !payload.success) {
+          const msg = (payload && payload.message) || `Upload failed (HTTP ${response.status})`;
+          const lower = msg.toLowerCase();
+          if (lower.includes('upgrade') || lower.includes('credit') || lower.includes('limit exceeded')) {
+            showPersistentError(`${msg} <a href="/subscription/upgrade">Upgrade your plan</a> to continue.`);
+          } else {
+            showTranscriptError(msg);
+          }
+          hideProgress();
+          updateSubmitState();
+          return;
+        }
+
+        progressMessage.textContent = 'Redirecting to Video Dashboard...';
+        setTimeout(() => {
+          window.location.href = `/videos?processing=true&count=1&contentTypes=${contentTypes.join(',')}`;
+        }, 1000);
+      } catch (err) {
+        console.error('Transcript upload error:', err);
+        showTranscriptError(err.message || 'Upload failed. Please try again.');
+        hideProgress();
+        updateSubmitState();
+      }
+    });
+
+    updateSubmitState();
+  })();
 
 });
 </script>

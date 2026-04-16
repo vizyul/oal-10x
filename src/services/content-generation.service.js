@@ -1409,6 +1409,109 @@ class ContentGenerationService {
       // Don't throw - this is a non-critical background task
     }
   }
+
+  /**
+   * On server startup, find videos whose generation died mid-flight
+   * (status='pending', transcript populated, content partially saved) and
+   * resume generation for content types that are still missing.
+   *
+   * Bounded to videos created in the last 24 hours to avoid resurrecting
+   * ancient stuck rows. Safe to call more than once — per-type UPSERTs in
+   * updateVideoWithGeneratedContent prevent duplicates.
+   */
+  async resumePendingVideoGenerations() {
+    try {
+      const pendingRes = await database.query(`
+        SELECT id, videoid, users_id, video_title
+        FROM videos
+        WHERE status = 'pending'
+          AND transcript_text IS NOT NULL
+          AND LENGTH(TRIM(transcript_text)) > 0
+          AND created_at > NOW() - INTERVAL '24 hours'
+        ORDER BY created_at ASC
+      `);
+
+      if (pendingRes.rows.length === 0) {
+        return { resumed: 0, completed: 0, skipped: 0 };
+      }
+
+      logger.info(`resumePendingVideoGenerations: found ${pendingRes.rows.length} candidate video(s)`);
+
+      const allActiveTypes = await this.getSupportedContentTypes();
+      let resumed = 0;
+      let completed = 0;
+      let skipped = 0;
+
+      for (const row of pendingRes.rows) {
+        try {
+          const existingRes = await database.query(`
+            SELECT ct.key
+            FROM video_content vc
+            JOIN content_types ct ON ct.id = vc.content_type_id
+            WHERE vc.video_id = $1
+              AND vc.content_text IS NOT NULL
+              AND vc.content_text != ''
+              AND vc.generation_status = 'completed'
+          `, [row.id]);
+
+          const existingTypes = new Set(existingRes.rows.map(r => r.key));
+          const missing = allActiveTypes.filter(t => !existingTypes.has(t));
+
+          if (missing.length === 0) {
+            await this.checkAndUpdateVideoCompletion(row.id, row.videoid);
+            completed += 1;
+            logger.info(`resumePendingVideoGenerations: video ${row.videoid} already has all content; marked completed`);
+            continue;
+          }
+
+          const videoRec = await videoModel.findById(row.id);
+          const transcript = videoRec && videoRec.transcript_text;
+          if (!transcript) {
+            skipped += 1;
+            continue;
+          }
+
+          logger.info(`resumePendingVideoGenerations: resuming video ${row.videoid} — ${missing.length}/${allActiveTypes.length} types missing: ${missing.join(', ')}`);
+
+          try {
+            const processingStatusService = require('./processing-status.service');
+            await processingStatusService.initializeVideoProcessingAsync(
+              row.videoid,
+              row.id,
+              row.video_title || 'Untitled',
+              row.users_id,
+              missing
+            );
+            processingStatusService.updateTranscriptStatus(row.videoid, 'completed');
+          } catch (statusErr) {
+            logger.warn(`resumePendingVideoGenerations: status init failed for ${row.videoid}: ${statusErr.message}`);
+          }
+
+          this.generateAllContentForVideo(row.id, row.videoid, transcript, {
+            contentTypes: missing,
+            userId: row.users_id
+          }).then(result => {
+            logger.info(`resumePendingVideoGenerations: ${row.videoid} finished`, {
+              successful: result.summary?.successful || 0,
+              failed: result.summary?.failed || 0
+            });
+          }).catch(err => {
+            logger.warn(`resumePendingVideoGenerations: ${row.videoid} failed: ${err.message}`);
+          });
+
+          resumed += 1;
+        } catch (innerErr) {
+          logger.warn(`resumePendingVideoGenerations: error handling video ${row.videoid}: ${innerErr.message}`);
+        }
+      }
+
+      logger.info(`resumePendingVideoGenerations: resumed=${resumed} completed=${completed} skipped=${skipped}`);
+      return { resumed, completed, skipped };
+    } catch (error) {
+      logger.error('resumePendingVideoGenerations failed:', error.message);
+      return { resumed: 0, completed: 0, skipped: 0, error: error.message };
+    }
+  }
 }
 
 module.exports = new ContentGenerationService();

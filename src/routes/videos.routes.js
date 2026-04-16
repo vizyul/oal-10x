@@ -1,8 +1,39 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
 const { body, param, query } = require('express-validator');
 const router = express.Router();
 const videosController = require('../controllers/videos.controller');
 const { authMiddleware, subscriptionMiddleware } = require('../middleware');
+const { SUPPORTED_EXTENSIONS } = require('../services/transcript-parser.service');
+
+const transcriptUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (SUPPORTED_EXTENSIONS.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type. Allowed: ${SUPPORTED_EXTENSIONS.join(', ')}`), false);
+    }
+  }
+});
+
+function handleTranscriptUploadErrors(err, req, res, next) {
+  if (err) {
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Upload error',
+      error: err.code || 'UPLOAD_ERROR'
+    });
+  }
+  next();
+}
 // Rate limiting for content operations removed - handled by Cloudflare at the edge.
 // Subscription limits (checkUsageLimit) enforce per-user business rules.
 
@@ -297,6 +328,20 @@ router.post('/batch',
       })
   ],
   videosController.processBatch.bind(videosController)
+);
+
+/**
+ * @route   POST /api/videos/transcript-upload
+ * @desc    Upload a transcript file and generate AI content from it (BILLABLE OPERATION)
+ * @access  Private - Requires Basic subscription
+ */
+router.post('/transcript-upload',
+  subscriptionMiddleware.requireSubscription('free'),
+  subscriptionMiddleware.checkUsageLimit('videos'),
+  (req, res, next) => {
+    transcriptUpload.single('file')(req, res, (err) => handleTranscriptUploadErrors(err, req, res, next));
+  },
+  videosController.uploadTranscriptFile.bind(videosController)
 );
 
 module.exports = router;

@@ -76,6 +76,16 @@ const startServer = () => {
     logger.info(`🚀 Server running on ${HOST}:${PORT}`);
     logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`📊 Process ID: ${process.pid}`);
+
+    setTimeout(() => {
+      try {
+        const contentGenerationService = require('./services/content-generation.service');
+        contentGenerationService.resumePendingVideoGenerations()
+          .catch(err => logger.warn('resumePendingVideoGenerations error:', err.message));
+      } catch (err) {
+        logger.warn('Could not trigger resumePendingVideoGenerations:', err.message);
+      }
+    }, 5000);
   });
 };
 
