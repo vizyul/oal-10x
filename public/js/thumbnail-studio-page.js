@@ -127,7 +127,7 @@ class ThumbnailStudioPage {
      */
     async loadVideoSelector() {
         try {
-            const response = await fetch('/api/videos?status=completed');
+            const response = await fetch('/api/videos?status=completed&limit=1000');
             const data = await response.json();
 
             const selector = document.getElementById('video-selector');
