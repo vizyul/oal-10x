@@ -21,6 +21,7 @@ class User extends BaseModel {
       'email_verification_token', 'email_verification_expires', 'terms_accepted',
       'privacy_accepted', 'registration_method', 'last_login', 'welcome_email_sent',
       'welcome_email_sent_at', 'free_video_used',
+      'password_reset_token', 'password_reset_expires',
       // Affiliate fields
       'referred_by_code', 'affiliate_code', 'is_affiliate', 'affiliate_status',
       'affiliate_joined_at', 'refgrow_affiliate_id'
@@ -28,7 +29,8 @@ class User extends BaseModel {
 
     this.hidden = [
       'password', 'api_key_hash', 'session_token', 'magic_link_token',
-      'email_verification_token', 'email_verification_expires'
+      'email_verification_token', 'email_verification_expires',
+      'password_reset_token', 'password_reset_expires'
     ];
 
     this.casts = {
@@ -82,6 +84,30 @@ class User extends BaseModel {
       return result.rows[0];
     } catch (error) {
       logger.error(`Error finding user by email with password ${email}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find user by password reset token (returns raw row including hidden fields
+   * so the auth service can read password_reset_expires for validity checks).
+   * @param {string} token
+   * @returns {Promise<object|null>}
+   */
+  async findByPasswordResetToken(token) {
+    try {
+      if (!token) return null;
+
+      const query = `SELECT * FROM ${this.tableName} WHERE password_reset_token = $1 LIMIT 1`;
+      const result = await database.query(query, [token]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      logger.error('Error finding user by password reset token:', error);
       throw error;
     }
   }

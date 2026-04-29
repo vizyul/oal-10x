@@ -216,6 +216,8 @@ class AuthService {
       if (updateData.emailVerified !== undefined) mappedData.email_verified = updateData.emailVerified;
       if (updateData.emailVerificationToken !== undefined) mappedData.email_verification_token = updateData.emailVerificationToken;
       if (updateData.emailVerificationExpires !== undefined) mappedData.email_verification_expires = updateData.emailVerificationExpires;
+      if (updateData.passwordResetToken !== undefined) mappedData.password_reset_token = updateData.passwordResetToken;
+      if (updateData.passwordResetExpires !== undefined) mappedData.password_reset_expires = updateData.passwordResetExpires;
       if (updateData.status) mappedData.status = updateData.status;
       if (updateData.lastLoginAt) mappedData.last_login = updateData.lastLoginAt;
       if (updateData.termsAccepted !== undefined) mappedData.terms_accepted = updateData.termsAccepted;
@@ -304,6 +306,103 @@ class AuthService {
   }
 
   /**
+   * Generate a single-use password reset token for a user looked up by email.
+   * Returns null when no account matches so callers can respond generically
+   * (avoid leaking which addresses exist).
+   * @param {string} email
+   * @returns {Promise<{user: Object, token: string}|null>}
+   */
+  async generatePasswordResetToken(email) {
+    try {
+      const found = await UserModel.findByEmail(email);
+      if (!found) {
+        logger.info(`Password reset requested for unknown email: ${email}`);
+        return null;
+      }
+
+      const userRecord = this.formatUserRecord(found);
+      const crypto = require('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      const updated = await this.updateUser(userRecord.id, {
+        passwordResetToken: token,
+        passwordResetExpires: expires
+      });
+
+      logger.info(`Password reset token issued for user: ${updated.id}`);
+      return { user: updated, token };
+    } catch (error) {
+      logger.error('Error generating password reset token:', error);
+      throw new Error('Failed to generate password reset token');
+    }
+  }
+
+  /**
+   * Verify a password reset token. Returns the user when the token exists
+   * and has not expired, otherwise null.
+   * @param {string} token
+   * @returns {Promise<Object|null>}
+   */
+  async verifyPasswordResetToken(token) {
+    try {
+      if (!token) return null;
+
+      // Use the raw lookup so password_reset_expires (which lives in the
+      // model's `hidden` array) survives BaseModel.formatOutput.
+      const record = await UserModel.findByPasswordResetToken(token);
+      if (!record) {
+        logger.warn('Password reset token not found');
+        return null;
+      }
+
+      if (!record.password_reset_expires) {
+        logger.warn('Password reset token has no expiry');
+        return null;
+      }
+
+      const expiry = new Date(record.password_reset_expires);
+      if (Number.isNaN(expiry.getTime()) || new Date() > expiry) {
+        logger.warn('Password reset token expired');
+        return null;
+      }
+
+      return this.formatUserRecord(record);
+    } catch (error) {
+      logger.error('Error verifying password reset token:', error);
+      throw new Error('Failed to verify password reset token');
+    }
+  }
+
+  /**
+   * Reset a user's password given a valid token. Clears the token on success.
+   * @param {string} token
+   * @param {string} newPassword - plaintext, will be bcrypt-hashed
+   * @returns {Promise<Object|null>} updated user or null if token invalid
+   */
+  async resetUserPassword(token, newPassword) {
+    try {
+      const user = await this.verifyPasswordResetToken(token);
+      if (!user) return null;
+
+      const bcrypt = require('bcryptjs');
+      const hashed = await bcrypt.hash(newPassword, 12);
+
+      const updated = await this.updateUser(user.id, {
+        password: hashed,
+        passwordResetToken: null,
+        passwordResetExpires: null
+      });
+
+      logger.info(`Password reset completed for user: ${updated.id}`);
+      return updated;
+    } catch (error) {
+      logger.error('Error resetting user password:', error);
+      throw new Error('Failed to reset user password');
+    }
+  }
+
+  /**
    * Delete user (soft delete by updating status)
    * @param {string} userId - User ID
    * @returns {Promise<Object>} Updated user object
@@ -346,6 +445,8 @@ class AuthService {
       emailVerified: fields.email_verified || false,
       emailVerificationToken: fields.email_verification_token,
       emailVerificationExpires: fields.email_verification_expires,
+      passwordResetToken: fields.password_reset_token,
+      passwordResetExpires: fields.password_reset_expires,
       termsAccepted: fields.terms_accepted || false,
       privacyAccepted: fields.privacy_accepted || false,
       status: fields.status || 'pending',

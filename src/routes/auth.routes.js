@@ -191,23 +191,11 @@ router.post('/forgot-password',
 router.get('/reset-password/:token', authController.renderResetPassword);
 
 // POST /auth/reset-password/:token - Process reset password
+// NOTE: validation is done inside the controller so we can re-render the
+// form with inline errors. The shared validationMiddleware relies on
+// req.flash, which isn't installed app-wide.
 router.post('/reset-password/:token',
   authSecurityLimit,
-  [
-    body('password')
-      .isLength({ min: 8 })
-      .withMessage('Password must be at least 8 characters long')
-      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-      .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
-    body('confirmPassword')
-      .custom((value, { req }) => {
-        if (value !== req.body.password) {
-          throw new Error('Passwords do not match');
-        }
-        return true;
-      })
-  ],
-  validationMiddleware,
   authController.resetPassword
 );
 

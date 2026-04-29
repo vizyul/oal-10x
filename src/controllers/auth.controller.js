@@ -568,12 +568,14 @@ class AuthController {
         return res.redirect(getPostAuthRedirectUrl(req.user));
       }
 
-      const { verified } = req.query;
+      const { verified, reset } = req.query;
       let message = '';
 
       if (verified === 'pending') {
         message = 'Please check your email and click the verification link to activate your account.';
       }
+
+      const resetSuccess = reset === 'success';
 
       res.render('auth/signin', {
         title: 'Sign In',
@@ -582,6 +584,7 @@ class AuthController {
         showHeader: false,
         showFooter: false,
         message,
+        resetSuccess,
         csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     } catch (error) {
@@ -803,7 +806,8 @@ class AuthController {
         subtitle: 'Enter your email to reset your password',
         layout: 'auth',
         showHeader: false,
-        showFooter: false
+        showFooter: false,
+        csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     } catch (error) {
       logger.error('Error rendering forgot password page:', error);
@@ -817,17 +821,39 @@ class AuthController {
   // POST /auth/forgot-password
   async forgotPassword(req, res) {
     try {
-      // Implementation for password reset
-      res.status(501).json({
-        success: false,
-        message: 'Password reset feature coming soon'
+      const { email } = req.body;
+      const result = await authService.generatePasswordResetToken(email);
+
+      // Fire-and-forget the email send when we matched a user. We always
+      // render the same generic success message either way to avoid
+      // disclosing which addresses have an account.
+      if (result) {
+        const resetUrl = `${req.protocol}://${req.get('host')}/auth/reset-password/${result.token}`;
+        emailService
+          .sendPasswordResetEmail(result.user.email, result.user.firstName, resetUrl)
+          .catch(err => logger.error('Password reset email send failed:', err));
+      }
+
+      return res.render('auth/forgot-password', {
+        title: 'Check Your Email',
+        subtitle: 'Password reset request received',
+        layout: 'auth',
+        showHeader: false,
+        showFooter: false,
+        success: true,
+        successMessage: 'If an account exists for that email, we sent a password reset link. The link expires in 1 hour.'
       });
     } catch (error) {
       logger.error('Forgot password error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Unable to process password reset request',
-        error: 'INTERNAL_SERVER_ERROR'
+      return res.status(500).render('auth/forgot-password', {
+        title: 'Forgot Password',
+        subtitle: 'Enter your email to reset your password',
+        layout: 'auth',
+        showHeader: false,
+        showFooter: false,
+        error: 'Unable to process your request right now. Please try again in a moment.',
+        formData: { email: req.body && req.body.email },
+        csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     }
   }
@@ -836,14 +862,17 @@ class AuthController {
   async renderResetPassword(req, res) {
     try {
       const { token } = req.params;
+      const user = await authService.verifyPasswordResetToken(token);
 
       res.render('auth/reset-password', {
         title: 'Reset Password',
-        subtitle: 'Enter your new password',
+        subtitle: user ? 'Enter your new password' : 'Reset link is invalid or expired',
         layout: 'auth',
         showHeader: false,
         showFooter: false,
-        token
+        token,
+        tokenValid: !!user,
+        csrfToken: req.csrfToken ? req.csrfToken() : null
       });
     } catch (error) {
       logger.error('Error rendering reset password page:', error);
@@ -856,19 +885,55 @@ class AuthController {
 
   // POST /auth/reset-password/:token
   async resetPassword(req, res) {
+    const { token } = req.params;
+    const password = (req.body && req.body.password) || '';
+    const confirmPassword = (req.body && req.body.confirmPassword) || '';
+
+    const renderForm = (error, status = 400) => res.status(status).render('auth/reset-password', {
+      title: 'Reset Password',
+      subtitle: 'Enter your new password',
+      layout: 'auth',
+      showHeader: false,
+      showFooter: false,
+      token,
+      tokenValid: true,
+      error,
+      csrfToken: req.csrfToken ? req.csrfToken() : null
+    });
+
+    // Inline validation: keeps error reporting on-page without depending on
+    // req.flash (which isn't wired up in this app).
+    if (password.length < 8) {
+      return renderForm('Password must be at least 8 characters long.');
+    }
+    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      return renderForm('Password must contain an uppercase letter, a lowercase letter, a number, and a special character.');
+    }
+    if (password !== confirmPassword) {
+      return renderForm('Passwords do not match.');
+    }
+
     try {
-      // Implementation for password reset
-      res.status(501).json({
-        success: false,
-        message: 'Password reset feature coming soon'
-      });
+      const updated = await authService.resetUserPassword(token, password);
+
+      if (!updated) {
+        return res.status(400).render('auth/reset-password', {
+          title: 'Reset Password',
+          subtitle: 'Reset link is invalid or expired',
+          layout: 'auth',
+          showHeader: false,
+          showFooter: false,
+          token,
+          tokenValid: false,
+          error: 'This reset link is invalid or has expired. Please request a new one.',
+          csrfToken: req.csrfToken ? req.csrfToken() : null
+        });
+      }
+
+      return res.redirect('/auth/sign-in?reset=success');
     } catch (error) {
       logger.error('Reset password error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Unable to reset password',
-        error: 'INTERNAL_SERVER_ERROR'
-      });
+      return renderForm('Unable to reset your password right now. Please try again in a moment.', 500);
     }
   }
 }

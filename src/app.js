@@ -95,11 +95,14 @@ app.engine('.hbs', engine({
     lookup: (obj, key) => {
       return obj && obj[key];
     },
-    unless: (condition, options) => {
+    // Standard Handlebars-style unless: pass `this` so block content can
+    // resolve parent-context variables. Must be a regular function (not an
+    // arrow) so Handlebars' caller-provided `this` reaches options.fn/inverse.
+    unless: function (condition, options) {
       if (!condition) {
-        return options.fn && options.fn();
+        return options.fn ? options.fn(this) : '';
       }
-      return options.inverse && options.inverse();
+      return options.inverse ? options.inverse(this) : '';
     },
     firstInitial: (name) => {
       return name ? name.charAt(0).toUpperCase() : '?';

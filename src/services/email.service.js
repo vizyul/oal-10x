@@ -327,6 +327,178 @@ class EmailService {
     }
   }
 
+  async sendPasswordResetEmail(email, firstName, resetUrl) {
+    try {
+      await this.ensureInitialized();
+
+      if (this.useGraphAPI) {
+        return await this.sendPasswordResetEmailViaGraph(email, firstName, resetUrl);
+      } else if (this.transporter) {
+        return await this.sendPasswordResetEmailViaSMTP(email, firstName, resetUrl);
+      } else {
+        logger.warn(`No email service configured. Password reset link for ${email}: ${resetUrl}`);
+        return {
+          success: true,
+          messageId: 'dev-mode',
+          previewUrl: null
+        };
+      }
+    } catch (error) {
+      logger.error('Error sending password reset email:', error);
+      throw new Error('Failed to send password reset email');
+    }
+  }
+
+  async sendPasswordResetEmailViaGraph(email, firstName, resetUrl) {
+    try {
+      const accessToken = await this.getAccessToken();
+
+      const emailMessage = {
+        message: {
+          subject: 'Reset Your Password - AmplifyContent.ai',
+          body: {
+            contentType: 'HTML',
+            content: this.generatePasswordResetEmailHTML(firstName, resetUrl)
+          },
+          toRecipients: [
+            {
+              emailAddress: {
+                address: email
+              }
+            }
+          ],
+          from: {
+            emailAddress: {
+              address: process.env.AZURE_EMAIL_ADDRESS
+            }
+          }
+        },
+        saveToSentItems: false
+      };
+
+      const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
+
+      const response = await axios.post(
+        endpoint,
+        emailMessage,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      logger.info(`Password reset email sent via Graph API to ${email}`, {
+        status: response.status,
+        statusText: response.statusText
+      });
+
+      return {
+        success: true,
+        messageId: `graph-${Date.now()}`,
+        previewUrl: null
+      };
+    } catch (error) {
+      logger.error('Error sending password reset email via Graph API:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async sendPasswordResetEmailViaSMTP(email, firstName, resetUrl) {
+    try {
+      const mailOptions = {
+        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
+        to: email,
+        subject: 'Reset Your Password - AmplifyContent.ai',
+        html: this.generatePasswordResetEmailHTML(firstName, resetUrl),
+        text: this.generatePasswordResetEmailText(firstName, resetUrl)
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+
+      if (process.env.NODE_ENV !== 'production') {
+        logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
+      }
+
+      logger.info(`Password reset email sent via SMTP to ${email}`, {
+        messageId: info.messageId,
+        response: info.response
+      });
+
+      return {
+        success: true,
+        messageId: info.messageId,
+        previewUrl: process.env.NODE_ENV !== 'production' ? nodemailer.getTestMessageUrl(info) : null
+      };
+    } catch (error) {
+      logger.error('Error sending password reset email via SMTP:', error);
+      throw error;
+    }
+  }
+
+  generatePasswordResetEmailHTML(firstName, resetUrl) {
+    const greetingName = firstName ? firstName : 'there';
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #000000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+            .header h2 { color: white; margin: 0; font-size: 20px; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { background-color: #10b981; color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; font-weight: bold; }
+            .link-fallback { word-break: break-all; color: #10b981; font-size: 13px; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1><span style="color: #ffffff;">AmplifyContent.</span><span style="color: #10b981;">ai</span></h1>
+            <h2>Reset Your Password</h2>
+        </div>
+        <div class="content">
+            <p>Hi ${greetingName},</p>
+            <p>We received a request to reset the password on your AmplifyContent.ai account. Click the button below to choose a new password.</p>
+
+            <p style="text-align: center;"><a class="button" href="${resetUrl}">Reset Password</a></p>
+
+            <p>If the button doesn't work, copy and paste this link into your browser:</p>
+            <p class="link-fallback">${resetUrl}</p>
+
+            <p>This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
+        </div>
+        <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generatePasswordResetEmailText(firstName, resetUrl) {
+    const greetingName = firstName ? firstName : 'there';
+    return `
+AmplifyContent.ai - Reset Your Password
+
+Hi ${greetingName},
+
+We received a request to reset the password on your AmplifyContent.ai account. Open the link below to choose a new password:
+
+${resetUrl}
+
+This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email - your password won't change.
+
+(c) ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+This is an automated email, please do not reply.
+    `;
+  }
+
   generateVerificationEmailHTML(code) {
     return `
     <!DOCTYPE html>
