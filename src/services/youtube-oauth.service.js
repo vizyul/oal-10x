@@ -695,8 +695,14 @@ class YouTubeOAuthService {
     try {
       const resolvedUserId = await this.resolveUserId(userId);
 
-      // Check if channel already exists
-      const existingChannel = await userYoutubeChannels.findByChannelId(channelData.id);
+      // Scope the lookup to (users_id, channel_id). channel_id is not unique
+      // across users, so a global lookup would return another user's row and
+      // overwriting it would steal that row and trip the per-user
+      // idx_user_primary_youtube_channel unique partial index.
+      const existingChannel = await userYoutubeChannels.findByUserAndChannel(
+        resolvedUserId,
+        channelData.id
+      );
 
       const channelRecord = {
         users_id: resolvedUserId,
@@ -713,11 +719,13 @@ class YouTubeOAuthService {
 
       let result;
       if (existingChannel) {
-        // Update existing channel
+        // Same user re-OAuthing the same channel - update their own row.
         result = await userYoutubeChannels.updateChannel(existingChannel.id, channelRecord);
         logger.debug(`Channel updated in PostgreSQL for user ${userId}`);
       } else {
-        // Create new channel
+        // First time this user is connecting this channel. createChannel calls
+        // ensureSinglePrimary(users_id, null) before insert, so any other
+        // primary channel this user owns is demoted automatically.
         result = await userYoutubeChannels.createChannel(channelRecord);
         logger.debug(`Channel created in PostgreSQL for user ${userId}`);
       }

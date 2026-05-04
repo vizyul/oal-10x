@@ -1,7 +1,14 @@
+const crypto = require('crypto');
 const refgrowService = require('../services/refgrow.service');
+const emailService = require('../services/email.service');
 const database = require('../services/database.service');
 const subscriptionService = require('../services/subscription.service');
 const { logger } = require('../utils');
+
+// PayPal-email verification code: 6 digits, 10-minute TTL, 60-second resend cooldown
+const PAYPAL_CODE_TTL_MS = 10 * 60 * 1000;
+const PAYPAL_RESEND_COOLDOWN_MS = 60 * 1000;
+const PAYPAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Video limits by tier (matches subscription service)
 const TIER_VIDEO_LIMITS = {
@@ -165,8 +172,10 @@ class AffiliateController {
 
       const referrals = referralsResult.rows;
 
-      // Get payment method (would come from user preferences)
-      const paymentMethod = freshUser.metadata?.affiliate_payment_method || null;
+      // Payment method: prefer the verified PayPal email column, fall back to legacy metadata
+      const paymentMethod = freshUser.paypal_email
+        ? `PayPal (${freshUser.paypal_email})`
+        : (freshUser.metadata?.affiliate_payment_method || null);
 
       // Format user data for template (convert snake_case to camelCase for header)
       const formattedUser = {
@@ -287,6 +296,279 @@ class AffiliateController {
     } catch (error) {
       logger.error('Error fetching affiliate stats:', error);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  }
+
+  /**
+   * Show affiliate settings page (PayPal payout email)
+   */
+  async showSettings(req, res) {
+    try {
+      if (!req.user) {
+        return res.redirect('/auth/sign-in?redirect=/affiliate/settings');
+      }
+
+      const freshUser = await database.findById('users', req.user.id);
+
+      if (!freshUser || !freshUser.is_affiliate) {
+        return res.redirect('/affiliate/signup');
+      }
+
+      const formattedUser = {
+        ...freshUser,
+        firstName: freshUser.first_name,
+        lastName: freshUser.last_name,
+        subscriptionTier: freshUser.subscription_tier,
+        isAffiliate: freshUser.is_affiliate
+      };
+
+      const tier = freshUser.subscription_tier || 'free';
+      const usage = await subscriptionService.getCurrentUsage(freshUser.id);
+      const subscription = {
+        tier,
+        usage: { videos: usage.videos_processed || 0 },
+        limits: { videos: TIER_VIDEO_LIMITS[tier] || 1 }
+      };
+
+      const pendingActive = freshUser.paypal_email_pending
+        && freshUser.paypal_verification_expires
+        && new Date(freshUser.paypal_verification_expires) > new Date();
+
+      res.render('affiliate-settings', {
+        title: 'Affiliate Payout Settings',
+        user: formattedUser,
+        subscription,
+        paypalEmail: freshUser.paypal_email || null,
+        paypalEmailVerifiedAt: freshUser.paypal_email_verified_at || null,
+        pendingEmail: pendingActive ? freshUser.paypal_email_pending : null,
+        layout: 'main'
+      });
+    } catch (error) {
+      logger.error('Error showing affiliate settings:', error);
+      res.status(500).render('errors/500', { error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Send a 6-digit verification code to a candidate PayPal email.
+   * Stores it in users.paypal_email_pending + paypal_verification_token until
+   * the user confirms via verifyPayPalEmail.
+   */
+  async sendPayPalVerificationCode(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+
+      const rawEmail = (req.body?.paypalEmail || '').trim().toLowerCase();
+      if (!PAYPAL_EMAIL_REGEX.test(rawEmail) || rawEmail.length > 255) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please enter a valid email address.'
+        });
+      }
+
+      const freshUser = await database.findById('users', req.user.id);
+      if (!freshUser || !freshUser.is_affiliate) {
+        return res.status(403).json({ success: false, error: 'Not an affiliate account.' });
+      }
+
+      // 60-second cooldown when an unexpired code was just sent for the same email
+      if (freshUser.paypal_email_pending === rawEmail
+        && freshUser.paypal_verification_sent_at
+        && (Date.now() - new Date(freshUser.paypal_verification_sent_at).getTime()) < PAYPAL_RESEND_COOLDOWN_MS) {
+        return res.status(429).json({
+          success: false,
+          error: 'A verification code was just sent. Please wait 60 seconds before requesting another.'
+        });
+      }
+
+      const code = String(crypto.randomInt(100000, 1000000));
+      const now = new Date();
+      const expires = new Date(now.getTime() + PAYPAL_CODE_TTL_MS);
+
+      await database.update('users', freshUser.id, {
+        paypal_email_pending: rawEmail,
+        paypal_verification_token: code,
+        paypal_verification_expires: expires,
+        paypal_verification_sent_at: now
+      });
+
+      await emailService.sendPayPalVerificationCode(rawEmail, code, freshUser.first_name);
+
+      logger.info('PayPal verification code sent', {
+        userId: freshUser.id,
+        paypalEmail: rawEmail
+      });
+
+      return res.json({
+        success: true,
+        message: `Verification code sent to ${rawEmail}. Check your inbox.`
+      });
+    } catch (error) {
+      logger.error('Error sending PayPal verification code:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Could not send verification code. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Resend the verification code for the currently-pending PayPal email.
+   * Same cooldown logic as sendPayPalVerificationCode.
+   */
+  async resendPayPalCode(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+
+      const freshUser = await database.findById('users', req.user.id);
+      if (!freshUser || !freshUser.is_affiliate) {
+        return res.status(403).json({ success: false, error: 'Not an affiliate account.' });
+      }
+
+      if (!freshUser.paypal_email_pending) {
+        return res.status(400).json({
+          success: false,
+          error: 'No pending PayPal email to verify. Submit your email first.'
+        });
+      }
+
+      if (freshUser.paypal_verification_sent_at
+        && (Date.now() - new Date(freshUser.paypal_verification_sent_at).getTime()) < PAYPAL_RESEND_COOLDOWN_MS) {
+        return res.status(429).json({
+          success: false,
+          error: 'Please wait 60 seconds between code requests.'
+        });
+      }
+
+      const code = String(crypto.randomInt(100000, 1000000));
+      const now = new Date();
+      const expires = new Date(now.getTime() + PAYPAL_CODE_TTL_MS);
+
+      await database.update('users', freshUser.id, {
+        paypal_verification_token: code,
+        paypal_verification_expires: expires,
+        paypal_verification_sent_at: now
+      });
+
+      await emailService.sendPayPalVerificationCode(
+        freshUser.paypal_email_pending,
+        code,
+        freshUser.first_name
+      );
+
+      logger.info('PayPal verification code resent', {
+        userId: freshUser.id,
+        paypalEmail: freshUser.paypal_email_pending
+      });
+
+      return res.json({
+        success: true,
+        message: `New code sent to ${freshUser.paypal_email_pending}.`
+      });
+    } catch (error) {
+      logger.error('Error resending PayPal verification code:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Could not resend verification code. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Verify the 6-digit code, persist the verified PayPal email locally, then
+   * push it to RefGrow. RefGrow sync failure is reported as a warning but does
+   * NOT undo the local verification — the user still owns the email.
+   */
+  async verifyPayPalEmail(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+
+      const code = (req.body?.code || '').trim();
+      if (!/^\d{6}$/.test(code)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Enter the 6-digit code from your email.'
+        });
+      }
+
+      const freshUser = await database.findById('users', req.user.id);
+      if (!freshUser || !freshUser.is_affiliate) {
+        return res.status(403).json({ success: false, error: 'Not an affiliate account.' });
+      }
+
+      if (!freshUser.paypal_email_pending || !freshUser.paypal_verification_token) {
+        return res.status(400).json({
+          success: false,
+          error: 'No pending PayPal email to verify. Submit your email first.'
+        });
+      }
+
+      if (!freshUser.paypal_verification_expires
+        || new Date(freshUser.paypal_verification_expires) < new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: 'This code has expired. Click "Resend code" to get a new one.'
+        });
+      }
+
+      if (code !== freshUser.paypal_verification_token) {
+        return res.status(400).json({
+          success: false,
+          error: 'That code is incorrect. Double-check your inbox and try again.'
+        });
+      }
+
+      const verifiedEmail = freshUser.paypal_email_pending;
+
+      // Persist locally first - the user proved inbox ownership, do not lose that.
+      await database.update('users', freshUser.id, {
+        paypal_email: verifiedEmail,
+        paypal_email_verified_at: new Date(),
+        paypal_email_pending: null,
+        paypal_verification_token: null,
+        paypal_verification_expires: null,
+        paypal_verification_sent_at: null
+      });
+
+      // Best-effort push to RefGrow. Failure is surfaced as a warning, not an error.
+      let refgrowWarning = null;
+      const refgrowResult = await refgrowService.updateAffiliatePayPalEmail(
+        freshUser.email,
+        verifiedEmail
+      );
+      if (!refgrowResult.success) {
+        refgrowWarning = 'Your PayPal email was saved, but syncing it to RefGrow failed. Our team will retry automatically.';
+        logger.warn('RefGrow sync failed for verified PayPal email', {
+          userId: freshUser.id,
+          paypalEmail: verifiedEmail,
+          refgrowError: refgrowResult.error
+        });
+      }
+
+      logger.info('PayPal payout email verified and saved', {
+        userId: freshUser.id,
+        paypalEmail: verifiedEmail,
+        refgrowSynced: refgrowResult.success
+      });
+
+      return res.json({
+        success: true,
+        paypalEmail: verifiedEmail,
+        message: refgrowWarning || 'PayPal payout email verified and saved.',
+        warning: refgrowWarning
+      });
+    } catch (error) {
+      logger.error('Error verifying PayPal email:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Could not verify your code. Please try again.'
+      });
     }
   }
 

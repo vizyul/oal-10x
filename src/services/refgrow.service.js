@@ -498,6 +498,57 @@ class RefGrowService {
   }
 
   /**
+   * Update an affiliate's PayPal payout email on RefGrow.
+   * Calls PUT /api/v1/affiliates/:email with payout_method=paypal and the new
+   * paypal_email so RefGrow uses it on the next PayPal Payouts batch.
+   *
+   * Returns { success: true } on success, { success: false, error } on failure.
+   * Does NOT throw — callers (e.g. the verify endpoint) decide whether a
+   * RefGrow sync failure should block local persistence.
+   *
+   * @param {string} userEmail - The affiliate's account email (RefGrow's lookup key)
+   * @param {string} paypalEmail - The verified PayPal email to register for payouts
+   * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+   */
+  async updateAffiliatePayPalEmail(userEmail, paypalEmail) {
+    if (!this.isConfigured()) {
+      return { success: false, error: 'RefGrow API not configured' };
+    }
+
+    try {
+      const response = await axios.put(
+        `${this.baseUrl}/affiliates/${encodeURIComponent(userEmail)}`,
+        {
+          payout_method: 'paypal',
+          paypal_email: paypalEmail
+        },
+        { headers: this.getHeaders() }
+      );
+
+      logger.info('RefGrow affiliate PayPal email updated', {
+        userEmail,
+        paypalEmail
+      });
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.warn('Failed to update RefGrow affiliate PayPal email:', {
+        userEmail,
+        paypalEmail,
+        status: error.response?.status,
+        error: error.message,
+        responseData: error.response?.data
+      });
+
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        status: error.response?.status
+      };
+    }
+  }
+
+  /**
    * Update commission status
    * @param {number} referralId - Local referral ID
    * @param {string} status - New status (pending, approved, paid, failed, cancelled)

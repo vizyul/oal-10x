@@ -294,16 +294,21 @@ class ProcessingStatusManager {
       return;
     }
 
-    // Skip fully completed videos — remove from map if present
+    // Drop completed/failed videos. The dashboard only shows in-flight work;
+    // finished videos belong in the All Videos grid below. This applies whether
+    // the video was already being tracked locally or arrived completed in the
+    // initial socket batch.
     if (status) {
       const transcriptDone = status.transcript && status.transcript.status !== 'pending';
       const allContentDone = status.content && Object.values(status.content).every(c => c.status !== 'pending');
-      if ((status.completed || (transcriptDone && allContentDone)) && this.processingVideos.has(videoId)) {
-        this.processingVideos.delete(videoId);
-        if (this.processingVideos.size === 0) {
-          this.hideProcessingDashboard();
-        } else {
-          this.updateStatusTable();
+      if (status.completed || (transcriptDone && allContentDone)) {
+        if (this.processingVideos.has(videoId)) {
+          this.processingVideos.delete(videoId);
+          if (this.processingVideos.size === 0) {
+            this.hideProcessingDashboard();
+          } else {
+            this.updateStatusTable();
+          }
         }
         if (typeof refreshCompletedVideos === 'function') {
           refreshCompletedVideos();

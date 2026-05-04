@@ -1,0 +1,566 @@
+<div class="affiliate-settings">
+    <div class="settings-header">
+        <a href="/affiliate/dashboard" class="back-link">&larr; Back to Dashboard</a>
+        <h1>Affiliate Payout Settings</h1>
+        <p class="settings-subtitle">Set the PayPal address where your commissions will be sent.</p>
+    </div>
+
+    <div class="alert alert-success" id="success-alert" style="display:none;">
+        <span class="alert-icon">&check;</span>
+        <span class="alert-text"></span>
+        <button type="button" class="alert-close" data-dismiss="success-alert">&times;</button>
+    </div>
+
+    <div class="alert alert-warning" id="warning-alert" style="display:none;">
+        <span class="alert-icon">!</span>
+        <span class="alert-text"></span>
+        <button type="button" class="alert-close" data-dismiss="warning-alert">&times;</button>
+    </div>
+
+    <div class="alert alert-error" id="error-alert" style="display:none;">
+        <span class="alert-icon">!</span>
+        <span class="alert-text"></span>
+        <button type="button" class="alert-close" data-dismiss="error-alert">&times;</button>
+    </div>
+
+    <div class="settings-card">
+        <h2>PayPal Payout Email</h2>
+
+        {{#if paypalEmail}}
+        <div class="current-email-block" id="current-email-block">
+            <div class="current-email">
+                <span class="status-dot verified"></span>
+                <div>
+                    <div class="current-label">Verified PayPal email:</div>
+                    <div class="current-value">{{paypalEmail}}</div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-secondary" id="changeEmailBtn">Change PayPal Email</button>
+        </div>
+        {{/if}}
+
+        <div class="paypal-form-block" id="paypal-form-block" {{#if paypalEmail}}style="display:none;"{{/if}}>
+            <p class="form-help">
+                Enter the email address tied to your PayPal account. We'll send a 6-digit code there to confirm
+                you control the inbox.
+            </p>
+            <p class="form-warning">
+                <strong>Important:</strong> PayPal cannot tell us in advance whether an email is registered with them.
+                Make sure this email exactly matches your PayPal account &mdash; payouts to an unregistered address are
+                held as Unclaimed for 30 days, then returned.
+            </p>
+
+            <div class="form-row" id="email-input-row" {{#if pendingEmail}}style="display:none;"{{/if}}>
+                <input
+                    type="email"
+                    id="paypalEmailInput"
+                    class="text-input"
+                    placeholder="paypal-account@example.com"
+                    autocomplete="email"
+                    value="{{pendingEmail}}"
+                />
+                <button type="button" class="btn btn-primary" id="sendCodeBtn">
+                    Send verification code
+                </button>
+            </div>
+
+            <div class="form-row code-row" id="code-input-row" {{#unless pendingEmail}}style="display:none;"{{/unless}}>
+                <div class="code-input-wrapper">
+                    <label class="code-label">Enter the 6-digit code sent to <span id="pendingEmailDisplay">{{pendingEmail}}</span></label>
+                    <input
+                        type="text"
+                        id="codeInput"
+                        class="text-input code-input"
+                        placeholder="000000"
+                        inputmode="numeric"
+                        maxlength="6"
+                        autocomplete="one-time-code"
+                    />
+                </div>
+                <div class="code-actions">
+                    <button type="button" class="btn btn-primary" id="verifyBtn">
+                        Verify &amp; save
+                    </button>
+                    <button type="button" class="btn btn-link" id="resendBtn">
+                        Resend code
+                    </button>
+                    <button type="button" class="btn btn-link" id="useDifferentBtn">
+                        Use a different email
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.affiliate-settings {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.settings-header {
+    margin-bottom: 30px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 16px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.settings-header h1 {
+    font-size: 2rem;
+    margin: 0 0 8px 0;
+}
+
+.settings-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    margin: 0;
+}
+
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.alert-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.alert-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+}
+
+.alert-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.alert-icon {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.alert-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    opacity: 0.6;
+    color: inherit;
+}
+
+.alert-close:hover {
+    opacity: 1;
+}
+
+.settings-card {
+    background: var(--bg-secondary);
+    padding: 30px;
+    border-radius: 12px;
+}
+
+.settings-card h2 {
+    margin: 0 0 20px 0;
+    font-size: 1.4rem;
+}
+
+.current-email-block {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border-left: 4px solid #10b981;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.current-email {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+.current-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.current-value {
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.form-help {
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+}
+
+.form-warning {
+    background: #fff3cd;
+    border-left: 4px solid #f59e0b;
+    color: #856404;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin: 0 0 24px 0;
+}
+
+.form-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    flex-wrap: wrap;
+}
+
+.code-row {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.code-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.code-label {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.text-input {
+    flex: 1;
+    min-width: 240px;
+    padding: 14px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.code-input {
+    letter-spacing: 8px;
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 600;
+    max-width: 240px;
+}
+
+.btn {
+    padding: 14px 22px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--primary-color, #10b981);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover, #059669);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--border-color);
+}
+
+.btn-link {
+    background: none;
+    color: var(--primary-color, #10b981);
+    padding: 8px 12px;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.btn-link:hover:not(:disabled) {
+    opacity: 0.8;
+}
+
+.code-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+</style>
+
+<script>
+(function() {
+    const RESEND_COOLDOWN_SECONDS = 60;
+    let resendTimer = null;
+
+    function showAlert(id, message) {
+        ['success-alert', 'warning-alert', 'error-alert'].forEach(function(otherId) {
+            if (otherId !== id) {
+                document.getElementById(otherId).style.display = 'none';
+            }
+        });
+        const el = document.getElementById(id);
+        el.querySelector('.alert-text').textContent = message;
+        el.style.display = 'flex';
+        if (id === 'success-alert') {
+            window.setTimeout(function() { hideAlert(id); }, 5000);
+        }
+    }
+
+    function hideAlert(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function setBusy(buttonId, busy, busyLabel, idleLabel) {
+        const btn = document.getElementById(buttonId);
+        if (!btn) return;
+        btn.disabled = busy;
+        if (busy) {
+            btn.dataset.idleLabel = idleLabel || btn.textContent;
+            btn.textContent = busyLabel;
+        } else if (btn.dataset.idleLabel) {
+            btn.textContent = btn.dataset.idleLabel;
+        }
+    }
+
+    function startResendCooldown() {
+        const btn = document.getElementById('resendBtn');
+        if (!btn) return;
+        let remaining = RESEND_COOLDOWN_SECONDS;
+        btn.disabled = true;
+        const originalText = 'Resend code';
+        btn.textContent = 'Resend in ' + remaining + 's';
+        if (resendTimer) window.clearInterval(resendTimer);
+        resendTimer = window.setInterval(function() {
+            remaining -= 1;
+            if (remaining <= 0) {
+                window.clearInterval(resendTimer);
+                resendTimer = null;
+                btn.disabled = false;
+                btn.textContent = originalText;
+            } else {
+                btn.textContent = 'Resend in ' + remaining + 's';
+            }
+        }, 1000);
+    }
+
+    async function postJson(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(body || {})
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) { /* non-JSON body */ }
+        return { ok: res.ok, status: res.status, data: data };
+    }
+
+    async function sendCode() {
+        const email = document.getElementById('paypalEmailInput').value.trim();
+        if (!email) {
+            showAlert('error-alert', 'Enter a PayPal email address.');
+            return;
+        }
+        setBusy('sendCodeBtn', true, 'Sending...', 'Send verification code');
+        const result = await postJson('/affiliate/settings/paypal/send-code', { paypalEmail: email });
+        setBusy('sendCodeBtn', false);
+
+        if (result.ok && result.data.success) {
+            showAlert('success-alert', result.data.message);
+            document.getElementById('pendingEmailDisplay').textContent = email;
+            document.getElementById('email-input-row').style.display = 'none';
+            document.getElementById('code-input-row').style.display = 'flex';
+            document.getElementById('codeInput').value = '';
+            document.getElementById('codeInput').focus();
+            startResendCooldown();
+        } else {
+            showAlert('error-alert', result.data.error || 'Could not send the code. Please try again.');
+        }
+    }
+
+    async function resendCode() {
+        setBusy('resendBtn', true, 'Sending...');
+        const result = await postJson('/affiliate/settings/paypal/resend-code', {});
+        setBusy('resendBtn', false);
+
+        if (result.ok && result.data.success) {
+            showAlert('success-alert', result.data.message);
+            startResendCooldown();
+        } else {
+            showAlert('error-alert', result.data.error || 'Could not resend the code.');
+        }
+    }
+
+    async function verifyCode() {
+        const code = document.getElementById('codeInput').value.trim();
+        if (!/^\d{6}$/.test(code)) {
+            showAlert('error-alert', 'Enter the 6-digit code from your email.');
+            return;
+        }
+        setBusy('verifyBtn', true, 'Verifying...', 'Verify & save');
+        const result = await postJson('/affiliate/settings/paypal/verify-code', { code: code });
+        setBusy('verifyBtn', false);
+
+        if (result.ok && result.data.success) {
+            if (result.data.warning) {
+                showAlert('warning-alert', result.data.warning);
+            } else {
+                showAlert('success-alert', result.data.message || 'PayPal payout email saved.');
+            }
+            renderVerifiedState(result.data.paypalEmail);
+        } else {
+            showAlert('error-alert', result.data.error || 'Verification failed.');
+        }
+    }
+
+    function showChangeForm() {
+        const block = document.getElementById('paypal-form-block');
+        if (block) block.style.display = 'block';
+        document.getElementById('email-input-row').style.display = 'flex';
+        document.getElementById('code-input-row').style.display = 'none';
+        document.getElementById('paypalEmailInput').focus();
+    }
+
+    function changeEmail() {
+        document.getElementById('code-input-row').style.display = 'none';
+        document.getElementById('email-input-row').style.display = 'flex';
+        document.getElementById('paypalEmailInput').focus();
+        if (resendTimer) {
+            window.clearInterval(resendTimer);
+            resendTimer = null;
+            const btn = document.getElementById('resendBtn');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Resend code';
+            }
+        }
+    }
+
+    function renderVerifiedState(email) {
+        let block = document.getElementById('current-email-block');
+        const formBlock = document.getElementById('paypal-form-block');
+        if (formBlock) formBlock.style.display = 'none';
+
+        if (!block) {
+            const card = document.querySelector('.settings-card');
+            const h2 = card.querySelector('h2');
+            block = document.createElement('div');
+            block.id = 'current-email-block';
+            block.className = 'current-email-block';
+
+            const emailWrap = document.createElement('div');
+            emailWrap.className = 'current-email';
+            const dot = document.createElement('span');
+            dot.className = 'status-dot verified';
+            const labelWrap = document.createElement('div');
+            const label = document.createElement('div');
+            label.className = 'current-label';
+            label.textContent = 'Verified PayPal email:';
+            const value = document.createElement('div');
+            value.className = 'current-value';
+            labelWrap.appendChild(label);
+            labelWrap.appendChild(value);
+            emailWrap.appendChild(dot);
+            emailWrap.appendChild(labelWrap);
+
+            const changeBtn = document.createElement('button');
+            changeBtn.type = 'button';
+            changeBtn.className = 'btn btn-secondary';
+            changeBtn.id = 'changeEmailBtn';
+            changeBtn.textContent = 'Change PayPal Email';
+            changeBtn.addEventListener('click', showChangeForm);
+
+            block.appendChild(emailWrap);
+            block.appendChild(changeBtn);
+            h2.parentNode.insertBefore(block, h2.nextSibling);
+        }
+        block.querySelector('.current-value').textContent = email;
+        block.style.display = 'flex';
+    }
+
+    function bindUI() {
+        const handlers = [
+            ['sendCodeBtn', 'click', sendCode],
+            ['verifyBtn', 'click', verifyCode],
+            ['resendBtn', 'click', resendCode],
+            ['useDifferentBtn', 'click', changeEmail],
+            ['changeEmailBtn', 'click', showChangeForm]
+        ];
+        handlers.forEach(function(entry) {
+            const el = document.getElementById(entry[0]);
+            if (el) el.addEventListener(entry[1], entry[2]);
+        });
+
+        document.querySelectorAll('[data-dismiss]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                hideAlert(btn.getAttribute('data-dismiss'));
+            });
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') return;
+            const target = e.target;
+            if (target.id === 'paypalEmailInput') {
+                e.preventDefault();
+                sendCode();
+            } else if (target.id === 'codeInput') {
+                e.preventDefault();
+                verifyCode();
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindUI);
+    } else {
+        bindUI();
+    }
+})();
+</script>

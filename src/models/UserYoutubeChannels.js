@@ -165,6 +165,31 @@ class UserYoutubeChannels extends BaseModel {
   }
 
   /**
+   * Find a channel scoped to a specific user.
+   * channel_id is not globally unique (the same YouTube channel may be
+   * registered by multiple local users), so OAuth flows must look it up by
+   * (users_id, channel_id) to avoid stealing another user's row.
+   * @param {number} usersId - Local user ID
+   * @param {string} youtubeChannelId - YouTube channel ID (e.g. UCxxxx)
+   * @returns {Promise<object|null>} Channel object or null
+   */
+  async findByUserAndChannel(usersId, youtubeChannelId) {
+    try {
+      const result = await database.query(
+        `SELECT * FROM ${this.tableName} WHERE users_id = $1 AND channel_id = $2 LIMIT 1`,
+        [usersId, youtubeChannelId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error(
+        `Error finding channel for user ${usersId} / channel ${youtubeChannelId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Find channel by handle
    * @param {string} channelHandle - YouTube channel handle (e.g., @username)
    * @returns {Promise<object|null>} Channel object or null

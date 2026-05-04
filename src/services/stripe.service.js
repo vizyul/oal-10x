@@ -605,37 +605,52 @@ class StripeService {
     // Force token refresh to update subscription info in JWT
     forceTokenRefresh(pgUserId);
 
-    // SEND UPGRADE EMAIL if this is an upgrade (handles checkout-based upgrades)
+    // SEND UPGRADE EMAIL if this is an upgrade (handles checkout-based upgrades).
+    // Suppress for users with an active full_access grant — Stripe state isn't authoritative for them.
     if (isUpgrade && oldTier !== tier) {
-      try {
-        const userForEmail = await UserModel.findById(pgUserId);
-        if (userForEmail && userForEmail.email) {
-          const subscriptionPlansService = require('./subscription-plans.service');
-          const newPlanData = await subscriptionPlansService.getPlanByKey(tier);
-          const newFeatures = newPlanData ? newPlanData.features : [];
+      const subscriptionServiceForGrant = require('./subscription.service');
+      const activeGrantForCreate = await subscriptionServiceForGrant.getActiveGrant(pgUserId);
+      const hasFullAccessGrantForCreate = !!(activeGrantForCreate && activeGrantForCreate.grant_type === 'full_access' && activeGrantForCreate.tier_override);
 
-          await emailService.sendSubscriptionUpgraded(userForEmail.email, {
-            firstName: userForEmail.first_name || 'User',
-            oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
-            newPlanName: tier.charAt(0).toUpperCase() + tier.slice(1),
-            newFeatures: newFeatures
-          });
-
-          logger.info('Upgrade email sent from handleSubscriptionCreated', {
-            userId: pgUserId,
-            email: userForEmail.email,
-            oldTier,
-            newTier: tier
-          });
-        }
-      } catch (emailError) {
-        logger.error('Failed to send upgrade email from handleSubscriptionCreated', {
-          error: emailError.message,
-          userId: pgUserId,
+      if (hasFullAccessGrantForCreate) {
+        logger.info('Suppressing upgrade email from handleSubscriptionCreated — user has active full_access grant', {
+          pgUserId,
+          subscriptionId: subscription.id,
+          grantId: activeGrantForCreate.id,
           oldTier,
           newTier: tier
         });
-        // Don't fail webhook if email fails
+      } else {
+        try {
+          const userForEmail = await UserModel.findById(pgUserId);
+          if (userForEmail && userForEmail.email) {
+            const subscriptionPlansService = require('./subscription-plans.service');
+            const newPlanData = await subscriptionPlansService.getPlanByKey(tier);
+            const newFeatures = newPlanData ? newPlanData.features : [];
+
+            await emailService.sendSubscriptionUpgraded(userForEmail.email, {
+              firstName: userForEmail.first_name || 'User',
+              oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
+              newPlanName: tier.charAt(0).toUpperCase() + tier.slice(1),
+              newFeatures: newFeatures
+            });
+
+            logger.info('Upgrade email sent from handleSubscriptionCreated', {
+              userId: pgUserId,
+              email: userForEmail.email,
+              oldTier,
+              newTier: tier
+            });
+          }
+        } catch (emailError) {
+          logger.error('Failed to send upgrade email from handleSubscriptionCreated', {
+            error: emailError.message,
+            userId: pgUserId,
+            oldTier,
+            newTier: tier
+          });
+          // Don't fail webhook if email fails
+        }
       }
     }
 
@@ -796,9 +811,17 @@ class StripeService {
       }
     }
 
-    // Get user's current tier
-    const user = await UserModel.findById(pgUserId);
-    const oldTier = user.subscription_tier;
+    // Derive old tier from THIS subscription's persisted record, not from users.subscription_tier.
+    // The user-level column can be polluted by grants or sibling subscriptions, which would cause
+    // a routine update to look like an upgrade (e.g., 'free' -> 'premium' after an unrelated cancel).
+    const oldTier = subscriptionRecord.price_id
+      ? await this.getTierFromPrice(subscriptionRecord.price_id)
+      : 'free';
+
+    // Look up any active admin grant once — used to suppress emails and tier writes below.
+    const subscriptionService = require('./subscription.service');
+    const activeGrant = await subscriptionService.getActiveGrant(pgUserId);
+    const hasFullAccessGrant = !!(activeGrant && activeGrant.grant_type === 'full_access' && activeGrant.tier_override);
 
     // Detect plan change
     const tierChanged = oldTier !== newTier;
@@ -873,11 +896,24 @@ class StripeService {
       price_id: newPriceId
     });
 
-    // Update user record
-    await UserModel.updateUser(pgUserId, {
-      subscription_tier: newTier,
-      subscription_status: subscription.status
-    });
+    // Update user record. If a full_access grant is active, leave subscription_tier alone —
+    // the grant is the source of truth for the user's effective tier.
+    if (hasFullAccessGrant) {
+      await UserModel.updateUser(pgUserId, {
+        subscription_status: subscription.status
+      });
+      logger.info('Active full_access grant present — preserving users.subscription_tier on subscription update', {
+        pgUserId,
+        grantId: activeGrant.id,
+        tierOverride: activeGrant.tier_override,
+        incomingNewTier: newTier
+      });
+    } else {
+      await UserModel.updateUser(pgUserId, {
+        subscription_tier: newTier,
+        subscription_status: subscription.status
+      });
+    }
 
     // Clear cached user data
     clearCachedUser(userId);
@@ -888,43 +924,51 @@ class StripeService {
     const isCancelScheduled = subscription.cancel_at_period_end;
 
     if (!wasCancelScheduled && isCancelScheduled) {
-      // Remove from BREVO Subscribers list
-      try {
-        const brevoService = require('./brevo.service');
-        const userForBrevo = await UserModel.findById(pgUserId);
-        if (userForBrevo && userForBrevo.email) {
-          await brevoService.removeFromSubscribersList(userForBrevo.email);
-        }
-      } catch (brevoError) {
-        logger.error('BREVO integration error during cancellation scheduling:', brevoError);
-        // Don't fail webhook if BREVO fails
-      }
-
-      try {
-        const userForEmail = await UserModel.findById(pgUserId);
-        if (userForEmail && userForEmail.email) {
-          const endDate = updatedPeriod.endTimestamp.toLocaleDateString('en-US', {
-            year: 'numeric', month: 'long', day: 'numeric'
-          });
-
-          await emailService.sendSubscriptionCancellationScheduled(userForEmail.email, {
-            firstName: userForEmail.first_name || 'User',
-            planName: newTier ? newTier.charAt(0).toUpperCase() + newTier.slice(1) : 'subscription',
-            endDate: endDate
-          });
-
-          logger.info('Cancellation scheduled email sent', {
-            userId: pgUserId,
-            email: userForEmail.email,
-            endDate
-          });
-        }
-      } catch (emailError) {
-        logger.error('Failed to send cancellation scheduled email', {
-          error: emailError.message,
-          userId: pgUserId
+      if (hasFullAccessGrant) {
+        logger.info('Suppressing cancellation-scheduled email — user has active full_access grant', {
+          pgUserId,
+          subscriptionId: subscription.id,
+          grantId: activeGrant.id
         });
-        // Don't fail webhook if email fails
+      } else {
+        // Remove from BREVO Subscribers list
+        try {
+          const brevoService = require('./brevo.service');
+          const userForBrevo = await UserModel.findById(pgUserId);
+          if (userForBrevo && userForBrevo.email) {
+            await brevoService.removeFromSubscribersList(userForBrevo.email);
+          }
+        } catch (brevoError) {
+          logger.error('BREVO integration error during cancellation scheduling:', brevoError);
+          // Don't fail webhook if BREVO fails
+        }
+
+        try {
+          const userForEmail = await UserModel.findById(pgUserId);
+          if (userForEmail && userForEmail.email) {
+            const endDate = updatedPeriod.endTimestamp.toLocaleDateString('en-US', {
+              year: 'numeric', month: 'long', day: 'numeric'
+            });
+
+            await emailService.sendSubscriptionCancellationScheduled(userForEmail.email, {
+              firstName: userForEmail.first_name || 'User',
+              planName: newTier ? newTier.charAt(0).toUpperCase() + newTier.slice(1) : 'subscription',
+              endDate: endDate
+            });
+
+            logger.info('Cancellation scheduled email sent', {
+              userId: pgUserId,
+              email: userForEmail.email,
+              endDate
+            });
+          }
+        } catch (emailError) {
+          logger.error('Failed to send cancellation scheduled email', {
+            error: emailError.message,
+            userId: pgUserId
+          });
+          // Don't fail webhook if email fails
+        }
       }
     }
 
@@ -941,35 +985,45 @@ class StripeService {
       });
 
       if (changeType === 'upgrade') {
-        try {
-          const userForEmail = await UserModel.findById(pgUserId);
-          if (userForEmail && userForEmail.email) {
-            const subscriptionPlansService = require('./subscription-plans.service');
-            const newPlanData = await subscriptionPlansService.getPlanByKey(newTier);
-            const newFeatures = newPlanData ? newPlanData.features : [];
-
-            await emailService.sendSubscriptionUpgraded(userForEmail.email, {
-              firstName: userForEmail.first_name || 'User',
-              oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
-              newPlanName: newTier.charAt(0).toUpperCase() + newTier.slice(1),
-              newFeatures: newFeatures
-            });
-
-            logger.info('Upgrade email sent successfully', {
-              userId: pgUserId,
-              email: userForEmail.email,
-              oldTier,
-              newTier
-            });
-          }
-        } catch (emailError) {
-          logger.error('Failed to send subscription upgraded email', {
-            error: emailError.message,
-            userId: pgUserId,
+        if (hasFullAccessGrant) {
+          logger.info('Suppressing upgrade email — user has active full_access grant', {
+            pgUserId,
+            subscriptionId: subscription.id,
+            grantId: activeGrant.id,
             oldTier,
             newTier
           });
-          // Don't fail webhook if email fails
+        } else {
+          try {
+            const userForEmail = await UserModel.findById(pgUserId);
+            if (userForEmail && userForEmail.email) {
+              const subscriptionPlansService = require('./subscription-plans.service');
+              const newPlanData = await subscriptionPlansService.getPlanByKey(newTier);
+              const newFeatures = newPlanData ? newPlanData.features : [];
+
+              await emailService.sendSubscriptionUpgraded(userForEmail.email, {
+                firstName: userForEmail.first_name || 'User',
+                oldPlanName: oldTier.charAt(0).toUpperCase() + oldTier.slice(1),
+                newPlanName: newTier.charAt(0).toUpperCase() + newTier.slice(1),
+                newFeatures: newFeatures
+              });
+
+              logger.info('Upgrade email sent successfully', {
+                userId: pgUserId,
+                email: userForEmail.email,
+                oldTier,
+                newTier
+              });
+            }
+          } catch (emailError) {
+            logger.error('Failed to send subscription upgraded email', {
+              error: emailError.message,
+              userId: pgUserId,
+              oldTier,
+              newTier
+            });
+            // Don't fail webhook if email fails
+          }
         }
       } else {
         logger.info('No upgrade email sent - not an upgrade', {
@@ -1023,6 +1077,54 @@ class StripeService {
       });
       return { processed: false, reason: 'User not found' };
     }
+
+    // GRANT-AWARE BRANCH: a full_access admin grant overrides Stripe state.
+    // Don't reset tier or send a "canceled" email — the user still has access via the grant.
+    const subscriptionService = require('./subscription.service');
+    const activeGrant = await subscriptionService.getActiveGrant(pgUserId);
+    if (activeGrant && activeGrant.grant_type === 'full_access' && activeGrant.tier_override) {
+      await UserModel.updateUser(pgUserId, {
+        subscription_tier: activeGrant.tier_override,
+        subscription_status: 'active'
+      });
+      forceTokenRefresh(pgUserId);
+      logger.info('Stripe sub deleted but active full_access grant exists — preserving tier, suppressing cancel email', {
+        pgUserId,
+        subscriptionId: subscription.id,
+        grantId: activeGrant.id,
+        tierOverride: activeGrant.tier_override
+      });
+      return { processed: true, skippedEmail: true, reason: 'active_grant' };
+    }
+
+    // SIBLING-SUBSCRIPTION BRANCH: another active Stripe subscription still covers the user
+    // (e.g., they upgraded by creating a new sub instead of mutating the old). Don't reset
+    // them to free, don't email.
+    const otherActive = await database.query(
+      `SELECT id, price_id FROM user_subscriptions
+       WHERE users_id = $1 AND status = 'active' AND id != $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [pgUserId, subscriptionRecord ? subscriptionRecord.id : 0]
+    );
+    if (otherActive.rows.length > 0) {
+      const survivingPriceId = otherActive.rows[0].price_id;
+      const survivingTier = survivingPriceId
+        ? await this.getTierFromPrice(survivingPriceId)
+        : null;
+      await UserModel.updateUser(pgUserId, {
+        subscription_tier: survivingTier || 'free',
+        subscription_status: 'active'
+      });
+      forceTokenRefresh(pgUserId);
+      logger.info('Stripe sub deleted but another active subscription exists — preserving tier, suppressing cancel email', {
+        pgUserId,
+        deletedSubscriptionId: subscription.id,
+        survivingSubscriptionRecordId: otherActive.rows[0].id,
+        survivingTier
+      });
+      return { processed: true, skippedEmail: true, reason: 'other_active_subscription' };
+    }
+
     await UserModel.updateUser(pgUserId, {
       subscription_tier: 'free',
       subscription_status: 'canceled'

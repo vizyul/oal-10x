@@ -25,6 +25,30 @@ router.get('/dashboard', authMiddleware, affiliateController.showDashboard);
  */
 router.get('/terms', optionalAuthMiddleware, affiliateController.showTermsPage);
 
+/**
+ * GET /affiliate/settings
+ * Show affiliate payout settings page (PayPal email)
+ */
+router.get('/settings', authMiddleware, affiliateController.showSettings);
+
+/**
+ * POST /affiliate/settings/paypal/send-code
+ * Send a 6-digit verification code to a candidate PayPal email
+ */
+router.post('/settings/paypal/send-code', authMiddleware, affiliateController.sendPayPalVerificationCode);
+
+/**
+ * POST /affiliate/settings/paypal/resend-code
+ * Resend the verification code to the currently-pending PayPal email
+ */
+router.post('/settings/paypal/resend-code', authMiddleware, affiliateController.resendPayPalCode);
+
+/**
+ * POST /affiliate/settings/paypal/verify-code
+ * Confirm the 6-digit code, persist the verified email, push to RefGrow
+ */
+router.post('/settings/paypal/verify-code', authMiddleware, affiliateController.verifyPayPalEmail);
+
 // ============================================================================
 // API Routes (mounted under /affiliate, so paths are /affiliate/api/*)
 // ============================================================================

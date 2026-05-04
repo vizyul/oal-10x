@@ -267,20 +267,18 @@ class ProcessingStatusService extends EventEmitter {
     const userVideos = [];
 
     this.processingVideos.forEach((status) => {
-      if (status.userId === userId) {
-        // Include videos that have any pending processing or were recently started
-        const hasActiveProcessing = !status.completed && (
-          status.transcript.status === 'pending' ||
-          Object.values(status.content).some(content => content.status === 'pending')
-        );
+      if (status.userId !== userId) return;
 
-        // Also include recently completed videos (within last 5 minutes) for user feedback
-        const isRecentlyProcessed = status.completed &&
-          (Date.now() - new Date(status.completedAt).getTime()) < 5 * 60 * 1000;
+      // Only include videos that are still actively processing.
+      // Completed and failed videos are surfaced via the All Videos grid; the
+      // status dashboard is for in-flight work only.
+      const hasActiveProcessing = !status.completed && (
+        status.transcript.status === 'pending' ||
+        Object.values(status.content).some(content => content.status === 'pending')
+      );
 
-        if (hasActiveProcessing || isRecentlyProcessed) {
-          userVideos.push(status);
-        }
+      if (hasActiveProcessing) {
+        userVideos.push(status);
       }
     });
 

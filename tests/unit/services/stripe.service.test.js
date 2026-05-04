@@ -37,7 +37,7 @@ jest.mock('../../../src/config/stripe.config', () => ({
 }));
 
 jest.mock('../../../src/services/database.service', () => ({
-  query: jest.fn(),
+  query: jest.fn().mockResolvedValue({ rows: [] }),
   create: jest.fn()
 }));
 
@@ -99,10 +99,13 @@ const { user: UserModel, userSubscription, subscriptionUsage, subscriptionEvents
 const emailService = require('../../../src/services/email.service');
 const subscriptionPlansService = require('../../../src/services/subscription-plans.service');
 const { forceTokenRefresh } = require('../../../src/middleware');
+const database = require('../../../src/services/database.service');
 
 describe('StripeService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default DB mock: empty result set. Individual tests override as needed.
+    database.query.mockResolvedValue({ rows: [] });
   });
 
   describe('resolveUserId', () => {
@@ -355,8 +358,14 @@ describe('StripeService', () => {
     };
 
     beforeEach(() => {
-      subscriptionPlansService.getTierFromPrice.mockResolvedValue('premium');
-      userSubscription.getByStripeId.mockResolvedValue({ id: 1, stripe_price_id: 'price_basic' });
+      // Per-price mock: derives tier from the price_id string.
+      subscriptionPlansService.getTierFromPrice.mockImplementation(async (priceId) => {
+        if (priceId === 'price_premium') return 'premium';
+        if (priceId === 'price_basic') return 'basic';
+        if (priceId === 'price_free') return 'free';
+        return 'basic';
+      });
+      userSubscription.getByStripeId.mockResolvedValue({ id: 1, price_id: 'price_basic' });
       UserModel.findById.mockResolvedValue({
         id: 1,
         email: 'test@example.com',
@@ -388,14 +397,14 @@ describe('StripeService', () => {
     });
 
     it('should not send email on downgrade', async () => {
-      subscriptionPlansService.getTierFromPrice.mockResolvedValue('free');
-      UserModel.findById.mockResolvedValue({
-        id: 1,
-        email: 'test@example.com',
-        subscription_tier: 'basic'
-      });
+      // New subscription is on Free price; old record was Premium.
+      userSubscription.getByStripeId.mockResolvedValue({ id: 1, price_id: 'price_premium' });
+      const downgradeSub = {
+        ...mockSubscription,
+        items: { data: [{ price: { id: 'price_free' } }] }
+      };
 
-      await stripeService.handleSubscriptionUpdated(mockSubscription);
+      await stripeService.handleSubscriptionUpdated(downgradeSub);
 
       expect(emailService.sendSubscriptionUpgraded).not.toHaveBeenCalled();
     });

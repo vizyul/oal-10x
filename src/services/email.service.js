@@ -327,6 +327,92 @@ class EmailService {
     }
   }
 
+  async sendPayPalVerificationCode(email, code, firstName) {
+    try {
+      await this.ensureInitialized();
+
+      const subject = 'Verify your PayPal payout email - AmplifyContent.ai';
+      const html = this.generatePayPalVerificationEmailHTML(code, firstName);
+      const text = this.generatePayPalVerificationEmailText(code, firstName);
+
+      if (this.useGraphAPI || this.transporter) {
+        return await this.sendEmail(email, subject, html, text);
+      }
+
+      logger.warn(`No email service configured. PayPal verification code for ${email}: ${code}`);
+      return {
+        success: true,
+        messageId: 'dev-mode',
+        previewUrl: null
+      };
+    } catch (error) {
+      logger.error('Error sending PayPal verification email:', error);
+      throw new Error('Failed to send PayPal verification email');
+    }
+  }
+
+  generatePayPalVerificationEmailHTML(code, firstName) {
+    const greetingName = firstName ? firstName : 'there';
+    return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your PayPal Payout Email</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #000000; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header h1 { margin: 0 0 10px 0; font-size: 28px; }
+            .header h2 { color: white; margin: 0; font-size: 20px; }
+            .content { background-color: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }
+            .verification-code { background-color: #10b981; color: #ffffff; font-size: 36px; font-weight: bold; text-align: center; padding: 20px; margin: 20px 0; border-radius: 8px; letter-spacing: 8px; }
+            .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1><span style="color: #ffffff;">AmplifyContent.</span><span style="color: #10b981;">ai</span></h1>
+            <h2>Verify Your PayPal Payout Email</h2>
+        </div>
+        <div class="content">
+            <p>Hi ${greetingName},</p>
+            <p>You're setting this email address as the destination for your AmplifyContent.ai affiliate payouts. To confirm you control this inbox, enter the 6-digit code below on the affiliate settings page:</p>
+
+            <div class="verification-code">${code}</div>
+
+            <p>This code expires in 10 minutes. If you didn't request this, you can safely ignore this email - no changes will be made to your payout details.</p>
+
+            <p><strong>Important:</strong> Make sure this email matches the address on your PayPal account. PayPal payouts sent to an unregistered email will be held as Unclaimed for 30 days and then returned.</p>
+        </div>
+        <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+        </div>
+    </body>
+    </html>`;
+  }
+
+  generatePayPalVerificationEmailText(code, firstName) {
+    const greetingName = firstName ? firstName : 'there';
+    return `
+AmplifyContent.ai - Verify Your PayPal Payout Email
+
+Hi ${greetingName},
+
+You're setting this email address as the destination for your AmplifyContent.ai affiliate payouts. To confirm you control this inbox, enter the 6-digit code below on the affiliate settings page:
+
+${code}
+
+This code expires in 10 minutes. If you didn't request this, you can safely ignore this email - no changes will be made to your payout details.
+
+Important: Make sure this email matches the address on your PayPal account. PayPal payouts sent to an unregistered email will be held as Unclaimed for 30 days and then returned.
+
+(c) ${new Date().getFullYear()} AmplifyContent.ai. All rights reserved.
+This is an automated email, please do not reply.
+    `;
+  }
+
   async sendPasswordResetEmail(email, firstName, resetUrl) {
     try {
       await this.ensureInitialized();

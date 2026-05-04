@@ -381,22 +381,20 @@
   flex-shrink: 0;
 }
 
-/* Upload Methods Container - Responsive Layout */
+/* Upload Methods Container - 3-column on desktop, stacks below 1024px */
 .upload-methods-container {
   display: grid;
-  grid-template-columns: 1fr 2px 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 2rem;
   align-items: start;
   width: 100%;
 }
 
-/* Method Divider */
-.method-divider {
-  width: 2px;
-  background-color: #d1d5db;
-  border-radius: 1px;
-  min-height: 400px;
-  justify-self: center;
+@media (max-width: 1024px) {
+  .upload-methods-container {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
 }
 
 /* Upload Methods */
@@ -2351,11 +2349,6 @@
 }
 
 /* Transcript Upload Method */
-.upload-method.transcript-method {
-  margin-top: 1.5rem;
-  padding: 1.5rem;
-}
-
 .upload-method.transcript-method .method-header {
   margin-bottom: 1.25rem;
 }

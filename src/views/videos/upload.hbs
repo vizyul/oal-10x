@@ -23,33 +23,6 @@
         {{/if}}
       </div>
 
-      <div class="upload-method transcript-method">
-        <div class="method-header">
-          <h1>Upload Transcript</h1>
-          <p>Provide a transcript file directly. We'll generate content from its text.</p>
-        </div>
-
-        <div class="form-group">
-          <label for="transcript-title" class="control-label">Title <span class="required-mark">*</span></label>
-          <input type="text" id="transcript-title" class="form-input" maxlength="200" placeholder="Give this content a name" />
-        </div>
-
-        <div class="form-group">
-          <label for="transcript-file" class="control-label">Transcript file <span class="required-mark">*</span></label>
-          <div class="transcript-file-picker">
-            <input type="file" id="transcript-file" accept=".txt,.srt,.vtt,.docx,.pdf" hidden />
-            <button type="button" class="btn btn-secondary" id="transcript-file-browse">Choose file</button>
-            <span class="transcript-file-name" id="transcript-file-name">No file selected</span>
-          </div>
-          <p class="form-help">Accepted: .txt, .srt, .vtt, .docx, .pdf (max 10&nbsp;MB)</p>
-        </div>
-
-        <div id="transcript-upload-error" class="error-message hidden" style="margin: 0 0 12px 0;"></div>
-
-        <button type="button" id="upload-transcript-btn" class="btn btn-primary btn-large" disabled>
-          Amplify Content
-        </button>
-      </div>
     </div>
 
     <div class="upload-right-panel">
@@ -110,6 +83,35 @@
   <div id="global-error-message" class="error-message hidden" style="margin: 0 0 16px 0;"></div>
 
   <div class="upload-methods-container">
+    <!-- Transcript Upload Method -->
+    <div class="upload-method transcript-method">
+      <div class="method-header">
+        <h1>Upload Transcript</h1>
+        <p>Provide a transcript file directly. We'll generate content from its text.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="transcript-title" class="control-label">Title <span class="required-mark">*</span></label>
+        <input type="text" id="transcript-title" class="form-input" maxlength="200" placeholder="Give this content a name" />
+      </div>
+
+      <div class="form-group">
+        <label for="transcript-file" class="control-label">Transcript file <span class="required-mark">*</span></label>
+        <div class="transcript-file-picker">
+          <input type="file" id="transcript-file" accept=".txt,.srt,.vtt,.docx,.pdf" hidden />
+          <button type="button" class="btn btn-secondary" id="transcript-file-browse">Choose file</button>
+          <span class="transcript-file-name" id="transcript-file-name">No file selected</span>
+        </div>
+        <p class="form-help">Accepted: .txt, .srt, .vtt, .docx, .pdf (max 10&nbsp;MB)</p>
+      </div>
+
+      <div id="transcript-upload-error" class="error-message hidden" style="margin: 0 0 12px 0;"></div>
+
+      <button type="button" id="upload-transcript-btn" class="btn btn-primary btn-large" disabled>
+        Amplify Content
+      </button>
+    </div>
+
     <!-- YouTube OAuth Method -->
     <div class="upload-method youtube-method">
       <div class="method-header">
@@ -182,9 +184,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Method Divider -->
-    <div class="method-divider"></div>
 
     <!-- URL Input Method -->
     <div class="upload-method url-method">
@@ -748,12 +747,10 @@ ${droppedUrls.map((url, i) => `${availableSlots + i + 1}. ${url}`).join('\n')}
     const floatingAmplifyBtn = document.getElementById('floating-amplify-btn');
     const floatingBtnCount = document.getElementById('floating-btn-count');
 
-    // Show video grid only when there are YouTube OAuth videos selected
-    if (selectedVideos.size > 0) {
-      videoGrid?.classList.remove('hidden');
-    } else {
-      videoGrid?.classList.add('hidden');
-    }
+    // Grid visibility is owned by loadChannelVideos / handleChannelChange /
+    // showDisconnectedState. Do not toggle it from selection state, or
+    // appending pages of videos and clearing selections will both hide the
+    // entire loaded grid.
 
     let countText = '';
     if (selectedVideos.size > 0 && selectedUrls.size > 0) {
