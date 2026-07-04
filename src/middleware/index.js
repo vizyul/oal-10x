@@ -20,9 +20,9 @@ const securityMiddleware = [
         defaultSrc: ['\'self\''],
         styleSrc: ['\'self\'', '\'unsafe-inline\'', 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
         fontSrc: ['\'self\'', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
-        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', ...envDomains('CSP_SCRIPT_SRC')],
+        scriptSrc: ['\'self\'', '\'unsafe-inline\'', 'https://cdn.jsdelivr.net', 'https://js.stripe.com', 'https://www.google.com', 'https://www.gstatic.com', 'https://static.cloudflareinsights.com', 'https://scripts.refgrowcdn.com', ...envDomains('CSP_SCRIPT_SRC')],
         imgSrc: ['\'self\'', 'data:', 'https:', ...envDomains('CSP_IMG_SRC')],
-        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://res.cloudinary.com', ...envDomains('CSP_CONNECT_SRC')],
+        connectSrc: ['\'self\'', 'https://api.stripe.com', 'https://www.google.com', 'https://res.cloudinary.com', 'https://scripts.refgrowcdn.com', 'https://refgrow.com', ...envDomains('CSP_CONNECT_SRC')],
         frameSrc: ['\'self\'', 'https://js.stripe.com', 'https://hooks.stripe.com', 'https://www.google.com', 'https://recaptcha.google.com', 'https://www.youtube.com', 'https://youtube.com', ...envDomains('CSP_FRAME_SRC')]
       }
     },
