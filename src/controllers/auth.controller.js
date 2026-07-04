@@ -359,8 +359,9 @@ class AuthController {
       const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      // Get referral code from request body (passed from frontend localStorage)
-      const referralCode = req.body.referralCode || req.cookies?.referral_code || null;
+      // Get referral code from RefGrow's first-party tracking cookie (set by the
+      // RefGrow tracking script when the visitor arrives via an affiliate link).
+      const referralCode = req.cookies?.refgrow_ref_code || null;
 
       // Complete user registration
       const updatedUser = await authService.updateUser(user.id, {
@@ -442,8 +443,9 @@ class AuthController {
 
       res.cookie('auth_token', jwtToken, cookieOptions);
 
-      // Clear referral cookie after it's been used
-      res.clearCookie('referral_code', { path: '/' });
+      // Note: the RefGrow `refgrow_ref_code` cookie is intentionally left in place.
+      // RefGrow owns it and still needs it to attribute the eventual purchase
+      // (its Stripe integration and email-fallback attribution rely on it).
 
       // Record signup session
       await sessionService.recordSignup(updatedUser, req, 'email');

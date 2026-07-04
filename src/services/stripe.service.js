@@ -71,13 +71,18 @@ class StripeService {
         metadata: {
           user_id: userId,
           referred_by_code: referredByCode,
-          is_referred: referredByCode ? 'true' : 'false'
+          is_referred: referredByCode ? 'true' : 'false',
+          // RefGrow attributes the conversion off `referral_code` in the checkout
+          // session metadata (its recommended Stripe attribution method). Omit the
+          // key entirely when there is no referral so RefGrow does not try to match.
+          ...(referredByCode ? { referral_code: referredByCode } : {})
         },
         subscription_data: {
           metadata: {
             user_id: userId,
             referred_by_code: referredByCode,
-            is_referred: referredByCode ? 'true' : 'false'
+            is_referred: referredByCode ? 'true' : 'false',
+            ...(referredByCode ? { referral_code: referredByCode } : {})
           }
         }
       });

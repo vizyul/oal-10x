@@ -15,19 +15,19 @@ const { getPostAuthRedirectUrl } = require('../utils/redirect.utils');
 
 const router = express.Router();
 
-// Helper: apply referral code from cookie to OAuth users
+// Helper: apply RefGrow referral code from its first-party tracking cookie to
+// OAuth users. The `refgrow_ref_code` cookie is set by the RefGrow tracking
+// script when the visitor arrives via an affiliate link. We copy it onto the
+// user (once) so it can be forwarded to Stripe at checkout; we do NOT clear it
+// because RefGrow still needs it for its own attribution.
 async function applyReferralFromCookie(req, res, userId) {
   try {
-    const referralCode = req.cookies?.referral_code;
+    const referralCode = req.cookies?.refgrow_ref_code;
     if (!referralCode) return;
     const user = await require('../services/database.service').findById('users', userId);
-    if (user && user.referred_by_code) {
-      res.clearCookie('referral_code', { path: '/' });
-      return;
-    }
+    if (user && user.referred_by_code) return;
     await authService.updateUser(userId, { referred_by_code: referralCode });
-    logger.info('Referral code applied from cookie to OAuth user', { userId, referralCode });
-    res.clearCookie('referral_code', { path: '/' });
+    logger.info('Referral code applied from RefGrow cookie to OAuth user', { userId, referralCode });
   } catch (error) {
     logger.error('Error applying referral code from cookie:', error);
   }

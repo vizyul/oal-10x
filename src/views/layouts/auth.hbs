@@ -41,6 +41,11 @@
     {{> meta-pixel}}
     {{> tracking-events}}
 
+    <!-- RefGrow affiliate tracking (records referral clicks, sets refgrow_ref_code cookie) -->
+    {{#if refgrowProjectId}}
+    <script src="https://scripts.refgrowcdn.com/latest.js" data-project-id="{{refgrowProjectId}}" async defer></script>
+    {{/if}}
+
 </head>
 <body class="auth-body">
     <!-- Global Toolbar -->
@@ -127,36 +132,5 @@
     <!-- JavaScript -->
     <script src="/js/main.js"></script>
     <script src="/js/auth.js"></script>
-
-    <!-- Affiliate Tracking -->
-    <script>
-        // Check for referral code in URL and store in localStorage
-        (function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const refCode = urlParams.get('ref') || urlParams.get('referral');
-
-            if (refCode) {
-                // Store referral code in localStorage for signup form
-                localStorage.setItem('referral_code', refCode);
-
-                // Set cookie so server can read it during OAuth callbacks
-                var expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toUTCString();
-                document.cookie = 'referral_code=' + encodeURIComponent(refCode) + '; expires=' + expires + '; path=/; SameSite=Lax';
-
-                // Track click via backend API
-                fetch('/affiliate/api/track-click', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        referralCode: refCode,
-                        landingPage: window.location.href,
-                        referrerUrl: document.referrer
-                    })
-                }).catch(err => console.error('Error tracking affiliate click:', err));
-            }
-        })();
-    </script>
 </body>
 </html>

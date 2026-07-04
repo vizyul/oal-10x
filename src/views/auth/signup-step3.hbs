@@ -293,11 +293,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const formData = new FormData(form);
       const data = Object.fromEntries(formData);
 
-      // Add referral code from localStorage if it exists
-      const referralCode = localStorage.getItem('referral_code');
-      if (referralCode) {
-        data.referralCode = referralCode;
-      }
+      // Referral attribution is handled server-side via RefGrow's first-party
+      // `refgrow_ref_code` cookie (set by the RefGrow tracking script).
 
       const response = await fetch('/auth/sign-up/complete', {
         method: 'POST',
@@ -311,10 +308,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const result = await response.json();
       
       if (response.ok && result.success) {
-        // Clear referral tracking after successful signup
-        localStorage.removeItem('referral_code');
-        document.cookie = 'referral_code=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-
         // Track CompleteRegistration event (Meta/TikTok pixels)
         if (typeof trackCompleteRegistration === 'function') {
           trackCompleteRegistration({

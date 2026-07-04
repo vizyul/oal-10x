@@ -6,7 +6,9 @@
       "Bash(dir /s \"C:\\\\Apps\\\\our-ai-legacy-app\\\\public\\\\css\")",
       "Bash(findstr:*)",
       "Bash(grep -n \"multer\\\\|upload\\\\|file\" /c/Apps/our-ai-legacy-app/src/routes/*.js)",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "WebFetch(domain:refgrow.com)",
+      "PowerShell($ok=$false; for\\($i=0;$i-lt20;$i++\\){ Start-Sleep -Seconds 1; try { $r=Invoke-WebRequest -Uri \"http://localhost:3000/health\" -TimeoutSec 2 -UseBasicParsing; if\\($r.StatusCode -eq 200\\){ Write-Output \"SERVER UP after $i s\"; $ok=$true; break } } catch {} }; if\\(-not $ok\\){ Write-Output \"SERVER DID NOT COME UP\"; Get-Content \"C:\\\\Users\\\\Dwight\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Apps-our-ai-legacy-app\\\\bc7598ae-8fe8-4948-bbb3-282fda1c9c54\\\\scratchpad\\\\server.log\" -Tail 30 })"
     ]
   },
   "spinnerTipsEnabled": false

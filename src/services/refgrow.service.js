@@ -48,32 +48,22 @@ class RefGrowService {
         return null;
       }
 
-      // Try to find existing affiliate by email
+      // RefGrow API: GET /api/v1/affiliates/:email
+      // Returns { success: true, data: { id, user_email, referral_code, status, ... } }
       const response = await axios.get(
-        `${this.baseUrl}/affiliates`,
-        {
-          headers: this.getHeaders(),
-          params: { email }
-        }
+        `${this.baseUrl}/affiliates/${encodeURIComponent(email)}`,
+        { headers: this.getHeaders() }
       );
 
       const data = response.data;
 
-      // Check various response formats RefGrow might use
-      if (data.success && data.data) {
-        // Format: { success: true, data: { id, user_email, referral_code, ... } }
-        if (data.data.id) {
-          return data.data;
-        }
-        // Format: { success: true, data: [{ id, user_email, referral_code, ... }] }
-        if (Array.isArray(data.data) && data.data.length > 0) {
-          return data.data.find(a => a.user_email === email || a.email === email) || null;
-        }
+      if (data.success && data.data && data.data.id) {
+        return data.data;
       }
 
-      // Direct array response
-      if (Array.isArray(data) && data.length > 0) {
-        return data.find(a => a.user_email === email || a.email === email) || null;
+      // Direct object response fallback
+      if (data.id) {
+        return data;
       }
 
       return null;
@@ -264,100 +254,31 @@ class RefGrowService {
   }
 
   /**
-   * Track conversion when user subscribes via referral
+   * Record a conversion locally when a referred user subscribes.
+   *
+   * IMPORTANT: This does NOT post to RefGrow's /conversions API. RefGrow's own
+   * Stripe integration credits the affiliate automatically from the
+   * `referral_code` we pass in the Stripe Checkout session metadata (see
+   * stripe.service.createCheckoutSession). Posting a conversion here as well
+   * would double-count the commission. This method only writes the local
+   * `affiliate_referrals` row that powers the in-app affiliate dashboard.
+   *
    * @param {string} referralCode - Affiliate referral code
    * @param {number} userId - User ID who subscribed
    * @param {number} subscriptionAmount - Subscription amount in dollars
    * @param {string} stripeSubscriptionId - Stripe subscription ID
-   * @returns {Promise<Object>} Conversion tracking result
+   * @returns {Promise<Object>} Local conversion record result
    */
   async trackConversion(referralCode, userId, subscriptionAmount, stripeSubscriptionId) {
-    // Calculate commission for local record
+    // Commission mirrored locally for the dashboard; RefGrow remains the source
+    // of truth for what is actually paid out.
     const commissionAmount = (subscriptionAmount * this.commissionRate) / 100;
-    let refgrowConversionId = null;
 
-    try {
-      if (!this.isConfigured()) {
-        logger.warn('RefGrow not configured, creating local record only');
-      } else {
-        // Look up the affiliate's RefGrow ID from our database
-        const affiliate = await this.getAffiliateByReferralCode(referralCode);
-
-        if (!affiliate) {
-          logger.warn('Affiliate not found for referral code, creating local record only', { referralCode });
-        } else if (!affiliate.refgrow_affiliate_id) {
-          logger.warn('Affiliate has no RefGrow ID, creating local record only', {
-            referralCode,
-            affiliateUserId: affiliate.id
-          });
-        } else {
-          logger.info('Tracking RefGrow conversion', {
-            referralCode,
-            userId,
-            amount: subscriptionAmount,
-            affiliateId: affiliate.refgrow_affiliate_id
-          });
-
-          // Track conversion in RefGrow API using correct field names
-          // API spec: POST /api/v1/conversions
-          // Required: type ('signup' or 'purchase'), value (number)
-          // - value = commission amount (what affiliate earns)
-          // - base_value = original transaction amount (sale price)
-          // Optional: affiliate_id, base_value, base_value_currency, reference
-          const calculatedCommission = (subscriptionAmount * this.commissionRate) / 100;
-          const conversionPayload = {
-            type: 'purchase',
-            value: calculatedCommission,  // Commission amount (20% of sale)
-            base_value: subscriptionAmount,  // Original sale amount
-            base_value_currency: 'USD',
-            affiliate_id: parseInt(affiliate.refgrow_affiliate_id),
-            reference: stripeSubscriptionId
-          };
-
-          logger.info('RefGrow conversion API request', {
-            url: `${this.baseUrl}/conversions`,
-            payload: conversionPayload
-          });
-
-          const response = await axios.post(
-            `${this.baseUrl}/conversions`,
-            conversionPayload,
-            { headers: this.getHeaders() }
-          );
-
-          // Parse response - RefGrow returns { success: true, data: { id, ... } }
-          const responseData = response.data;
-          if (responseData.success && responseData.data) {
-            refgrowConversionId = responseData.data.id;
-          } else if (responseData.id) {
-            // Direct response format
-            refgrowConversionId = responseData.id;
-          }
-
-          logger.info('RefGrow API conversion created', {
-            refgrowConversionId,
-            referralCode,
-            userId
-          });
-        }
-      }
-    } catch (apiError) {
-      // Log the API error but continue to create local record
-      logger.error('RefGrow API call failed, creating local record only:', {
-        referralCode,
-        userId,
-        error: apiError.message,
-        status: apiError.response?.status,
-        responseData: apiError.response?.data,
-        responseHeaders: apiError.response?.headers
-      });
-    }
-
-    // Always create local referral record (even if RefGrow API fails)
+    // Create local referral record for in-app reporting.
     try {
       const referralRecord = await database.create('affiliate_referrals', {
         users_id: userId,
-        refgrow_referral_id: refgrowConversionId,
+        refgrow_referral_id: null,
         referral_code: referralCode,
         commission_amount: commissionAmount,
         commission_rate: this.commissionRate,
@@ -372,14 +293,13 @@ class RefGrowService {
         [userId, referralCode]
       );
 
-      logger.info('Affiliate conversion tracked', {
+      logger.info('Affiliate conversion recorded locally (RefGrow credits via Stripe metadata)', {
         userId,
         referralCode,
-        commissionAmount,
-        refgrowConversionId: refgrowConversionId || 'local-only'
+        commissionAmount
       });
 
-      return { referralRecord, refgrowConversionId };
+      return { referralRecord };
     } catch (dbError) {
       logger.error('Error creating local affiliate referral record:', {
         referralCode,

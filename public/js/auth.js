@@ -263,14 +263,9 @@ async function handleSignupSubmit(e) {
     loadingOverlay.classList.add('show');
     
     try {
-        // Get referral code from localStorage if available
-        const referralCode = localStorage.getItem('referral_code');
+        // Referral attribution is handled by the RefGrow tracking script, which
+        // sets a first-party `refgrow_ref_code` cookie the server reads on signup.
         const signupData = Object.fromEntries(formData);
-
-        // Include referral code in signup data for affiliate tracking
-        if (referralCode) {
-            signupData.referralCode = referralCode;
-        }
 
         const response = await fetch('/auth/sign-up', {
             method: 'POST',
@@ -284,10 +279,6 @@ async function handleSignupSubmit(e) {
         const result = await response.json();
         
         if (response.ok && result.success) {
-            // Clear referral code after successful signup
-            localStorage.removeItem('referral_code');
-            document.cookie = 'referral_code=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-
             // Show success modal
             showSuccessModal(result.message, formData.get('email'));
         } else {

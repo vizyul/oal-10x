@@ -156,6 +156,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   res.locals.metaPixelId = process.env.META_PIXEL_ID || null;
   res.locals.tiktokPixelId = process.env.TIKTOK_PIXEL_ID || null;
+  res.locals.refgrowProjectId = process.env.REFGROW_PROJECT_ID || null;
   next();
 });
 
