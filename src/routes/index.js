@@ -423,7 +423,9 @@ router.post('/demo', [
     const result = await emailService.sendEmail(
       'support@amplifycontent.ai',
       `Demo Request: ${organization}`,
-      demoEmailContent
+      demoEmailContent,
+      null,
+      email
     );
 
     if (result.success) {
@@ -599,7 +601,9 @@ router.post('/contact', [
     const result = await emailService.sendEmail(
       'support@amplifycontent.ai',
       `Contact Form: ${subject}`,
-      contactEmailContent
+      contactEmailContent,
+      null,
+      email
     );
 
     if (result.success) {

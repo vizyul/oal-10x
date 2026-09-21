@@ -77,6 +77,16 @@ const startServer = () => {
     logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`📊 Process ID: ${process.pid}`);
 
+    // Resolve the latest GA Gemini Flash model once at boot (non-blocking).
+    try {
+      const geminiModelService = require('./services/gemini-model.service');
+      geminiModelService.warmUp()
+        .then(model => logger.info(`Gemini text model in use: ${model || geminiModelService.getTextModel()}`))
+        .catch(err => logger.warn('Gemini model warmUp error:', err.message));
+    } catch (err) {
+      logger.warn('Could not warm up Gemini model resolver:', err.message);
+    }
+
     setTimeout(() => {
       try {
         const contentGenerationService = require('./services/content-generation.service');

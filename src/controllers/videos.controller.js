@@ -1519,13 +1519,19 @@ class VideosController {
 
       // Use direct transcript processing (same as YouTube OAuth videos)
       const transcriptService = require('../services/transcript.service');
+      const aiQueue = require('../services/ai-queue.service');
       const youtubeUrl = metadata?.url;
 
       if (youtubeVideoId && youtubeUrl) {
-        logger.debug(`Starting transcript extraction for video ${youtubeVideoId}`);
+        logger.debug(`Queued transcript extraction for video ${youtubeVideoId}`);
 
-        // Process transcript asynchronously using the same method as YouTube OAuth videos
-        transcriptService.processVideoTranscript(youtubeVideoId, youtubeUrl, videoId, userId, contentTypes)
+        // Enqueue the per-video pipeline into the global video-level concurrency
+        // gate so only a bounded number of pipelines run at once (rest show as
+        // "Queued" in the dashboard). Response is unaffected - fire-and-forget.
+        aiQueue.runVideo(() => {
+          processingStatusService.markVideoProcessingStarted(youtubeVideoId);
+          return transcriptService.processVideoTranscript(youtubeVideoId, youtubeUrl, videoId, userId, contentTypes);
+        })
           .then(result => {
             if (result.success) {
               logger.info(`Transcript processed for video ${youtubeVideoId}`);
@@ -1727,12 +1733,20 @@ class VideosController {
 
       try {
         const contentGenerationService = require('../services/content-generation.service');
-        contentGenerationService.generateAllContentForVideo(
-          postgresRecord.id,
-          uploadVideoId,
-          parsed.text,
-          { contentTypes, userId: actualUserId }
-        ).then(result => {
+        const aiQueue = require('../services/ai-queue.service');
+        const processingStatusService = require('../services/processing-status.service');
+        // Run through the video-level gate so it shares the same bounded
+        // concurrency as batch imports (content AI calls are additionally
+        // bounded by the global AI gate inside ai-chat.service).
+        aiQueue.runVideo(() => {
+          processingStatusService.markVideoProcessingStarted(uploadVideoId);
+          return contentGenerationService.generateAllContentForVideo(
+            postgresRecord.id,
+            uploadVideoId,
+            parsed.text,
+            { contentTypes, userId: actualUserId }
+          );
+        }).then(result => {
           logger.info(`Uploaded-transcript content generation complete for video ${uploadVideoId}`, {
             successful: result.summary?.successful || 0,
             failed: result.summary?.failed || 0

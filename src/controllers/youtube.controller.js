@@ -441,6 +441,7 @@ class YouTubeController {
             try {
               const transcriptService = require('../services/transcript.service');
               const processingStatusService = require('../services/processing-status.service');
+              const aiQueue = require('../services/ai-queue.service');
               const recordId = postgresRecord.id;
 
               if (recordId) {
@@ -472,10 +473,18 @@ class YouTubeController {
                   selectedContentTypes
                 );
 
-                logger.info(`Starting transcript extraction for video ${videoId}`);
+                logger.info(`Queued transcript extraction for video ${videoId}`);
 
-                // Process transcript asynchronously - don't wait for completion
-                transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId, selectedContentTypes)
+                // Enqueue the per-video pipeline into the global video-level
+                // concurrency gate. The HTTP response still returns immediately;
+                // only a bounded number of pipelines run at once, and the rest
+                // show as "Queued" in the dashboard until a slot frees up.
+                aiQueue.runVideo(() => {
+                  // Flip the dashboard badge from "queued" -> "processing" the
+                  // moment this video's slot actually starts.
+                  processingStatusService.markVideoProcessingStarted(videoId);
+                  return transcriptService.processVideoTranscript(videoId, youtubeUrl, recordId, actualUserId, selectedContentTypes);
+                })
                   .then(result => {
                     if (result.success) {
                       logger.info(`✅ Transcript successfully processed for video ${videoId}`);

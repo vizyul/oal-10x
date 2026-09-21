@@ -4,31 +4,19 @@
  */
 
 // Mock dependencies before requiring the service
-jest.mock('nodemailer', () => ({
-  createTransport: jest.fn(() => ({
-    sendMail: jest.fn(),
-    verify: jest.fn()
-  })),
-  getTestMessageUrl: jest.fn(() => 'https://preview.url')
-}));
+const mockSend = jest.fn();
 
-jest.mock('@azure/msal-node', () => ({
-  ConfidentialClientApplication: jest.fn().mockImplementation(() => ({
-    acquireTokenSilent: jest.fn(),
-    acquireTokenByClientCredential: jest.fn()
+jest.mock('resend', () => ({
+  Resend: jest.fn().mockImplementation(() => ({
+    emails: { send: mockSend }
   }))
 }));
-
-jest.mock('axios');
 
 // Store original env
 const originalEnv = process.env;
 
 describe('EmailService', () => {
-  let EmailService;
   let emailService;
-  let nodemailer;
-  let axios;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -38,17 +26,11 @@ describe('EmailService', () => {
     process.env = {
       ...originalEnv,
       NODE_ENV: 'test',
-      AZURE_EMAIL_ADDRESS: 'test@example.com',
-      AZURE_EMAIL_PASSWORD: 'testpassword',
-      AZURE_CLIENT_ID: 'test-client-id',
-      AZURE_CLIENT_SECRET: 'test-client-secret',
-      AZURE_TENANT_ID: 'test-tenant-id',
       BASE_URL: 'https://app.example.com',
       STRIPE_CUSTOMER_PORTAL_URL: 'https://billing.stripe.com'
     };
-
-    nodemailer = require('nodemailer');
-    axios = require('axios');
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_FROM_EMAIL;
   });
 
   afterEach(() => {
@@ -57,29 +39,20 @@ describe('EmailService', () => {
 
   describe('EmailService Class Structure', () => {
     beforeEach(() => {
-      // Clear module cache and reimport
       jest.resetModules();
-
-      // Set up minimal environment for testing
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-
-      EmailService = require('../../../src/services/email.service');
-      emailService = EmailService;
+      emailService = require('../../../src/services/email.service');
     });
 
     it('should have correct initial properties', () => {
-      expect(emailService).toHaveProperty('transporter');
+      expect(emailService).toHaveProperty('resend');
+      expect(emailService).toHaveProperty('fromAddress');
       expect(emailService).toHaveProperty('initialized');
-      expect(emailService).toHaveProperty('useGraphAPI');
     });
   });
 
   describe('generateVerificationEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -110,8 +83,6 @@ describe('EmailService', () => {
   describe('generateVerificationEmailText', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -132,8 +103,6 @@ describe('EmailService', () => {
   describe('generateWelcomeEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -154,8 +123,6 @@ describe('EmailService', () => {
   describe('generateWelcomeEmailText', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -167,11 +134,73 @@ describe('EmailService', () => {
     });
   });
 
+  describe('generatePayPalVerificationEmailHTML', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
+
+    it('should generate HTML with code and first name', () => {
+      const html = emailService.generatePayPalVerificationEmailHTML('654321', 'John');
+
+      expect(html).toContain('654321');
+      expect(html).toContain('Hi John');
+      expect(html).toContain('PayPal Payout Email');
+    });
+
+    it('should default greeting when firstName missing', () => {
+      const html = emailService.generatePayPalVerificationEmailHTML('111111');
+
+      expect(html).toContain('Hi there');
+    });
+  });
+
+  describe('generatePayPalVerificationEmailText', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
+
+    it('should generate plain text with code and first name', () => {
+      const text = emailService.generatePayPalVerificationEmailText('654321', 'John');
+
+      expect(text).toContain('654321');
+      expect(text).toContain('Hi John');
+    });
+  });
+
+  describe('generatePasswordResetEmailHTML', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
+
+    it('should generate HTML with reset URL and first name', () => {
+      const html = emailService.generatePasswordResetEmailHTML('John', 'https://app.example.com/reset?token=abc');
+
+      expect(html).toContain('Hi John');
+      expect(html).toContain('https://app.example.com/reset?token=abc');
+      expect(html).toContain('Reset Password');
+    });
+  });
+
+  describe('generatePasswordResetEmailText', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
+
+    it('should generate plain text with reset URL', () => {
+      const text = emailService.generatePasswordResetEmailText('John', 'https://app.example.com/reset?token=abc');
+
+      expect(text).toContain('Hi John');
+      expect(text).toContain('https://app.example.com/reset?token=abc');
+    });
+  });
+
   describe('generatePaymentFailedEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -194,8 +223,6 @@ describe('EmailService', () => {
   describe('generatePaymentFailedEmailText', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -210,9 +237,6 @@ describe('EmailService', () => {
   describe('generateTrialEndedEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -235,8 +259,6 @@ describe('EmailService', () => {
   describe('generatePaymentActionRequiredEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -252,9 +274,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionCanceledEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -291,9 +310,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionCanceledEmailText', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -313,8 +329,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionPausedEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 
@@ -342,9 +356,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionResumedEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -370,9 +381,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionUpgradedEmailHTML', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -415,9 +423,6 @@ describe('EmailService', () => {
   describe('generateSubscriptionUpgradedEmailText', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.BASE_URL = 'https://app.example.com';
       emailService = require('../../../src/services/email.service');
     });
 
@@ -436,74 +441,98 @@ describe('EmailService', () => {
     });
   });
 
-  describe('Email Sending Methods (with mocked transporter)', () => {
-    let mockTransporter;
+  describe('generateSubscriptionCancellationScheduledEmailHTML', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
 
+    it('should generate HTML with plan and end date', () => {
+      const html = emailService.generateSubscriptionCancellationScheduledEmailHTML({
+        firstName: 'John',
+        planName: 'Premium',
+        endDate: 'January 31, 2025'
+      });
+
+      expect(html).toContain('Hello John');
+      expect(html).toContain('Premium');
+      expect(html).toContain('January 31, 2025');
+      expect(html).toContain('Manage Subscription');
+    });
+  });
+
+  describe('generateSubscriptionCancellationScheduledEmailText', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      emailService = require('../../../src/services/email.service');
+    });
+
+    it('should generate plain text with plan and end date', () => {
+      const text = emailService.generateSubscriptionCancellationScheduledEmailText({
+        firstName: 'John',
+        planName: 'Premium',
+        endDate: 'January 31, 2025'
+      });
+
+      expect(text).toContain('Hello John');
+      expect(text).toContain('Premium');
+      expect(text).toContain('January 31, 2025');
+    });
+  });
+
+  describe('Email Sending Methods (configured with Resend)', () => {
     beforeEach(() => {
       jest.resetModules();
 
-      // Create mock transporter
-      mockTransporter = {
-        sendMail: jest.fn().mockResolvedValue({
-          messageId: 'test-message-id',
-          response: '250 OK'
-        }),
-        verify: jest.fn().mockResolvedValue(true)
-      };
+      process.env.RESEND_API_KEY = 're_test_key';
+      process.env.RESEND_FROM_EMAIL = 'support@amplifycontent.ai';
 
-      nodemailer.createTransport.mockReturnValue(mockTransporter);
-
-      // Set up environment for SMTP
-      process.env.AZURE_EMAIL_ADDRESS = 'test@example.com';
-      process.env.AZURE_EMAIL_PASSWORD = 'testpassword';
-      process.env.AZURE_CLIENT_ID = undefined;
-      process.env.NODE_ENV = 'test';
+      mockSend.mockResolvedValue({ data: { id: 'test-message-id' }, error: null });
 
       emailService = require('../../../src/services/email.service');
     });
 
     describe('sendVerificationCode', () => {
-      it('should send verification email via SMTP when configured', async () => {
-        // Wait for initialization
-        await emailService.ensureInitialized();
-
-        // Set transporter directly for testing
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-
+      it('should send verification email via Resend when configured', async () => {
         const result = await emailService.sendVerificationCode('user@example.com', '123456');
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
+            from: 'AmplifyContent.ai <support@amplifycontent.ai>',
             to: 'user@example.com',
             subject: expect.stringContaining('Verify Your Email')
           })
         );
         expect(result).toHaveProperty('success', true);
-        expect(result).toHaveProperty('messageId');
+        expect(result).toHaveProperty('messageId', 'test-message-id');
       });
 
-      it('should return dev-mode response when no transporter', async () => {
-        emailService.transporter = null;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
+      it('should return dev-mode response when not configured', async () => {
+        delete process.env.RESEND_API_KEY;
+        jest.resetModules();
+        emailService = require('../../../src/services/email.service');
 
         const result = await emailService.sendVerificationCode('user@example.com', '999999');
 
+        expect(mockSend).not.toHaveBeenCalled();
         expect(result).toHaveProperty('success', true);
         expect(result).toHaveProperty('messageId', 'dev-mode');
+      });
+
+      it('should throw when Resend returns an error', async () => {
+        mockSend.mockResolvedValue({ data: null, error: { message: 'invalid_from_address' } });
+
+        await expect(
+          emailService.sendVerificationCode('user@example.com', '123456')
+        ).rejects.toThrow('Failed to send verification email');
       });
     });
 
     describe('sendWelcomeEmail', () => {
-      it('should send welcome email via SMTP', async () => {
-        await emailService.ensureInitialized();
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-
+      it('should send welcome email via Resend', async () => {
         const result = await emailService.sendWelcomeEmail('user@example.com', 'John');
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             to: 'user@example.com',
             subject: 'Welcome to AmplifyContent.ai!'
@@ -512,24 +541,49 @@ describe('EmailService', () => {
         expect(result).toHaveProperty('success', true);
       });
 
-      it('should return dev-mode when no transporter', async () => {
-        emailService.transporter = null;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
+      it('should return dev-mode when not configured', async () => {
+        delete process.env.RESEND_API_KEY;
+        jest.resetModules();
+        emailService = require('../../../src/services/email.service');
 
         const result = await emailService.sendWelcomeEmail('user@example.com', 'Jane');
 
+        expect(mockSend).not.toHaveBeenCalled();
         expect(result).toHaveProperty('success', true);
         expect(result).toHaveProperty('messageId', 'dev-mode');
       });
     });
 
-    describe('sendEmail (generic)', () => {
-      it('should send generic email via SMTP', async () => {
-        await emailService.ensureInitialized();
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
+    describe('sendPasswordResetEmail', () => {
+      it('should send password reset email via Resend', async () => {
+        const result = await emailService.sendPasswordResetEmail('user@example.com', 'John', 'https://app.example.com/reset');
 
+        expect(mockSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: 'user@example.com',
+            subject: expect.stringContaining('Reset Your Password')
+          })
+        );
+        expect(result).toHaveProperty('success', true);
+      });
+    });
+
+    describe('sendPayPalVerificationCode', () => {
+      it('should send PayPal verification email via Resend', async () => {
+        const result = await emailService.sendPayPalVerificationCode('user@example.com', '654321', 'John');
+
+        expect(mockSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: 'user@example.com',
+            subject: expect.stringContaining('PayPal payout email')
+          })
+        );
+        expect(result).toHaveProperty('success', true);
+      });
+    });
+
+    describe('sendEmail (generic)', () => {
+      it('should send generic email via Resend', async () => {
         const result = await emailService.sendEmail(
           'user@example.com',
           'Test Subject',
@@ -537,38 +591,56 @@ describe('EmailService', () => {
           'Test text'
         );
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             to: 'user@example.com',
             subject: 'Test Subject',
-            html: '<p>Test HTML</p>'
+            html: '<p>Test HTML</p>',
+            text: 'Test text'
           })
         );
         expect(result).toHaveProperty('success', true);
       });
 
-      it('should handle sendMail errors gracefully', async () => {
-        mockTransporter.sendMail.mockRejectedValue(new Error('SMTP error'));
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
+      it('should pass replyTo through when provided', async () => {
+        await emailService.sendEmail(
+          'support@amplifycontent.ai',
+          'Contact Form: Hello',
+          '<p>Message</p>',
+          null,
+          'submitter@example.com'
+        );
+
+        expect(mockSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            replyTo: 'submitter@example.com'
+          })
+        );
+      });
+
+      it('should handle Resend send errors gracefully', async () => {
+        mockSend.mockRejectedValue(new Error('Resend error'));
 
         const result = await emailService.sendEmail('user@example.com', 'Subject', '<p>HTML</p>');
 
         expect(result).toHaveProperty('success', false);
         expect(result).toHaveProperty('error');
       });
+
+      it('should handle Resend-returned errors gracefully', async () => {
+        mockSend.mockResolvedValue({ data: null, error: { message: 'rate_limit_exceeded' } });
+
+        const result = await emailService.sendEmail('user@example.com', 'Subject', '<p>HTML</p>');
+
+        expect(result).toEqual({ success: false, error: 'rate_limit_exceeded' });
+      });
     });
 
     describe('sendPaymentFailed', () => {
       it('should send payment failed email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendPaymentFailed('user@example.com', { amount: '$19.99' });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Action Required: Payment Failed'
           })
@@ -577,10 +649,7 @@ describe('EmailService', () => {
       });
 
       it('should not throw on error', async () => {
-        mockTransporter.sendMail.mockRejectedValue(new Error('Error'));
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
+        mockSend.mockRejectedValue(new Error('Error'));
 
         const result = await emailService.sendPaymentFailed('user@example.com', { amount: '$9.99' });
 
@@ -590,13 +659,9 @@ describe('EmailService', () => {
 
     describe('sendTrialEnded', () => {
       it('should send trial ended email for active subscription', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendTrialEnded('user@example.com', { isActive: true });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Free Trial Has Ended'
           })
@@ -605,13 +670,9 @@ describe('EmailService', () => {
       });
 
       it('should send trial expired email for inactive', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendTrialEnded('user@example.com', { isActive: false });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Free Trial Has Expired'
           })
@@ -622,13 +683,9 @@ describe('EmailService', () => {
 
     describe('sendPaymentActionRequired', () => {
       it('should send payment action required email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendPaymentActionRequired('user@example.com', { amount: '$29.99' });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Action Required: Verify Your Payment'
           })
@@ -639,16 +696,12 @@ describe('EmailService', () => {
 
     describe('sendSubscriptionCanceled', () => {
       it('should send subscription canceled email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendSubscriptionCanceled('user@example.com', {
           firstName: 'John',
           planName: 'Premium'
         });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Subscription Has Been Canceled'
           })
@@ -659,16 +712,12 @@ describe('EmailService', () => {
 
     describe('sendSubscriptionPaused', () => {
       it('should send subscription paused email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendSubscriptionPaused('user@example.com', {
           firstName: 'John',
           planName: 'Premium'
         });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Subscription Has Been Paused'
           })
@@ -679,16 +728,12 @@ describe('EmailService', () => {
 
     describe('sendSubscriptionResumed', () => {
       it('should send subscription resumed email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendSubscriptionResumed('user@example.com', {
           firstName: 'John',
           planName: 'Premium'
         });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Subscription Has Been Resumed'
           })
@@ -699,17 +744,13 @@ describe('EmailService', () => {
 
     describe('sendSubscriptionUpgraded', () => {
       it('should send subscription upgraded email', async () => {
-        emailService.transporter = mockTransporter;
-        emailService.useGraphAPI = false;
-        emailService.initialized = true;
-
         const result = await emailService.sendSubscriptionUpgraded('user@example.com', {
           firstName: 'John',
           oldPlanName: 'Basic',
           newPlanName: 'Premium'
         });
 
-        expect(mockTransporter.sendMail).toHaveBeenCalledWith(
+        expect(mockSend).toHaveBeenCalledWith(
           expect.objectContaining({
             subject: 'Your Subscription Has Been Upgraded!'
           })
@@ -717,52 +758,93 @@ describe('EmailService', () => {
         expect(result).toHaveProperty('success', true);
       });
     });
+
+    describe('sendSubscriptionCancellationScheduled', () => {
+      it('should send subscription cancellation scheduled email', async () => {
+        const result = await emailService.sendSubscriptionCancellationScheduled('user@example.com', {
+          firstName: 'John',
+          planName: 'Premium',
+          endDate: 'January 31, 2025'
+        });
+
+        expect(mockSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            subject: 'Your Subscription Cancellation is Scheduled'
+          })
+        );
+        expect(result).toHaveProperty('success', true);
+      });
+    });
   });
 
-  describe('verifyConnection', () => {
+  describe('sendViaResend', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
+    });
+
+    it('should return dev-mode response without calling Resend when unconfigured', async () => {
       emailService = require('../../../src/services/email.service');
+      await emailService.ensureInitialized();
+
+      const result = await emailService.sendViaResend({
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>'
+      });
+
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(result).toEqual({ success: true, messageId: 'dev-mode', previewUrl: null });
     });
 
-    it('should return true when transporter verifies', async () => {
-      const mockTransporter = {
-        verify: jest.fn().mockResolvedValue(true)
-      };
-      emailService.transporter = mockTransporter;
+    it('should return success with messageId when Resend succeeds', async () => {
+      process.env.RESEND_API_KEY = 're_test_key';
+      mockSend.mockResolvedValue({ data: { id: 'abc-123' }, error: null });
+      emailService = require('../../../src/services/email.service');
+      await emailService.ensureInitialized();
 
-      const result = await emailService.verifyConnection();
+      const result = await emailService.sendViaResend({
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>'
+      });
 
-      expect(result).toBe(true);
+      expect(result).toEqual({ success: true, messageId: 'abc-123', previewUrl: null });
     });
 
-    it('should return false when transporter is null', async () => {
-      emailService.transporter = null;
+    it('should return failure when Resend returns an error object', async () => {
+      process.env.RESEND_API_KEY = 're_test_key';
+      mockSend.mockResolvedValue({ data: null, error: { message: 'invalid_api_key' } });
+      emailService = require('../../../src/services/email.service');
+      await emailService.ensureInitialized();
 
-      const result = await emailService.verifyConnection();
+      const result = await emailService.sendViaResend({
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>'
+      });
 
-      expect(result).toBe(false);
+      expect(result).toEqual({ success: false, error: 'invalid_api_key' });
     });
 
-    it('should return false when verification fails', async () => {
-      const mockTransporter = {
-        verify: jest.fn().mockRejectedValue(new Error('Connection failed'))
-      };
-      emailService.transporter = mockTransporter;
+    it('should return failure when Resend throws', async () => {
+      process.env.RESEND_API_KEY = 're_test_key';
+      mockSend.mockRejectedValue(new Error('network error'));
+      emailService = require('../../../src/services/email.service');
+      await emailService.ensureInitialized();
 
-      const result = await emailService.verifyConnection();
+      const result = await emailService.sendViaResend({
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>'
+      });
 
-      expect(result).toBe(false);
+      expect(result).toEqual({ success: false, error: 'network error' });
     });
   });
 
   describe('ensureInitialized', () => {
     beforeEach(() => {
       jest.resetModules();
-      process.env.AZURE_EMAIL_ADDRESS = undefined;
-      process.env.AZURE_CLIENT_ID = undefined;
       emailService = require('../../../src/services/email.service');
     });
 

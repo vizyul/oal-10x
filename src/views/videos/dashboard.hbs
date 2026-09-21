@@ -502,7 +502,13 @@ class ProcessingStatusManager {
     const videoTitle = video.videoTitle || 'Untitled Video';
     const videoTime = this.formatTime(video.startTime);
     const overallProgress = this.calculateProgress(video);
-    
+    // "Queued" until this video's slot opens in the video-level concurrency
+    // gate; once it starts (or any real progress reports) it shows "Processing".
+    const isComplete = overallProgress.total > 0 && overallProgress.completed >= overallProgress.total;
+    const isQueued = video.queued === true && !isComplete;
+    const phaseLabel = isQueued ? 'Queued' : 'Processing';
+    const phaseClass = isQueued ? 'phase-queued' : 'phase-processing';
+
     return `
       <div class="video-accordion" data-video-id="${video.videoId}">
         <div class="accordion-header-wrapper">
@@ -511,6 +517,7 @@ class ProcessingStatusManager {
               <div class="video-title-stretch" title="${videoTitle}">${videoTitle}</div>
               <div class="video-meta">
                 <span class="video-time">${videoTime}</span>
+                <span class="video-phase-badge ${phaseClass}">${phaseLabel}</span>
                 <span class="video-progress">${overallProgress.completed}/${overallProgress.total} completed</span>
               </div>
             </div>
@@ -2285,6 +2292,28 @@ async function populateProcessingTable() {
 .video-time, .video-progress {
   font-size: 12px;
   color: #666;
+}
+
+/* Queued / Processing phase badge */
+.video-phase-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+.video-phase-badge.phase-queued {
+  background-color: #edf2f7;
+  color: #718096;
+  border: 1px solid #cbd5e0;
+}
+.video-phase-badge.phase-processing {
+  background-color: #ebf8ff;
+  color: #2b6cb0;
+  border: 1px solid #90cdf4;
 }
 
 /* Chevron */

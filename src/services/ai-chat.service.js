@@ -3,6 +3,8 @@ const { VertexAI } = require('@google-cloud/vertexai');
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
 const { logger } = require('../utils');
+const aiQueue = require('./ai-queue.service');
+const geminiModelService = require('./gemini-model.service');
 
 class AIChatService {
   constructor() {
@@ -106,7 +108,7 @@ class AIChatService {
         systemMessage = '',
         temperature = 0.7,
         maxTokens = 2000,
-        model = process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        model = geminiModelService.getTextModel(),
         contentType = 'unknown'
       } = options;
 
@@ -280,7 +282,20 @@ class AIChatService {
       return { text, metrics };
 
     } catch (error) {
-      // Preserve detailed error information
+      // Rate-limit (429) errors are expected/handled by the retry+queue layer.
+      // Log them concisely (one line) instead of dumping the multi-KB error
+      // object repeatedly, which floods the logs during large batches.
+      const rl = this.parseRateLimitError(error);
+      if (rl.isRateLimit) {
+        logger.warn(`Gemini rate limit (429) - will retry in ~${Math.round(rl.retryMs / 1000)}s`);
+        const rlError = new Error(`Gemini generation failed: ${error.message}`);
+        rlError.code = error.code || 'RATE_LIMITED';
+        rlError.status = 429;
+        rlError.frontendMessage = 'Rate limited - retrying automatically';
+        throw rlError;
+      }
+
+      // Preserve detailed error information for genuinely unexpected failures
       const errorDetails = {
         type: error.code || 'UNKNOWN_ERROR',
         message: error.message,
@@ -459,21 +474,58 @@ class AIChatService {
    * @returns {Promise<string>} Generated content
    */
   async generateContent(provider, options) {
-    try {
-      switch (provider.toLowerCase()) {
-      case 'gemini':
-        return await this.generateWithGemini(options);
-      case 'chatgpt':
-        return await this.generateWithChatGPT(options);
-      case 'claude':
-        return await this.generateWithClaude(options);
-      default:
-        throw new Error(`Unsupported AI provider: ${provider}`);
+    // Funnel every outbound provider call through the global AI concurrency
+    // gate so total in-flight calls stay bounded no matter how many videos are
+    // processing (prevents the 429 quota blowout on large batches).
+    return aiQueue.runAI(async () => {
+      const isGemini = provider.toLowerCase() === 'gemini';
+
+      // Reserve input-token budget BEFORE the Gemini call so total input
+      // tokens/minute stay under the provider quota. This is the guaranteed fix
+      // for the token-per-minute 429 (concurrency alone can't respect a token
+      // budget when a single call can carry ~150k transcript tokens).
+      let tokenReservation = null;
+      if (isGemini) {
+        const est = aiQueue.estimateTokens(options.prompt, options.systemMessage);
+        tokenReservation = await aiQueue.reserveTokens(est);
       }
-    } catch (error) {
-      logger.error(`AI content generation failed for provider ${provider}:`, error.message);
-      throw error;
-    }
+
+      try {
+        let result;
+        switch (provider.toLowerCase()) {
+        case 'gemini':
+          result = await this.generateWithGemini(options);
+          break;
+        case 'chatgpt':
+          result = await this.generateWithChatGPT(options);
+          break;
+        case 'claude':
+          result = await this.generateWithClaude(options);
+          break;
+        default:
+          throw new Error(`Unsupported AI provider: ${provider}`);
+        }
+
+        // Reconcile the reservation with the REAL input token count so the
+        // window self-corrects. Cached tokens count toward the quota too, so we
+        // use the full promptTokenCount (metrics.inputTokens), not the fresh-only.
+        if (isGemini && tokenReservation) {
+          const actualInput = result && result.metrics && result.metrics.inputTokens;
+          if (typeof actualInput === 'number') {
+            aiQueue.reconcileTokens(tokenReservation, actualInput);
+          }
+        }
+        return result;
+      } catch (error) {
+        // Rate-limit errors are already logged concisely upstream; only log
+        // unexpected failures at error level here.
+        const rl = this.parseRateLimitError(error);
+        if (!rl.isRateLimit) {
+          logger.error(`AI content generation failed for provider ${provider}:`, error.message);
+        }
+        throw error;
+      }
+    });
   }
 
   /**
@@ -507,10 +559,12 @@ class AIChatService {
         if (isRecitationError) {
           logger.warn(`RECITATION error detected - Gemini blocked content due to similarity to copyrighted material`);
 
-          // Try fallback to OpenAI if available and we were using Gemini
-          if (currentProvider === 'gemini' && this.isProviderAvailable('openai')) {
-            logger.info(`Attempting fallback to OpenAI for ${options.contentType || 'content'}`);
-            currentProvider = 'openai';
+          // Try fallback to ChatGPT (OpenAI) if available and we were using Gemini.
+          // NOTE: the provider key must be 'chatgpt' - generateContent()/isProviderAvailable()
+          // route OpenAI under 'chatgpt'; 'openai' would hit the unsupported-provider path.
+          if (currentProvider === 'gemini' && this.isProviderAvailable('chatgpt')) {
+            logger.info(`Attempting fallback to ChatGPT for ${options.contentType || 'content'}`);
+            currentProvider = 'chatgpt';
             // Don't count this as a retry attempt - it's a provider switch
             attempt--;
             continue;
@@ -518,15 +572,72 @@ class AIChatService {
         }
 
         if (attempt <= maxRetries) {
-          // Wait before retry (exponential backoff)
-          const delay = Math.pow(2, attempt - 1) * 1000;
-          logger.debug(`Retrying in ${delay}ms...`);
+          // Rate-limit (429) aware backoff: honor the provider's Retry-After so
+          // ALL workers back off together, instead of hammering the quota.
+          const retryInfo = this.parseRateLimitError(error);
+          let delay;
+          if (retryInfo.isRateLimit) {
+            delay = retryInfo.retryMs;
+            // Globally pause the AI queue so every other in-flight worker waits
+            // out the same window rather than each retrying independently.
+            aiQueue.pauseFor(delay);
+            logger.warn(`Rate limit (429) hit for ${currentProvider} - honoring Retry-After, pausing ~${Math.round(delay / 1000)}s before retry`);
+          } else {
+            // Exponential backoff for transient/non-rate-limit errors
+            delay = Math.pow(2, attempt - 1) * 1000;
+            logger.debug(`Retrying in ${delay}ms...`);
+          }
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
     throw lastError;
+  }
+
+  /**
+   * Detect a provider rate-limit (429) error and extract how long to wait.
+   * Handles Gemini's "Please retry in 56.72s" message, a numeric HTTP
+   * Retry-After header, and generic quota/too-many-requests signals.
+   * @param {Error} error
+   * @returns {{ isRateLimit: boolean, retryMs: number }}
+   */
+  parseRateLimitError(error) {
+    const message = (error && error.message) || '';
+    const status = error && (error.status || error.statusCode || error.code);
+
+    const isRateLimit =
+      status === 429 ||
+      status === '429' ||
+      /\b429\b/.test(message) ||
+      /too many requests/i.test(message) ||
+      /quota/i.test(message) ||
+      /rate limit/i.test(message);
+
+    if (!isRateLimit) {
+      return { isRateLimit: false, retryMs: 0 };
+    }
+
+    // Default fallback if we can't parse an explicit delay
+    const MAX_RETRY_MS = 120000; // cap so we never wait absurdly long (covers token-quota windows)
+    let retryMs = 30000;
+
+    // Gemini style: "Please retry in 56.720261247s"
+    const secondsMatch = message.match(/retry in\s+([\d.]+)s/i);
+    if (secondsMatch) {
+      retryMs = Math.ceil(parseFloat(secondsMatch[1]) * 1000);
+    } else {
+      // HTTP Retry-After header (seconds), if present on the error
+      const headers = error && (error.responseHeaders || (error.response && error.response.headers));
+      const retryAfter = headers && (headers['retry-after'] || headers['Retry-After']);
+      if (retryAfter && !Number.isNaN(Number(retryAfter))) {
+        retryMs = Number(retryAfter) * 1000;
+      }
+    }
+
+    // Add a small buffer and clamp
+    retryMs = Math.min(retryMs + 1000, MAX_RETRY_MS);
+    return { isRateLimit: true, retryMs };
   }
 
   /**

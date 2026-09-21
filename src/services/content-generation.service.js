@@ -224,6 +224,13 @@ class ContentGenerationService {
 
     try {
 
+      // Early cancellation check: all content types for a video are now fired
+      // concurrently, so honor a mid-flight Cancel here to skip any that have
+      // not started their AI call yet.
+      if (await this.isVideoCancelled(videoId)) {
+        return { success: false, contentType: prompt.content_type, error: 'Video processing cancelled' };
+      }
+
       // Update content status to generating and set start timestamp
       processingStatusService.updateContentStatus(videoId, prompt.content_type, 'generating');
 
@@ -478,7 +485,6 @@ class ContentGenerationService {
       const {
         provider = null, // Will be determined from user preference or default to gemini
         contentTypes = this.supportedContentTypes,
-        concurrent = 2, // Number of concurrent generations
         userId = null,
         userEmail = null
       } = options;
@@ -548,46 +554,34 @@ class ContentGenerationService {
         }
       };
 
-      // Process prompts in batches
-      for (let i = 0; i < relevantPrompts.length; i += concurrent) {
-        // Check for cancellation before each batch
-        if (await this.isVideoCancelled(videoId)) {
-          logger.info(`Video ${videoId} was cancelled during content generation, stopping at batch ${Math.floor(i / concurrent) + 1}`);
-          break;
-        }
-
-        const batch = relevantPrompts.slice(i, i + concurrent);
-
-
-        const batchPromises = batch.map(prompt =>
+      // Generate ALL selected content types concurrently. The global aiQueue
+      // gate (concurrency + tokens-per-minute budget) inside aiChatService is
+      // what paces these calls now, so no per-video batching or inter-batch
+      // sleep is needed here - that only added latency. A mid-flight cancel is
+      // honored by the early isVideoCancelled() check inside generateContent().
+      const genResults = await Promise.all(
+        relevantPrompts.map(prompt =>
           this.generateContent(videoId, videoRecordId, transcript, prompt, userId)
             .then(result => ({ prompt: prompt.name, result }))
             .catch(error => ({ prompt: prompt.name, result: { success: false, error: error.message } }))
-        );
+        )
+      );
 
-        const batchResults = await Promise.all(batchPromises);
-
-        // Process batch results
-        batchResults.forEach(({ prompt, result }) => {
-          if (result.success) {
-            results.content[result.contentType] = {
-              content: result.content,
-              provider: result.provider,
-              promptName: result.promptName,
-              generatedAt: result.generatedAt
-            };
-            results.summary.successful++;
-          } else {
-            results.errors[prompt] = result.error;
-            results.summary.failed++;
-          }
-        });
-
-        // Add delay between batches to be respectful to the AI service
-        if (i + concurrent < relevantPrompts.length) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+      // Tally results
+      genResults.forEach(({ prompt, result }) => {
+        if (result.success) {
+          results.content[result.contentType] = {
+            content: result.content,
+            provider: result.provider,
+            promptName: result.promptName,
+            generatedAt: result.generatedAt
+          };
+          results.summary.successful++;
+        } else {
+          results.errors[prompt] = result.error;
+          results.summary.failed++;
         }
-      }
+      });
 
       // Note: Database updates now happen individually after each content generation
       // No batch update needed here since each generateContent call writes to database immediately

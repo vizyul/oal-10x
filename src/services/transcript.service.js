@@ -380,12 +380,18 @@ class TranscriptService {
         success: updateResults.success
       });
 
-      // Trigger content generation if transcript was successfully stored
+      // Generate content if transcript was successfully stored.
+      // IMPORTANT: this is AWAITED so the caller's video-level concurrency gate
+      // (aiQueue.runVideo) holds this video's slot for the FULL pipeline
+      // (transcript -> all content types). That is what makes the app process
+      // one video's entire content set as a unit, instead of releasing the slot
+      // after the transcript and letting every video's content generation pile
+      // up interleaved. The HTTP import request stays non-blocking because the
+      // controllers enqueue this method fire-and-forget at the controller level.
       if (success) {
         try {
           const contentGenerationService = require('./content-generation.service');
 
-          // Start content generation asynchronously - don't wait for completion
           logger.info(`Starting content generation for video ${videoId}`);
 
           // Use provided content types or get all available from database
@@ -404,21 +410,21 @@ class TranscriptService {
             logger.info(`Using ${typesToGenerate.length} specified content types for generation: ${typesToGenerate.join(', ')}`);
           }
 
-          contentGenerationService.generateAllContentForVideo(videoRecordId, videoId, transcript, {
+          const result = await contentGenerationService.generateAllContentForVideo(videoRecordId, videoId, transcript, {
             contentTypes: typesToGenerate,
             userId: userId
-          }).then(result => {
-            logger.info(`Content generation completed for video ${videoId}`, {
-              successful: result.summary?.successful || 0,
-              failed: result.summary?.failed || 0,
-              contentTypes: typesToGenerate.length
-            });
-          }).catch(error => {
-            logger.warn(`Content generation failed for video ${videoId}:`, error.message);
+          });
+
+          logger.info(`Content generation completed for video ${videoId}`, {
+            successful: result.summary?.successful || 0,
+            failed: result.summary?.failed || 0,
+            contentTypes: typesToGenerate.length
           });
 
         } catch (contentError) {
-          logger.warn(`Error initiating content generation for video ${videoId}:`, contentError.message);
+          // A content-generation failure must not discard the transcript-success
+          // result; the video-completion check handles partial/failed content.
+          logger.warn(`Content generation failed for video ${videoId}:`, contentError.message);
         }
       }
 

@@ -1,198 +1,34 @@
-const nodemailer = require('nodemailer');
-const axios = require('axios');
-const { ConfidentialClientApplication } = require('@azure/msal-node');
+const { Resend } = require('resend');
 const { logger } = require('../utils');
 
 class EmailService {
   constructor() {
-    this.transporter = null;
-    this.msalInstance = null;
-    this.accessToken = null;
-    this.tokenExpiry = null;
+    this.resend = null;
+    this.fromAddress = null;
     this.initialized = false;
-    this.useGraphAPI = false;
     this.init();
   }
 
   async init() {
     try {
-      // Try Graph API first now that EWS is enabled
-      if (process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && process.env.AZURE_TENANT_ID) {
-        logger.info('Initializing email service with Microsoft Graph API...');
-        await this.initGraphAPI();
-      }
-      // Fallback to SMTP if Graph API not configured
-      else if (process.env.AZURE_EMAIL_ADDRESS) {
-        logger.info('Initializing email service with Azure SMTP...');
-        await this.initSMTP();
+      if (process.env.RESEND_API_KEY) {
+        this.resend = new Resend(process.env.RESEND_API_KEY);
+        this.fromAddress = process.env.RESEND_FROM_EMAIL || 'support@amplifycontent.ai';
+        logger.info('Email service initialized with Resend');
       } else {
-        // No email credentials provided
-        this.transporter = null;
-        this.useGraphAPI = false;
+        this.resend = null;
         logger.info('Email service initialized in development mode - emails will be logged to console');
-        logger.warn('To enable email sending, configure either:');
-        logger.warn('  Graph API: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_EMAIL_ADDRESS');
-        logger.warn('  Or SMTP: AZURE_EMAIL_ADDRESS, AZURE_EMAIL_PASSWORD');
+        logger.warn('To enable email sending, configure RESEND_API_KEY');
       }
 
       this.initialized = true;
     } catch (error) {
       logger.error('Failed to initialize email service:', error);
 
-      // Fall back to development mode if authentication fails
-      this.transporter = null;
-      this.useGraphAPI = false;
+      // Fall back to development mode if initialization fails
+      this.resend = null;
       logger.warn('Falling back to development mode - emails will be logged to console');
       this.initialized = true; // Mark as initialized even on failure
-    }
-  }
-
-  async initGraphAPI() {
-    try {
-      const msalConfig = {
-        auth: {
-          clientId: process.env.AZURE_CLIENT_ID,
-          clientSecret: process.env.AZURE_CLIENT_SECRET,
-          authority: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`
-        }
-      };
-
-      this.msalInstance = new ConfidentialClientApplication(msalConfig);
-
-      // Get initial access token
-      await this.getAccessToken();
-
-      this.useGraphAPI = true;
-      logger.info('Email service initialized successfully with Microsoft Graph API');
-    } catch (error) {
-      logger.error('Failed to initialize Microsoft Graph API:', error);
-      throw error;
-    }
-  }
-
-  async initSMTPWithOAuth2() {
-    try {
-      // Initialize MSAL first
-      const msalConfig = {
-        auth: {
-          clientId: process.env.AZURE_CLIENT_ID,
-          clientSecret: process.env.AZURE_CLIENT_SECRET,
-          authority: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`
-        }
-      };
-
-      this.msalInstance = new ConfidentialClientApplication(msalConfig);
-
-      // Get access token for SMTP OAuth2
-      const accessToken = await this.getAccessToken();
-
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.office365.com',
-        port: 25,
-        secure: false,
-        auth: {
-          type: 'OAuth2',
-          user: process.env.AZURE_EMAIL_ADDRESS,
-          clientId: process.env.AZURE_CLIENT_ID,
-          clientSecret: process.env.AZURE_CLIENT_SECRET,
-          accessToken: accessToken,
-          method: 'XOAUTH2'
-        },
-        tls: {
-          rejectUnauthorized: true,
-          minVersion: 'TLSv1.2'
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000
-      });
-
-      this.useGraphAPI = false;
-      logger.info('Email service initialized with OAuth2 SMTP');
-    } catch (error) {
-      logger.error('Failed to initialize OAuth2 SMTP:', {
-        message: error.message,
-        stack: error.stack,
-        response: error.response?.data
-      });
-      throw error;
-    }
-  }
-
-  async initSMTP() {
-    try {
-      // Use OAuth2 for SMTP if we have Graph API credentials but no password
-      if (process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && !process.env.AZURE_EMAIL_PASSWORD) {
-        await this.initSMTPWithOAuth2();
-      } else {
-        // Traditional SMTP with password
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.office365.com',
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.AZURE_EMAIL_ADDRESS,
-            pass: process.env.AZURE_EMAIL_PASSWORD
-          },
-          tls: {
-            rejectUnauthorized: true,
-            minVersion: 'TLSv1.2'
-          },
-          authMethod: 'PLAIN',
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 10000
-        });
-      }
-
-      // Verify the connection (non-blocking)
-      const verified = await this.verifyConnection();
-      if (verified) {
-        logger.info('Email service initialized and verified successfully with Azure SMTP');
-      } else {
-        logger.warn('Email service initialized but SMTP verification failed');
-      }
-
-      this.useGraphAPI = false;
-    } catch (error) {
-      logger.error('Failed to initialize SMTP:', error);
-      throw error;
-    }
-  }
-
-  async getAccessToken() {
-    try {
-      // Check if current token is still valid
-      if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry - 60000) {
-        return this.accessToken;
-      }
-
-      const clientCredentialRequest = {
-        scopes: ['https://graph.microsoft.com/.default'],
-      };
-
-      const response = await this.msalInstance.acquireTokenSilent(clientCredentialRequest);
-
-      this.accessToken = response.accessToken;
-      this.tokenExpiry = response.expiresOn.getTime();
-
-      return this.accessToken;
-    // eslint-disable-next-line no-unused-vars
-    } catch (_error) {
-      // If silent token acquisition fails, try to acquire token
-      try {
-        const response = await this.msalInstance.acquireTokenByClientCredential({
-          scopes: ['https://graph.microsoft.com/.default']
-        });
-
-        this.accessToken = response.accessToken;
-        this.tokenExpiry = response.expiresOn.getTime();
-
-        return this.accessToken;
-      } catch (clientError) {
-        logger.error('Failed to acquire access token:', clientError);
-        throw clientError;
-      }
     }
   }
 
@@ -202,17 +38,56 @@ class EmailService {
     }
   }
 
-  async verifyConnection() {
+  // Single Resend transport used by every public send method. Never throws -
+  // callers decide whether a failed send should throw or just be logged.
+  async sendViaResend({ to, subject, html, text, replyTo = null, devModeMessage = null }) {
+    if (!this.resend) {
+      logger.warn(devModeMessage || `Email service in dev mode. Would send to ${to}: "${subject}"`);
+      return {
+        success: true,
+        messageId: 'dev-mode',
+        previewUrl: null
+      };
+    }
+
     try {
-      if (this.transporter && typeof this.transporter.verify === 'function') {
-        await this.transporter.verify();
-        logger.info('Email transporter verified successfully');
-        return true;
+      const payload = {
+        from: `AmplifyContent.ai <${this.fromAddress}>`,
+        to,
+        subject,
+        html
+      };
+
+      if (text) {
+        payload.text = text;
       }
-      return false;
-    } catch (error) {
-      logger.error('Email transporter verification failed:', error);
-      return false;
+      if (replyTo) {
+        payload.replyTo = replyTo;
+      }
+
+      const { data, error } = await this.resend.emails.send(payload);
+
+      if (error) {
+        logger.error('Error sending email via Resend:', error);
+        return {
+          success: false,
+          error: error.message || String(error)
+        };
+      }
+
+      logger.info(`Email sent via Resend to ${to}`, { messageId: data?.id });
+
+      return {
+        success: true,
+        messageId: data.id,
+        previewUrl: null
+      };
+    } catch (err) {
+      logger.error('Error sending email via Resend:', err);
+      return {
+        success: false,
+        error: err.message
+      };
     }
   }
 
@@ -220,110 +95,22 @@ class EmailService {
     try {
       await this.ensureInitialized();
 
-      if (this.useGraphAPI) {
-        return await this.sendEmailViaGraph(email, verificationCode);
-      } else if (this.transporter) {
-        return await this.sendEmailViaSMTP(email, verificationCode);
-      } else {
-        logger.warn(`No email service configured. Verification code for ${email}: ${verificationCode}`);
-        return {
-          success: true,
-          messageId: 'dev-mode',
-          previewUrl: null
-        };
-      }
-    } catch (error) {
-      logger.error('Error sending verification email:', error);
-      throw new Error('Failed to send verification email');
-    }
-  }
-
-  async sendEmailViaGraph(email, verificationCode) {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      const emailMessage = {
-        message: {
-          subject: 'Verify Your Email - AmplifyContent.ai',
-          body: {
-            contentType: 'HTML',
-            content: this.generateVerificationEmailHTML(verificationCode)
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: email
-              }
-            }
-          ],
-          from: {
-            emailAddress: {
-              address: process.env.AZURE_EMAIL_ADDRESS
-            }
-          }
-        },
-        saveToSentItems: false
-      };
-
-      // Use user-specific endpoint directly (works with application permissions)
-      const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-
-      const response = await axios.post(
-        endpoint,
-        emailMessage,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      logger.info(`Verification email sent via Graph API to ${email}`, {
-        status: response.status,
-        statusText: response.statusText
-      });
-
-      return {
-        success: true,
-        messageId: `graph-${Date.now()}`,
-        previewUrl: null
-      };
-    } catch (error) {
-      logger.error('Error sending email via Graph API:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async sendEmailViaSMTP(email, verificationCode) {
-    try {
-      const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
+      const result = await this.sendViaResend({
         to: email,
         subject: 'Verify Your Email - AmplifyContent.ai',
         html: this.generateVerificationEmailHTML(verificationCode),
-        text: this.generateVerificationEmailText(verificationCode)
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-
-      if (process.env.NODE_ENV !== 'production') {
-        logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
-      }
-
-      logger.info(`Verification email sent via SMTP to ${email}`, {
-        messageId: info.messageId,
-        response: info.response
+        text: this.generateVerificationEmailText(verificationCode),
+        devModeMessage: `No email service configured. Verification code for ${email}: ${verificationCode}`
       });
 
-      return {
-        success: true,
-        messageId: info.messageId,
-        previewUrl: process.env.NODE_ENV !== 'production' ? nodemailer.getTestMessageUrl(info) : null
-      };
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result;
     } catch (error) {
-      logger.error('Error sending email via SMTP:', error);
-      throw error;
+      logger.error('Error sending verification email:', error);
+      throw new Error('Failed to send verification email');
     }
   }
 
@@ -335,16 +122,13 @@ class EmailService {
       const html = this.generatePayPalVerificationEmailHTML(code, firstName);
       const text = this.generatePayPalVerificationEmailText(code, firstName);
 
-      if (this.useGraphAPI || this.transporter) {
-        return await this.sendEmail(email, subject, html, text);
-      }
-
-      logger.warn(`No email service configured. PayPal verification code for ${email}: ${code}`);
-      return {
-        success: true,
-        messageId: 'dev-mode',
-        previewUrl: null
-      };
+      return await this.sendViaResend({
+        to: email,
+        subject,
+        html,
+        text,
+        devModeMessage: `No email service configured. PayPal verification code for ${email}: ${code}`
+      });
     } catch (error) {
       logger.error('Error sending PayPal verification email:', error);
       throw new Error('Failed to send PayPal verification email');
@@ -417,109 +201,22 @@ This is an automated email, please do not reply.
     try {
       await this.ensureInitialized();
 
-      if (this.useGraphAPI) {
-        return await this.sendPasswordResetEmailViaGraph(email, firstName, resetUrl);
-      } else if (this.transporter) {
-        return await this.sendPasswordResetEmailViaSMTP(email, firstName, resetUrl);
-      } else {
-        logger.warn(`No email service configured. Password reset link for ${email}: ${resetUrl}`);
-        return {
-          success: true,
-          messageId: 'dev-mode',
-          previewUrl: null
-        };
-      }
-    } catch (error) {
-      logger.error('Error sending password reset email:', error);
-      throw new Error('Failed to send password reset email');
-    }
-  }
-
-  async sendPasswordResetEmailViaGraph(email, firstName, resetUrl) {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      const emailMessage = {
-        message: {
-          subject: 'Reset Your Password - AmplifyContent.ai',
-          body: {
-            contentType: 'HTML',
-            content: this.generatePasswordResetEmailHTML(firstName, resetUrl)
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: email
-              }
-            }
-          ],
-          from: {
-            emailAddress: {
-              address: process.env.AZURE_EMAIL_ADDRESS
-            }
-          }
-        },
-        saveToSentItems: false
-      };
-
-      const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-
-      const response = await axios.post(
-        endpoint,
-        emailMessage,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      logger.info(`Password reset email sent via Graph API to ${email}`, {
-        status: response.status,
-        statusText: response.statusText
-      });
-
-      return {
-        success: true,
-        messageId: `graph-${Date.now()}`,
-        previewUrl: null
-      };
-    } catch (error) {
-      logger.error('Error sending password reset email via Graph API:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async sendPasswordResetEmailViaSMTP(email, firstName, resetUrl) {
-    try {
-      const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
+      const result = await this.sendViaResend({
         to: email,
         subject: 'Reset Your Password - AmplifyContent.ai',
         html: this.generatePasswordResetEmailHTML(firstName, resetUrl),
-        text: this.generatePasswordResetEmailText(firstName, resetUrl)
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-
-      if (process.env.NODE_ENV !== 'production') {
-        logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
-      }
-
-      logger.info(`Password reset email sent via SMTP to ${email}`, {
-        messageId: info.messageId,
-        response: info.response
+        text: this.generatePasswordResetEmailText(firstName, resetUrl),
+        devModeMessage: `No email service configured. Password reset link for ${email}: ${resetUrl}`
       });
 
-      return {
-        success: true,
-        messageId: info.messageId,
-        previewUrl: process.env.NODE_ENV !== 'production' ? nodemailer.getTestMessageUrl(info) : null
-      };
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result;
     } catch (error) {
-      logger.error('Error sending password reset email via SMTP:', error);
-      throw error;
+      logger.error('Error sending password reset email:', error);
+      throw new Error('Failed to send password reset email');
     }
   }
 
@@ -649,17 +346,19 @@ This is an automated email, please do not reply.
     try {
       await this.ensureInitialized();
 
-      if (this.useGraphAPI) {
-        return await this.sendWelcomeEmailViaGraph(email, firstName);
-      } else if (this.transporter) {
-        return await this.sendWelcomeEmailViaSMTP(email, firstName);
-      } else {
-        logger.warn(`No email service configured. Welcome email for ${email} (${firstName}) not sent.`);
-        return {
-          success: true,
-          messageId: 'dev-mode'
-        };
+      const result = await this.sendViaResend({
+        to: email,
+        subject: 'Welcome to AmplifyContent.ai!',
+        html: this.generateWelcomeEmailHTML(firstName),
+        text: this.generateWelcomeEmailText(firstName),
+        devModeMessage: `No email service configured. Welcome email for ${email} (${firstName}) not sent.`
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
       }
+
+      return result;
     } catch (error) {
       logger.error('Error sending welcome email:', error);
       throw new Error('Failed to send welcome email');
@@ -708,92 +407,6 @@ This is an automated email, please do not reply.
     } catch (error) {
       logger.error('Error sending payment action required email:', error);
       return { success: false, error: error.message };
-    }
-  }
-
-  async sendWelcomeEmailViaGraph(email, firstName) {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      const emailMessage = {
-        message: {
-          subject: 'Welcome to AmplifyContent.ai!',
-          body: {
-            contentType: 'HTML',
-            content: this.generateWelcomeEmailHTML(firstName)
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: email
-              }
-            }
-          ],
-          from: {
-            emailAddress: {
-              address: process.env.AZURE_EMAIL_ADDRESS
-            }
-          }
-        },
-        saveToSentItems: false
-      };
-
-      // Use user-specific endpoint directly (works with application permissions)
-      const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-
-      const response = await axios.post(
-        endpoint,
-        emailMessage,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      logger.info(`Welcome email sent via Graph API to ${email}`, {
-        status: response.status,
-        statusText: response.statusText
-      });
-
-      return {
-        success: true,
-        messageId: `graph-welcome-${Date.now()}`
-      };
-    } catch (error) {
-      logger.error('Error sending welcome email via Graph API:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async sendWelcomeEmailViaSMTP(email, firstName) {
-    try {
-      const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
-        to: email,
-        subject: 'Welcome to AmplifyContent.ai!',
-        html: this.generateWelcomeEmailHTML(firstName),
-        text: this.generateWelcomeEmailText(firstName)
-      };
-
-      const info = await this.transporter.sendMail(mailOptions);
-
-      if (process.env.NODE_ENV !== 'production') {
-        logger.info('Welcome email preview URL:', nodemailer.getTestMessageUrl(info));
-      }
-
-      logger.info(`Welcome email sent via SMTP to ${email}`, {
-        messageId: info.messageId
-      });
-
-      return {
-        success: true,
-        messageId: info.messageId
-      };
-    } catch (error) {
-      logger.error('Error sending welcome email via SMTP:', error);
-      throw error;
     }
   }
 
@@ -854,22 +467,18 @@ The AmplifyContent.ai Team
     `;
   }
 
-  async sendEmail(to, subject, htmlContent, textContent = null) {
+  async sendEmail(to, subject, htmlContent, textContent = null, replyTo = null) {
     try {
       await this.ensureInitialized();
 
-      if (this.useGraphAPI) {
-        return await this.sendEmailViaGraphGeneric(to, subject, htmlContent);
-      } else if (this.transporter) {
-        return await this.sendEmailViaSMTPGeneric(to, subject, htmlContent, textContent);
-      } else {
-        logger.warn(`No email service configured. Email to ${to} with subject "${subject}" not sent.`);
-        return {
-          success: true,
-          messageId: 'dev-mode',
-          previewUrl: null
-        };
-      }
+      return await this.sendViaResend({
+        to,
+        subject,
+        html: htmlContent,
+        text: textContent,
+        replyTo,
+        devModeMessage: `No email service configured. Email to ${to} with subject "${subject}" not sent.`
+      });
     } catch (error) {
       logger.error('Error sending email:', error);
       return {
@@ -879,97 +488,6 @@ The AmplifyContent.ai Team
     }
   }
 
-  async sendEmailViaGraphGeneric(to, subject, htmlContent) {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      const emailMessage = {
-        message: {
-          subject: subject,
-          body: {
-            contentType: 'HTML',
-            content: htmlContent
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: to
-              }
-            }
-          ],
-          from: {
-            emailAddress: {
-              address: process.env.AZURE_EMAIL_ADDRESS
-            }
-          }
-        },
-        saveToSentItems: false
-      };
-
-      // Use user-specific endpoint directly (works with application permissions)
-      const endpoint = `https://graph.microsoft.com/v1.0/users/${process.env.AZURE_EMAIL_ADDRESS}/sendMail`;
-
-      const response = await axios.post(
-        endpoint,
-        emailMessage,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      logger.info(`Email sent via Graph API to ${to}`, {
-        status: response.status,
-        statusText: response.statusText
-      });
-
-      return {
-        success: true,
-        messageId: `graph-${Date.now()}`,
-        previewUrl: null
-      };
-    } catch (error) {
-      logger.error('Error sending email via Graph API:', error.response?.data || error.message);
-      throw error;
-    }
-  }
-
-  async sendEmailViaSMTPGeneric(to, subject, htmlContent, textContent) {
-    try {
-      const mailOptions = {
-        from: process.env.AZURE_EMAIL_ADDRESS || 'noreply@amplifycontent.ai',
-        to: to,
-        subject: subject,
-        html: htmlContent
-      };
-
-      if (textContent) {
-        mailOptions.text = textContent;
-      }
-
-      const info = await this.transporter.sendMail(mailOptions);
-
-      if (process.env.NODE_ENV !== 'production') {
-        logger.info('Preview URL:', nodemailer.getTestMessageUrl(info));
-      }
-
-      logger.info(`Email sent via SMTP to ${to}`, {
-        messageId: info.messageId,
-        response: info.response
-      });
-
-      return {
-        success: true,
-        messageId: info.messageId,
-        previewUrl: process.env.NODE_ENV !== 'production' ? nodemailer.getTestMessageUrl(info) : null
-      };
-    } catch (error) {
-      logger.error('Error sending email via SMTP:', error);
-      throw error;
-    }
-  }
   generatePaymentFailedEmailHTML(data) {
     return `
     <!DOCTYPE html>

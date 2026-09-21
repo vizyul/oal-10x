@@ -53,6 +53,10 @@ class ProcessingStatusService extends EventEmitter {
       videoId,
       startTime: new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
+      // Sync init is used when work starts immediately (e.g. crash-recovery resume),
+      // so it is already in the processing phase rather than queued.
+      queued: false,
+      phase: 'processing',
       transcript: { status: 'pending', completedAt: null },
       content: {}
     };
@@ -73,6 +77,32 @@ class ProcessingStatusService extends EventEmitter {
   }
 
   /**
+   * Mark a queued video as having started active processing (flips the
+   * "queued" badge to "processing" in the dashboard). Called by the video-level
+   * concurrency gate when a video's pipeline actually begins.
+   * @param {string} videoId - Video ID
+   */
+  markVideoProcessingStarted(videoId) {
+    const videoStatus = this.processingVideos.get(videoId);
+    if (!videoStatus) {
+      logger.warn(`No video status found for ${videoId} when marking processing started`);
+      return;
+    }
+
+    if (videoStatus.queued === false && videoStatus.phase === 'processing') {
+      return; // already processing - avoid redundant emits
+    }
+
+    videoStatus.queued = false;
+    videoStatus.phase = 'processing';
+    videoStatus.lastUpdate = new Date().toISOString();
+    this.processingVideos.set(videoId, videoStatus);
+
+    logger.debug(`Video ${videoId} moved from queued -> processing`);
+    this.emitStatusUpdate(videoStatus.userId, videoId, videoStatus);
+  }
+
+  /**
    * Initialize processing status for a video (async version with database lookup)
    * @param {string} videoId - YouTube video ID
    * @param {string} videoRecordId - PostgreSQL video record ID
@@ -88,6 +118,10 @@ class ProcessingStatusService extends EventEmitter {
       userId,
       startTime: new Date().toISOString(),
       lastUpdate: new Date().toISOString(),
+      // Videos start "queued" and flip to "processing" when the video-level
+      // concurrency gate actually starts their pipeline (see markVideoProcessingStarted).
+      queued: true,
+      phase: 'queued',
       transcript: { status: 'pending', completedAt: null },
       content: {}
     };
@@ -135,6 +169,12 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.transcript.error = error;
     videoStatus.lastUpdate = new Date().toISOString();
 
+    // Any real transcript progress means the video is actively processing, not queued
+    if (videoStatus.queued) {
+      videoStatus.queued = false;
+      videoStatus.phase = 'processing';
+    }
+
     this.processingVideos.set(videoId, videoStatus);
 
     logger.debug(`Updated transcript status for ${videoId}: ${status}`);
@@ -180,6 +220,12 @@ class ProcessingStatusService extends EventEmitter {
     videoStatus.content[contentType].errorDetails = metadata.errorDetails || null;
     videoStatus.content[contentType].aiProvider = metadata.aiProvider || null;
     videoStatus.lastUpdate = new Date().toISOString();
+
+    // Any real content progress means the video is actively processing, not queued
+    if (videoStatus.queued) {
+      videoStatus.queued = false;
+      videoStatus.phase = 'processing';
+    }
 
     this.processingVideos.set(videoId, videoStatus);
 
