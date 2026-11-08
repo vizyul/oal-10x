@@ -109,8 +109,10 @@ class ProcessingStatusService extends EventEmitter {
    * @param {string} videoTitle - Video title
    * @param {string} userId - User ID
    * @param {Array} contentTypes - Content types to generate
+   * @param {Object} [options]
+   * @param {boolean} [options.persist=true] - Save the requested types to videos.metadata so a restart can resume only those
    */
-  async initializeVideoProcessingAsync(videoId, videoRecordId, videoTitle, userId, contentTypes = []) {
+  async initializeVideoProcessingAsync(videoId, videoRecordId, videoTitle, userId, contentTypes = [], { persist = true } = {}) {
     const status = {
       videoId,
       videoRecordId,
@@ -138,6 +140,20 @@ class ProcessingStatusService extends EventEmitter {
     });
 
     this.processingVideos.set(videoId, status);
+
+    if (persist && videoRecordId && contentTypes.length > 0) {
+      try {
+        const database = require('./database.service');
+        await database.query(
+          `UPDATE videos
+           SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('requested_content_types', $2::jsonb)
+           WHERE id = $1`,
+          [videoRecordId, JSON.stringify(contentTypes)]
+        );
+      } catch (persistError) {
+        logger.warn(`Could not persist requested content types for video ${videoId}: ${persistError.message}`);
+      }
+    }
 
     logger.debug(`Processing status initialized for video ${videoId}`, {
       userId,

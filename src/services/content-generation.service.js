@@ -1416,7 +1416,7 @@ class ContentGenerationService {
   async resumePendingVideoGenerations() {
     try {
       const pendingRes = await database.query(`
-        SELECT id, videoid, users_id, video_title
+        SELECT id, videoid, users_id, video_title, metadata
         FROM videos
         WHERE status = 'pending'
           AND transcript_text IS NOT NULL
@@ -1449,7 +1449,15 @@ class ContentGenerationService {
           `, [row.id]);
 
           const existingTypes = new Set(existingRes.rows.map(r => r.key));
-          const missing = allActiveTypes.filter(t => !existingTypes.has(t));
+          // Only resume what the user asked for; without a saved selection we can't know, so don't guess
+          const requested = row.metadata && row.metadata.requested_content_types;
+          if (!Array.isArray(requested) || requested.length === 0) {
+            skipped += 1;
+            logger.info(`resumePendingVideoGenerations: video ${row.videoid} has no saved content type selection; skipping`);
+            continue;
+          }
+
+          const missing = allActiveTypes.filter(t => requested.includes(t) && !existingTypes.has(t));
 
           if (missing.length === 0) {
             await this.checkAndUpdateVideoCompletion(row.id, row.videoid);
@@ -1474,7 +1482,8 @@ class ContentGenerationService {
               row.id,
               row.video_title || 'Untitled',
               row.users_id,
-              missing
+              missing,
+              { persist: false }
             );
             processingStatusService.updateTranscriptStatus(row.videoid, 'completed');
           } catch (statusErr) {
